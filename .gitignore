@@ -1,0 +1,116 @@
+# repomix (packed outputs + cache — never commit packs, they may embed secrets)
+repomix-output*
+repomix-output/
+.repomix/
+
+# tofu / terraform
+.tofu/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example
+crash.log
+crash*.log
+override.tf
+override.tf.json
+*_override.tf
+*.plan
+tfplan*
+terraform.rc
+
+# ansible
+ansible/inventory/prod.yml
+ansible/inventory/*.yml
+!ansible/inventory/*.example
+ansible/*.retry
+ansible/vault.yml
+ansible/vault.*.yml
+*.vault.pass
+ansible/collections/
+
+# apps runtime / secrets — never commit live secrets or DBs
+.env
+*.env
+!*.example
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.kdbx
+secrets/
+.sops*
+
+# azure / gh cli
+.azure/
+*.publishsettings
+
+# caddy data
+caddy/data/
+caddy/config/
+
+# docker compose local overrides
+compose.override.yml
+compose.override.yaml
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# runners
+_runner_work/
+_actions_work/
+_runner/
+_work/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.venv*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.uv/
+
+# node (website v2: next.js / vite / static build)
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+out/
+.turbo/
+.parcel-cache/
+*.tsbuildinfo
+
+# backups / archives
+backups/
+*.tar.gz
+*.tgz
+*.zip
+*.bak
+*.orig
+*.rej
+
+# logs / tmp
+*.log
+tmp/
+temp/
+
+# nix / direnv
+result
+result-*
+.direnv/
+.envrc.local
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.orig

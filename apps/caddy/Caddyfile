@@ -1,0 +1,27 @@
+{
+	email {$ACME_EMAIL:admin@example.com}
+	admin off
+}
+
+{$DOMAIN:treau.me} {
+	root * /srv/website
+	file_server
+	header {
+		Cache-Control "public, max-age=3600"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+www.{$DOMAIN:treau.me} {
+	redir https://{$DOMAIN:treau.me}{uri} permanent
+}
+
+# Bare IP serves nothing: http://IP aborts, https://IP fails TLS (LE won't issue
+# for a raw IP). Cloudflare and legit clients always connect by hostname.
+http://{$SITE_IP:20.98.16.138} {
+	abort
+}

@@ -1,0 +1,39 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+    paths: [apps/**, ansible/**, scripts/deploy.sh]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build inventory from secrets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DOMAIN: ${{ secrets.SITE_DOMAIN }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          cat > ansible/inventory/ci.yml <<EOF
+          all:
+            vars:
+              domain: ${DOMAIN}
+              acme_email: ${ACME_EMAIL}
+              caddy_version: "2.11.4"
+              deploy_root: /opt/treaulab
+            hosts:
+              vps:
+                ansible_host: ${SSH_HOST}
+                ansible_user: ${SSH_USER}
+                ansible_ssh_private_key_file: ~/.ssh/deploy
+          EOF
+      # Single deploy path: same script (and same layout) local and in CI.
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ~/.ssh/deploy
+        run: ./scripts/deploy.sh ci

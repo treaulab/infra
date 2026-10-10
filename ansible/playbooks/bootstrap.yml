@@ -1,0 +1,9 @@
+---
+# Prereqs only: hardening + Docker. Run BEFORE scripts/deploy.sh,
+# which rsyncs app files and brings up the compose stacks.
+- name: Bootstrap VPS prereqs
+  hosts: vps
+  become: true
+  roles:
+    - base
+    - docker

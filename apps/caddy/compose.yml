@@ -1,0 +1,24 @@
+services:
+  # Front door: TLS + static website.
+  caddy:
+    image: caddy:${CADDY_VERSION:-2.11.4}
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../website/src:/srv/website:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      # All three also have defaults inside the Caddyfile, so a missing .env
+      # degrades to a sane config instead of a failed start.
+      DOMAIN: ${DOMAIN:-treau.me}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      SITE_IP: ${SITE_IP:-20.98.16.138}
+
+volumes:
+  caddy-data:
+  caddy-config:
