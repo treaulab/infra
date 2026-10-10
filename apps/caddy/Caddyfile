@@ -6,6 +6,10 @@
 {$DOMAIN:treau.me} {
 	root * /srv/website
 	file_server
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 	header {
 		Cache-Control "public, max-age=3600"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
