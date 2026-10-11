@@ -209,7 +209,13 @@ export class TunnelRoom {
 		const headers = new Headers();
 		if (msg.headers && typeof msg.headers === "object") {
 			for (const [k, v] of Object.entries(msg.headers)) {
-				if (!HOP_HEADERS.has(String(k).toLowerCase()) && typeof v === "string") {
+				const name = String(k).toLowerCase();
+				// Never let an upstream Referrer-Policy govern the tunnel URL:
+				// the room ID in the path is the secret, and a permissive
+				// upstream policy (e.g. unsafe-url) would leak it to third
+				// parties via the Referer header. Forced to no-referrer below.
+				if (name === "referrer-policy") continue;
+				if (!HOP_HEADERS.has(name) && typeof v === "string") {
 					try {
 						headers.append(k, v);
 					} catch {
@@ -218,6 +224,7 @@ export class TunnelRoom {
 				}
 			}
 		}
+		headers.set("Referrer-Policy", "no-referrer");
 		let body = null;
 		if (msg.bodyB64) {
 			let bytes;
