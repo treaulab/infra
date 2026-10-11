@@ -4,7 +4,7 @@
 //
 //   Host lockedvps
 //     HostName lockedvps
-//     ProxyCommand node /path/to/ws-ssh-proxy.js wss://treau.me/p/<long-box-id>
+//     ProxyCommand node /path/to/ws-ssh-proxy.js wss://go.treau.me/p/<long-box-id>
 //     ServerAliveInterval 25
 //     ServerAliveCountMax 3
 //

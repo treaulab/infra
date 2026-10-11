@@ -54,12 +54,11 @@ oversize response bodies fail `502` (never truncate).
 ## Run it (easy way — `tunnel` CLI)
 
 ```bash
-tunnel quickstart --host https://treau.me   # once: host only, no tokens
-tunnel create site1 --http --upstream http://127.0.0.1:8080
+tunnel create site1 --http --upstream http://127.0.0.1:8080   # host defaults to go.treau.me
 tunnel run site1        # on the locked box (or: tunnel route site1 for the URL)
 ```
 
-Then browse the printed long URL (`https://treau.me/t/<32-char-id>/`).
+Then browse the printed long URL (`https://go.treau.me/t/<32-char-id>/`).
 Manual equivalent (no CLI) below.
 
 ## Run it (manual)
@@ -68,9 +67,9 @@ Manual equivalent (no CLI) below.
    No secrets to set.
 2. Locked VPS: `python3 -m http.server 8080 --bind 127.0.0.1`, then
    `ROOM=$(openssl rand -hex 16)` and
-   `EDGE_URL="wss://treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" node agent/agent.js`
+   `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" node agent/agent.js`
    (see `agent/README.md` for systemd).
-3. Browse: `https://treau.me/t/$ROOM/`. Verify Azure silence via
+3. Browse: `https://go.treau.me/t/$ROOM/`. Verify Azure silence via
    `docker logs caddy` / Azure Monitor.
 
 ## Limits vs real cloudflared

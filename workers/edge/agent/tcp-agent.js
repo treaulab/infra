@@ -4,7 +4,7 @@
 // Zero dependencies, Node 22+. Only needs OUTBOUND 443 (wss) + DNS.
 // Azure TREAU is never involved. Long-URL-only: box ID is the secret.
 //
-//   EDGE_URL="wss://treau.me/p/<long-box-id>/__agent" \
+//   EDGE_URL="wss://go.treau.me/p/<long-box-id>/__agent" \
 //   SSH_HOST="127.0.0.1" SSH_PORT="22" \
 //   node tcp-agent.js
 //
@@ -15,7 +15,7 @@ import os from "node:os";
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
-	console.error("EDGE_URL is required, e.g. wss://treau.me/p/<long-box-id>/__agent");
+	console.error("EDGE_URL is required, e.g. wss://go.treau.me/p/<long-box-id>/__agent");
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.

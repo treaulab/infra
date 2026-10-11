@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // treaulab tunnel CLI: cloudflared-style ergonomics for the edge tunnels.
 // Zero dependencies, Node 22+. Local state (names, rooms, upstreams) lives in
-// ~/.config/treaulab/tunnels.json; host lives in config.json (or TUNNEL_HOST).
+// ~/.config/treaulab/tunnels.json; host defaults to https://go.treau.me
+// (override with TUNNEL_HOST env or `tunnel config set host`).
 // Long-URL-only: the room/box ID in the URL is the secret (no tokens).
 //
-//   tunnel quickstart        first-run checks + config
-//   tunnel login             verify wrangler auth + store host once
+//   tunnel --url <UPSTREAM>  instant share, zero setup (trycloudflare-style)
+//   tunnel quickstart        first-run checks + next steps (host optional)
+//   tunnel login [--host H]  verify wrangler auth + override default host
 //   tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room ID]
 //   tunnel list | url <name> | run <name> | ssh <name> | ssh-config <name>
 //   tunnel logs | delete <name> | config [get|set] | doctor
@@ -30,6 +32,9 @@ const STATE_FILE = path.join(CONF_DIR, "tunnels.json");
 const CONFIG_FILE = path.join(CONF_DIR, "config.json");
 
 const NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// Default edge host (go.treau.me). Precedence everywhere: TUNNEL_HOST env >
+// config.json host > this default. Override per-box, never edit here.
+const DEFAULT_HOST = "https://go.treau.me";
 // Long URL IDs: 20-64 chars, must match edge worker ID_RE in src/worker.js.
 const ID_RE = /^[A-Za-z0-9_-]{20,64}$/;
 function newRoomId() {
@@ -60,8 +65,8 @@ const loadConfig = () => readJson(CONFIG_FILE, {});
 const saveConfig = (c) => writeJson(CONFIG_FILE, c);
 
 function edgeHost() {
-	const h = (process.env.TUNNEL_HOST || loadConfig().host || "").replace(/\/$/, "");
-	if (!h) fail("no edge host configured — run: tunnel login --host https://<worker-host>");
+	// Default host: override with TUNNEL_HOST env or `tunnel config set host`.
+	const h = (process.env.TUNNEL_HOST || loadConfig().host || DEFAULT_HOST).replace(/\/$/, "");
 	if (!/^https?:\/\//.test(h)) fail(`bad host ${JSON.stringify(h)} — want https://...`);
 	return h;
 }
@@ -128,7 +133,7 @@ function haveBin(bin) {
 
 function cmdHelp(cmd) {
 	const per = {
-		login: "usage: tunnel login [--host H]\n  like `cloudflared tunnel login`: store edge host once.",
+		login: "usage: tunnel login [--host H]\n  like `cloudflared tunnel login`: override the default edge host (go.treau.me).",
 		create: "usage: tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room ID]\n  like `cloudflared tunnel create`: remember a named tunnel + its ingress.\n  Room ID defaults to a fresh 32-char secret (the long URL). Pass --room to reuse one.\n  aliases: tunnel add-site <name> <port> | tunnel add-ssh <name> [HOST:PORT]",
 		list: "usage: tunnel list\n  like `cloudflared tunnel list`: show named tunnels.",
 		info: "usage: tunnel info <name>\n  like `cloudflared tunnel info`: details + live agent check.",
@@ -140,17 +145,17 @@ function cmdHelp(cmd) {
 		logs: "usage: tunnel logs\n  tail live edge logs (wrangler tail).",
 		config: "usage: tunnel config [get [host] | set host <URL>]",
 		doctor: "usage: tunnel doctor\n  self-check: node, ssh, host (+ tunnel status).",
-		quickstart: "usage: tunnel quickstart --host H\n  first-run: checks + config + next steps (calls login).",
+		quickstart: "usage: tunnel quickstart [--host H]\n  first-run: checks + next steps (host defaults to go.treau.me).",
 	};
 	if (cmd && per[cmd]) return info(per[cmd]);
 	info(`usage: tunnel [--url <UPSTREAM>] [command] [args]   (mirrors cloudflared tunnel)
 
-  quick (no setup, like trycloudflare):
+  quick (no setup, like trycloudflare — host defaults to go.treau.me):
     tunnel --url http://127.0.0.1:8080 [--name tmp] [--output json]
                                 ephemeral share: prints public URL, runs agent
 
   manage tunnels (like cloudflared tunnel login/create/list/info/delete):
-    login [--host H]            store host once
+    login [--host H]            override the default edge host
     create <name> [--http --upstream URL | --tcp --to HOST:PORT]
                                 remember a tunnel (room ID auto-generated, long URL)
     list                        show named tunnels
@@ -167,7 +172,7 @@ function cmdHelp(cmd) {
     access ssh-config <name>    print/install ~/.ssh/config block
 
   maintain:
-    quickstart --host H         first-run wizard (calls login)
+    quickstart [--host H]       first-run wizard (host optional, defaults work)
     logs | config | doctor      tail logs, inspect host, self-check
 
   cloudflared muscle memory also works: tunnel tunnel <subcommand>
@@ -183,7 +188,7 @@ function cmdLogin(argv) {
 		return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
 	};
 	const cfg = loadConfig();
-	const host = get("--host") || cfg.host || process.env.TUNNEL_HOST || null;
+	const host = get("--host") || process.env.TUNNEL_HOST || cfg.host || DEFAULT_HOST;
 
 	info(`node ${process.versions.node} OK`);
 	info(haveBin("wrangler") || haveBin("npx") ? "wrangler available" : "note: wrangler not found (only needed for `tunnel logs` / deploys)");
@@ -197,10 +202,11 @@ function cmdLogin(argv) {
 
 	return (async () => {
 		let h = host;
-		if (!h) {
-			if (!process.stdin.isTTY) fail("no host configured — re-run with: tunnel login --host https://<worker-host>");
-			h = await prompt("edge host (https://treau.me or https://treaulab-edge.<acct>.workers.dev): ");
-			if (!h) fail("host is required");
+		// Interactive: offer to override the default. Non-interactive with no
+		// --host just keeps the default (no setup required anymore).
+		if (process.stdin.isTTY && !get("--host")) {
+			const ans = await prompt(`edge host [${DEFAULT_HOST}]: `);
+			if (ans) h = ans;
 		}
 		saveConfig({ ...cfg, host: h.replace(/\/$/, "") });
 		info(`host: ${h}`);
@@ -478,8 +484,9 @@ async function cmdDoctor() {
 	check(`node >= 22 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 22);
 	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
 	const cfg = loadConfig();
-	const host = process.env.TUNNEL_HOST || cfg.host;
-	check("edge host configured", !!host, "tunnel login --host https://...");
+	const host = process.env.TUNNEL_HOST || cfg.host || DEFAULT_HOST;
+	check("edge host configured", !!host, "tunnel config set host https://...");
+	info(`edge host: ${host} (default ${DEFAULT_HOST}; override with TUNNEL_HOST or tunnel config set host)`);
 	if (host) {
 		const curl = (p) =>
 			spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", host + p], {
@@ -512,13 +519,10 @@ async function cmdQuickstart(argv) {
 	info("1/3 node OK");
 	const host = (() => {
 		const i = argv.indexOf("--host");
-		return (i >= 0 && argv[i + 1]) || process.env.TUNNEL_HOST || loadConfig().host || null;
+		return ((i >= 0 && argv[i + 1]) || process.env.TUNNEL_HOST || loadConfig().host || DEFAULT_HOST).replace(/\/$/, "");
 	})();
-	if (!host) {
-		fail("quickstart needs the edge host: re-run as  tunnel quickstart --host https://treau.me");
-	}
-	saveConfig({ ...loadConfig(), host: host.replace(/\/$/, "") });
-	info(`2/3 host: ${host}`);
+	saveConfig({ ...loadConfig(), host });
+	info(`2/3 host: ${host} (default; override with --host)`);
 	info("3/3 next (mirrors cloudflared):");
 	info("  tunnel --url http://127.0.0.1:8080        # instant share, no save (trycloudflare-style)");
 	info("  tunnel create site1 --http --upstream http://127.0.0.1:8080");

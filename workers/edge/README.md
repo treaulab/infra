@@ -41,7 +41,7 @@ artifact synced by `npm run sync:public`, never edited by hand.
 
 ```bash
 cd workers/edge && npm install          # exposes `tunnel` via npm run tunnel --
-npm run tunnel -- quickstart --host https://treau.me
+npm run tunnel -- --url http://127.0.0.1:8080   # zero setup: host defaults to go.treau.me
 npm run tunnel -- create site1 --http --upstream http://127.0.0.1:8080
 npm run tunnel -- create lockedvps --tcp --to 127.0.0.1:22
 npm run tunnel -- route site1           # public URL (like: cloudflared tunnel route dns)
@@ -49,11 +49,16 @@ npm run tunnel -- run lockedvps         # on the origin box (like: tunnel run)
 npm run tunnel -- access ssh lockedvps  # from the laptop (like: cloudflared access ssh)
 ```
 
-Instant share, no saving (trycloudflare-style):
+Instant share needs no saving and no setup (trycloudflare-style) —
+`--url` alone is enough; add `--name tmp` to remember it, `--output json`
+for scripts:
 
 ```bash
 npm run tunnel -- --url http://127.0.0.1:8080 [--name tmp] [--output json]
 ```
+
+Host defaults to `https://go.treau.me` (override per-box with
+`TUNNEL_HOST=https://...` or `tunnel config set host <URL>`).
 
 Prefer a bare `tunnel` on PATH? `npm link` (or keep the manual
 `ln -sf "$PWD/bin/tunnel" ~/.local/bin/tunnel`), then drop the

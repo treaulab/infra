@@ -21,12 +21,12 @@ is never involved (stays at zero egress).
 # on the locked-down VPS, next to your :8080:
 node --version   # need >= 22 (global WebSocket + fetch)
 ROOM=$(openssl rand -hex 16)   # 32-char long URL ID, the secret
-EDGE_URL="wss://treau.me/t/$ROOM/__agent" \
+EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" \
 UPSTREAM="http://127.0.0.1:8080" \
 node agent.js
 ```
 
-Then from anywhere: `https://treau.me/t/$ROOM/` serves the `:8080`
+Then from anywhere: `https://go.treau.me/t/$ROOM/` serves the `:8080`
 content as plain HTTP. Same `$ROOM` for agent and browsers
 (agent connects to `.../$ROOM/__agent`). No token.
 
@@ -48,7 +48,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/node /opt/tunnel/agent.js
-Environment=EDGE_URL=wss://treau.me/t/<long-room-id>/__agent
+Environment=EDGE_URL=wss://go.treau.me/t/<long-room-id>/__agent
 Environment=UPSTREAM=http://127.0.0.1:8080
 Restart=always
 RestartSec=5
@@ -71,7 +71,7 @@ belt-and-braces.)
 ```bash
 # on the locked-down box, next to sshd on 127.0.0.1:22:
 BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel create`
-EDGE_URL="wss://treau.me/p/$BOX/__agent" \
+EDGE_URL="wss://go.treau.me/p/$BOX/__agent" \
 SSH_HOST="127.0.0.1" SSH_PORT="22" \
 node tcp-agent.js
 ```

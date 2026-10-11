@@ -4,7 +4,7 @@
 // Zero dependencies, Node 22+ (global WebSocket + fetch).
 // Long-URL-only: the room ID in EDGE_URL is the secret (no token).
 //
-//   EDGE_URL="wss://treau.me/t/<long-room-id>/__agent" \
+//   EDGE_URL="wss://go.treau.me/t/<long-room-id>/__agent" \
 //   UPSTREAM="http://127.0.0.1:8080" \
 //   node agent.js
 //
@@ -13,7 +13,7 @@
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
-	console.error("EDGE_URL is required, e.g. wss://treau.me/t/<long-room-id>/__agent");
+	console.error("EDGE_URL is required, e.g. wss://go.treau.me/t/<long-room-id>/__agent");
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.

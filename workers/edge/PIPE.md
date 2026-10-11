@@ -47,12 +47,14 @@ the far-end close. A 5-byte DATA payload colliding with that pattern is a
 ## Laptop setup (the easy way — `tunnel` CLI)
 
 ```bash
-# one-time: symlink + remember host (no tokens)
+# one-time: symlink (host defaults to go.treau.me, no tokens)
 ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # ensure ~/.local/bin is on PATH
-tunnel quickstart --host https://treau.me   # or your *.workers.dev preview host
 tunnel create lockedvps --tcp --to 127.0.0.1:22
 tunnel access ssh lockedvps   # that's it — ProxyCommand built inline (alias: tunnel ssh)
 ```
+
+(Host defaults to `go.treau.me`; point elsewhere with
+`TUNNEL_HOST=https://...` or `tunnel config set host <URL>`.)
 
 `scp`/`sftp` ride the same path (`tunnel access ssh lockedvps` covers `ssh`; for
 persistent config: `tunnel access ssh-config lockedvps --install`, then plain
@@ -71,7 +73,7 @@ mkdir -p ~/bin && cp workers/edge/bin/ws-ssh-proxy.js ~/bin/
 # ~/.ssh/config
 Host lockedvps
   HostName lockedvps
-  ProxyCommand node ~/bin/ws-ssh-proxy.js wss://treau.me/p/<long-box-id>
+  ProxyCommand node ~/bin/ws-ssh-proxy.js wss://go.treau.me/p/<long-box-id>
   ServerAliveInterval 25
   ServerAliveCountMax 3
 ```
@@ -90,7 +92,7 @@ Verify the server fingerprint out-of-band on first connect, as always.
 ```bash
 node --version  # >= 22, and sshd listening on 127.0.0.1:22
 BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel route`
-EDGE_URL="wss://treau.me/p/$BOX/__agent" \
+EDGE_URL="wss://go.treau.me/p/$BOX/__agent" \
 SSH_HOST="127.0.0.1" SSH_PORT="22" \
 node agent/tcp-agent.js
 ```
