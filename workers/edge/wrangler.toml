@@ -1,0 +1,20 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
+name = "treaulab-edge"
+main = "src/worker.js"
+compatibility_date = "2026-10-11"
+
+# Static site is the single source in apps/website/src, synced into ./public/
+# by `npm run sync:public` (gitignored) before dev/deploy. Worker runs first so
+# /ws/* hits the Durable Object relay and everything else falls to assets.
+[assets]
+directory = "./public/"
+binding = "ASSETS"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RelayRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayRoom"]

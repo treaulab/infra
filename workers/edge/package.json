@@ -1,0 +1,14 @@
+{
+  "name": "treaulab-edge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:public": "rm -rf public && mkdir -p public && cp -r ../../apps/website/src/. ./public/",
+    "dev": "npm run sync:public && wrangler dev",
+    "deploy": "npm run sync:public && wrangler deploy",
+    "deploy:dry": "npm run sync:public && wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -85,6 +85,11 @@ out/
 .parcel-cache/
 *.tsbuildinfo
 
+# cloudflare workers (edge relay)
+workers/edge/public/
+workers/edge/.dev.vars
+workers/edge/.wrangler/
+
 # backups / archives
 backups/
 *.tar.gz

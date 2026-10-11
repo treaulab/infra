@@ -1,11 +1,13 @@
 # treaulab/infra
 
-Organized IaC for 1x Azure VPS (Ubuntu 24.04) running a static website behind Caddy.
+Organized IaC for 1x Azure VPS (Ubuntu 24.04) running a static website behind Caddy,
+plus a full-edge Cloudflare Worker (static site + WebSocket relay, zero Azure egress).
 
 ## Architecture
 
 ```
-Azure VPS
+Cloudflare edge (treaulab-edge Worker) — serves site + /ws/* relay, no origin
+Azure VPS (fallback / pre-cutover origin)
 ├── Caddy :80/:443 (auto-TLS, front door)
 └── Website (static, via Caddy file_server)
 ```
@@ -16,10 +18,11 @@ Azure VPS
 tofu/                  L1: Azure RG/VNet/NSG/IP/VM (imports existing VPS)
 ansible/               L2: hardening, docker, caddy, website
 apps/caddy/            compose + Caddyfile
-apps/website/          static src + compose
+apps/website/          static src (single source; synced to edge public/ at deploy)
+workers/edge/          L0: Cloudflare Worker + Durable Object relay + edge assets
 scripts/               bootstrap.sh, deploy.sh
-.github/workflows/    tofu.yml, deploy.yml
-docs/runbooks.md       first boot, backups, upgrades
+.github/workflows/    tofu.yml, deploy.yml, edge.yml
+docs/runbooks.md       first boot, backups, upgrades, edge cutover
 ```
 
 ## Quickstart
@@ -47,4 +50,15 @@ once the VPS is stable (see `docs/runbooks.md`).
      ansible-playbook -i ansible/inventory/prod.yml ansible/playbooks/site.yml
      ```
 
-See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER`).
+See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER` for VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for edge; `RELAY_TOKEN` via `wrangler secret put`, never committed).
+
+## Edge (full-edge relay, zero Azure egress)
+
+```bash
+cd workers/edge && npm install
+cp .dev.vars.example .dev.vars   # fill RELAY_TOKEN
+npm run dev                      # local: http://127.0.0.1:8787
+npm run deploy                   # needs wrangler login + RELAY_TOKEN secret set
+```
+
+Details + DNS cutover/rollback: `workers/edge/README.md`.
