@@ -18,6 +18,16 @@ python3 /tmp/agent.py
 # browse: https://go.treau.me/t/$ROOM/
 ```
 
+Want the trycloudflare-style one-command share instead (prints the URL for
+you)? That's `quick.py` — same deal, single file, auto-fetches `agent.py`
+if needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/quick.py \
+  -o /tmp/quick.py
+UPSTREAM="http://127.0.0.1:8080" python3 /tmp/quick.py [--json]
+```
+
 * `agent.js` — HTTP origins (`UPSTREAM=http://127.0.0.1:8080`). Browsers use
   plain URLs, see `../TUNNEL.md`.
 * `tcp-agent.js` — raw TCP, one dial to `SSH_HOST:SSH_PORT` (default
