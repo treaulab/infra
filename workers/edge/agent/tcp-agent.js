@@ -40,6 +40,11 @@ const F_ACCEPT = 2;
 const F_DATA = 3;
 const F_FIN = 4;
 const F_RST = 5;
+const F_HB = 0; // heartbeat, ignored by the edge (see src/pipe.js)
+
+// Keepalive: idle control sockets get reaped (~60s Cloudflare/NAT idle
+// timeout, close 1006). A heartbeat frame every 20s keeps it warm.
+const HEARTBEAT_MS = 20_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString(), "-", ...a);
@@ -62,6 +67,7 @@ function connectOnce() {
 	return new Promise((resolve) => {
 		const sockets = new Map(); // stream -> net.Socket
 		let dead = false;
+		let hb;
 		const ws = new WebSocket(EDGE_URL);
 		ws.binaryType = "arraybuffer";
 
@@ -80,12 +86,16 @@ function connectOnce() {
 		const done = (why) => {
 			if (dead) return;
 			dead = true;
+			clearInterval(hb);
 			killAll();
 			log("control socket closed:", why);
 			resolve();
 		};
 
-		ws.onopen = () => log("control socket open, serving", `${SSH_HOST}:${SSH_PORT}`);
+		ws.onopen = () => {
+			log("control socket open, serving", `${SSH_HOST}:${SSH_PORT}`);
+			hb = setInterval(() => send(frame(F_HB, 0)), HEARTBEAT_MS);
+		};
 		ws.onmessage = (ev) => {
 			const f = parse(Buffer.from(ev.data));
 			if (!f) return;

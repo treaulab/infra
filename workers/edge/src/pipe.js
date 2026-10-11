@@ -18,6 +18,9 @@ const F_ACCEPT = 2;
 const F_DATA = 3;
 const F_FIN = 4;
 const F_RST = 5;
+// Heartbeat (agent -> edge only): keeps idle control sockets from being
+// reaped. Never references a stream; the edge drops it silently.
+const F_HB = 0;
 
 const MAX_DATA = 256 * 1024;
 const ACCEPT_TIMEOUT_MS = 10_000;
@@ -190,6 +193,7 @@ export class PipeRoom {
 	onAgentMessage(message) {
 		const f = parseFrame(message);
 		if (!f) return;
+		if (f.type === F_HB) return; // keepalive, no stream involved
 		const s = this.streams.get(f.stream);
 		if (f.type === F_ACCEPT) return; // stream already mapped; nothing to forward
 		if (!s) {

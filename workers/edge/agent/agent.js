@@ -50,6 +50,11 @@ const HOP = new Set([
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString(), "-", ...a);
 
+// Keepalive: idle control sockets get reaped (~60s Cloudflare/NAT idle
+// timeout, close 1006). The edge ignores {"type":"pong"} (see src/tunnel.js),
+// so a pong every 20s is pure keepalive traffic, both directions stay warm.
+const HEARTBEAT_MS = 20_000;
+
 async function serveUpstream(env) {
 	const target = UPSTREAM + env.path;
 	const headers = {};
@@ -91,16 +96,17 @@ async function serveUpstream(env) {
 function connectOnce() {
 	return new Promise((resolve) => {
 		const ws = new WebSocket(EDGE_URL);
-		let helloTimer;
+		let hb;
 		ws.onopen = () => {
 			log("control socket open, registering as", NAME);
 			ws.send(JSON.stringify({ type: "hello", name: NAME, version: 1 }));
-			// If the edge never sees us (silent drop), fail fast and redial.
-			helloTimer = setTimeout(() => {
+			// Heartbeat replaces the old "close if silent" timer: quiet
+			// tunnels are healthy and must stay up, not redial every 30s.
+			hb = setInterval(() => {
 				try {
-					ws.close(4001, "no traffic");
+					ws.send(JSON.stringify({ type: "pong" }));
 				} catch {}
-			}, 30_000);
+			}, HEARTBEAT_MS);
 		};
 		ws.onmessage = async (ev) => {
 			let msg;
@@ -116,14 +122,13 @@ function connectOnce() {
 				return;
 			}
 			if (msg?.type !== "req" || typeof msg?.id !== "string") return;
-			clearTimeout(helloTimer);
 			const answer = await serveUpstream(msg);
 			try {
 				ws.send(JSON.stringify(answer));
 			} catch {}
 		};
 		const done = (why) => {
-			clearTimeout(helloTimer);
+			clearInterval(hb);
 			log("control socket closed:", why);
 			resolve();
 		};

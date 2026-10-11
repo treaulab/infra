@@ -33,6 +33,10 @@ content as plain HTTP. Same `$ROOM` for agent and browsers
 Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `UPSTREAM_TIMEOUT_MS`
 (default `15000`), `NAME` (default hostname, shown in edge logs).
 
+Keepalive: both agents send a heartbeat every 20s (`pong` / empty frame),
+so idle control sockets survive Cloudflare/NAT idle timeouts instead of
+flapping with `1006` redials. Quiet tunnels stay up indefinitely.
+
 ## systemd (persist it)
 
 ```ini

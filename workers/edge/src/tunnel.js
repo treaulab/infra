@@ -63,6 +63,24 @@ export class TunnelRoom {
 		this.agent = null; // accepted server-side WebSocket
 		this.agentGen = null;
 		this.pending = new Map(); // id -> {resolve, reject, timer}
+		// Rebuild agent pairing after hibernation wake (memory was wiped but
+		// hibernated sockets survive). Without this, an evicted room answers
+		// 502 forever despite a live agent socket. Mirrors PipeRoom.
+		// In-flight requests from before the wake are gone with the old map;
+		// their browsers already hit the 20s agent timeout or will retry.
+		for (const ws of this.ctx.getWebSockets()) {
+			let a;
+			try {
+				a = ws.deserializeAttachment();
+			} catch {
+				continue;
+			}
+			if (a?.role === "agent" && typeof a.gen === "string") {
+				this.agent = ws;
+				this.agentGen = a.gen;
+				break;
+			}
+		}
 	}
 
 	// ---- entry -----------------------------------------------------------
@@ -98,13 +116,21 @@ export class TunnelRoom {
 	}
 
 	isLiveAgent(ws) {
-		if (!this.agent || ws !== this.agent) return false;
+		let a;
 		try {
-			const a = ws.deserializeAttachment();
-			return a?.role === "agent" && a?.gen === this.agentGen;
+			a = ws.deserializeAttachment();
 		} catch {
 			return false;
 		}
+		if (a?.role !== "agent" || typeof a?.gen !== "string") return false;
+		if (this.agent && ws === this.agent) return a.gen === this.agentGen;
+		// Adopt a matching agent socket we don't hold (hibernation wake may
+		// deliver a different object than the constructor rebuilt).
+		if (a.gen === this.agentGen) {
+			this.agent = ws;
+			return true;
+		}
+		return false;
 	}
 
 	dropAgent(reason) {
@@ -219,7 +245,9 @@ export class TunnelRoom {
 		} catch {
 			return;
 		}
-		if (msg?.type === "hello" || msg?.type === "pong") return;
+		// Agent "pong" frames double as keepalive (sent every 20s so idle
+	// control sockets aren't reaped). They carry no request state.
+	if (msg?.type === "hello" || msg?.type === "pong") return;
 		if ((msg?.type === "res" || msg?.type === "err") && typeof msg?.id === "string") {
 			const p = this.pending.get(msg.id);
 			if (!p) return;
