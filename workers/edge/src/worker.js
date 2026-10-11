@@ -1,8 +1,7 @@
-import { RelayRoom } from "./room.js";
 import { TunnelRoom } from "./tunnel.js";
 import { PipeRoom } from "./pipe.js";
 
-export { RelayRoom, TunnelRoom, PipeRoom };
+export { TunnelRoom, PipeRoom };
 
 // Mirror of apps/caddy/Caddyfile security posture, enforced at the edge.
 function withSecurityHeaders(res) {
@@ -70,15 +69,6 @@ function parsePipePath(pathname) {
 	return { box: client[1], agent: false };
 }
 
-// Path shapes: /ws/<roomId> -> one room. Long ID is the secret.
-function parseRelayPath(pathname) {
-	const m = pathname.match(/^\/ws\/([^/]+)\/?$/);
-	if (!m) return null;
-	const room = m[1];
-	if (!ID_RE.test(room)) return null;
-	return { room };
-}
-
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
@@ -120,16 +110,6 @@ export default {
 			const fwd = new Request(request);
 			fwd.headers.set("X-Tunnel-Role", parsed.agent ? "agent" : "client");
 			return stub.fetch(fwd);
-		}
-
-		if (url.pathname === "/ws" || url.pathname.startsWith("/ws/")) {
-			const parsed = parseRelayPath(url.pathname);
-			if (!parsed) return new Response("Not found", { status: 404 });
-			if (!isWebSocketUpgrade(request)) {
-				return new Response("Expected Upgrade: websocket", { status: 426 });
-			}
-			const stub = env.ROOM.getByName(parsed.room);
-			return stub.fetch(request);
 		}
 
 		// Static site (synced from apps/website/src). Custom 404 page on miss.

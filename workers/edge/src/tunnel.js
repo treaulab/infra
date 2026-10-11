@@ -4,7 +4,7 @@
 //
 // Roles (set by worker.js in the X-Tunnel-Role header, trusted same-account):
 //   agent  -> WS only,  path /t/<roomId>/__agent
-//   client -> HTTP only, path /ws untouched, /t/<roomId>/[...rest]
+//   client -> HTTP only, path /t/<roomId>/[...rest]
 // Plain WS upgrades on client paths get 426 (this tunnel is HTTP-only).
 
 const MAX_REQ_BODY = 2 * 1024 * 1024; // browser -> agent

@@ -1,12 +1,12 @@
 # treaulab/infra
 
 Organized IaC for 1x Azure VPS (Ubuntu 24.04) running a static website behind Caddy,
-plus a full-edge Cloudflare Worker (static site + WebSocket relay, zero Azure egress).
+plus a full-edge Cloudflare Worker (static site + HTTP/SSH tunnels, zero Azure egress).
 
 ## Architecture
 
 ```
-Cloudflare edge (treaulab-edge Worker) — serves site + /ws/* relay, no origin
+Cloudflare edge (treaulab-edge Worker) — serves site + /t/* + /p/* tunnels, no origin
 Azure VPS (fallback / pre-cutover origin)
 ├── Caddy :80/:443 (auto-TLS, front door)
 └── Website (static, via Caddy file_server)
@@ -19,7 +19,7 @@ tofu/                  L1: Azure RG/VNet/NSG/IP/VM (imports existing VPS)
 ansible/               L2: hardening, docker, caddy, website
 apps/caddy/            compose + Caddyfile
 apps/website/          static src (single source; synced to edge public/ at deploy)
-workers/edge/          L0: Cloudflare Worker + Durable Object relay + edge assets
+workers/edge/          L0: Cloudflare Worker + Durable Object tunnels + edge assets
 scripts/               bootstrap.sh, deploy.sh
 .github/workflows/    tofu.yml, deploy.yml, edge.yml
 docs/runbooks.md       first boot, backups, upgrades, edge cutover
@@ -52,7 +52,7 @@ once the VPS is stable (see `docs/runbooks.md`).
 
 See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER` for VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for edge).
 
-## Edge (full-edge relay, zero Azure egress)
+## Edge (full-edge tunnels, zero Azure egress)
 
 ```bash
 cd workers/edge && npm install

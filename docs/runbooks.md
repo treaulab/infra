@@ -22,8 +22,8 @@ Bump `CADDY_VERSION` in the inventory (`ansible/inventory/prod.yml`), re-run
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`
    → note the `*.workers.dev` preview URL.
 3. Verify on preview: `/` → `200`, `/robots.txt`, `/sitemap.xml`,
-   `/.well-known/security.txt`, `/nope-123` → `404`+`noindex`, two `wscat`
-   clients on `/ws/<long-id>` (e.g. `openssl rand -hex 16`) see each other's messages.
+   `/.well-known/security.txt`, `/nope-123` → `404`+`noindex`, plus
+   `tunnel doctor` against the preview host (all PASS).
 4. Dashboard → Worker → Custom Domains → add `treau.me` (+ `www.treau.me`).
    Re-run the same checks on the custom domain.
 5. Azure is now out of the path (no code fetches any origin). Soak 48h with

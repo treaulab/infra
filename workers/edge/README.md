@@ -1,6 +1,6 @@
 # treaulab-edge (Cloudflare Workers, full-edge)
 
-Client↔client WebSocket relay + static site, **100% on Cloudflare's edge**.
+HTTP tunnels + SSH pipes + static site, **100% on Cloudflare's edge**.
 Zero Azure egress by design: no `fetch()` to any origin anywhere in this code.
 The VPS/Caddy stack stays warm only as an instant DNS rollback target.
 
@@ -9,8 +9,7 @@ The VPS/Caddy stack stays warm only as an instant DNS rollback target.
 ```
 workers/edge/
 ├── wrangler.toml      # Worker + Static Assets + Durable Object bindings/migrations
-├── src/worker.js      # routing: www→apex, /health, /ws/*, /t/*, /p/*, assets+404
-├── src/room.js        # RelayRoom DO: hibernating broadcast relay, heartbeat, caps
+├── src/worker.js      # routing: www→apex, /health, /t/*, /p/*, assets+404
 ├── src/tunnel.js      # TunnelRoom DO: HTTP reverse tunnel over agent socket
 ├── src/pipe.js        # PipeRoom DO: multiplexed raw-TCP pipe (ssh), one room/box
 ├── agent/agent.js     # zero-dep dial-out agent for locked-down HTTP origins
@@ -25,17 +24,6 @@ workers/edge/
 
 Single source for the site stays `apps/website/src/` — `public/` is a build
 artifact synced by `npm run sync:public`, never edited by hand.
-
-## Protocol (long-URL-only, trycloudflare-style)
-
-* Connect: `wss://<host>/ws/<roomId>` (`roomId` = `[A-Za-z0-9_-]{20,64}`,
-  e.g. 32 hex chars). Anything sent is broadcast raw to every
-  *other* socket in the same room. No persistence, no history.
-  The long ID *is* the secret — no token. Short IDs → `404`.
-* Heartbeat (doesn't wake a hibernated room): send exactly
-  `__treaulab_ping__`, expect `__treaulab_pong__`.
-* Non-websocket GET on a `/ws/` path → `426`.
-* Soft caps (`src/room.js`): 1000 sockets/room, 1 MiB/message (close `1009`).
 
 ## Use it (`tunnel` CLI — mirrors `cloudflared tunnel`)
 
@@ -89,7 +77,6 @@ cd workers/edge
 npm install
 npm run dev                      # http://127.0.0.1:8787 (no secrets needed)
 # static:  curl -sI http://127.0.0.1:8787/
-# relay:   ID=$(openssl rand -hex 16); npx wscat -c "ws://127.0.0.1:8787/ws/$ID"  (x2 terminals)
 ```
 
 Generate a room ID: `openssl rand -hex 16` (32 chars, meets 20-64 rule).
@@ -118,8 +105,7 @@ Dry-run validation without uploading: `npm run deploy:dry`.
    (+ `www.treau.me`; the Worker itself 301s www→apex).
 2. Verify on the custom domain before touching anything else:
    `curl -sI https://treau.me/` → `200`, `/robots.txt`, `/sitemap.xml`,
-   `/.well-known/security.txt`, `/nope-123` → `404` + `noindex`,
-   `wss://treau.me/ws/<long-id>` echo across two clients.
+   `/.well-known/security.txt`, `/nope-123` → `404` + `noindex`.
 3. Azure is now out of the path (verify: `docker logs caddy` shows no new
    access; Azure Monitor egress flat). Leave the VPS running 48h.
 4. True zero: only after the soak, optionally stop Caddy / close NSG
@@ -134,7 +120,7 @@ Dry-run validation without uploading: `npm run deploy:dry`.
   Paid. 32 MiB runtime inbound cap; app enforces 1 MiB.
 * Abuse: long-URL obscurity is the only gate — anyone with the link can use
   it. Rotate by creating a fresh ID (`tunnel create` / `--url`) and dropping
-  the old one. No open relay paths (short IDs → `404`).
-* ToS: generic client-relay is fine; don't repurpose as a circumvention VPN
+  the old one. Short IDs → `404`.
+* ToS: private tunnel/pipe use is fine; don't repurpose as a circumvention VPN
   without checking Workers/Zero Trust terms — sanctioned private access is
   Tunnel + Access/WARP instead.

@@ -5,15 +5,12 @@ compatibility_date = "2026-10-11"
 
 # Static site is the single source in apps/website/src, synced into ./public/
 # by `npm run sync:public` (gitignored) before dev/deploy. Worker runs first so
-# /ws/* hits the Durable Object relay and everything else falls to assets.
+# /t/* + /p/* hit the tunnel/pipe Durable Objects and everything else falls
+# to assets.
 [assets]
 directory = "./public/"
 binding = "ASSETS"
 run_worker_first = true
-
-[[durable_objects.bindings]]
-name = "ROOM"
-class_name = "RelayRoom"
 
 [[durable_objects.bindings]]
 name = "TUNNEL"
@@ -22,10 +19,6 @@ class_name = "TunnelRoom"
 [[durable_objects.bindings]]
 name = "PIPE"
 class_name = "PipeRoom"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["RelayRoom"]
 
 [[migrations]]
 tag = "v2"
