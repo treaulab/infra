@@ -58,12 +58,12 @@ tunnel create site1 --http --upstream http://127.0.0.1:8080   # host defaults to
 tunnel run site1        # on the locked box (or: tunnel route site1 for the URL)
 ```
 
-No Node on the box? `quick.py` is the same one-command share in pure
-stdlib Python (single file, auto-fetches `agent.py`):
+No Node on the box? `agent.py --share` is the same one-command share in
+pure stdlib Python (single file, nothing else to download):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/quick.py -o /tmp/quick.py
-UPSTREAM="http://127.0.0.1:8080" python3 /tmp/quick.py
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py -o /tmp/agent.py
+UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share
 ```
 
 Then browse the printed long URL (`https://go.treau.me/t/<32-char-id>/`).

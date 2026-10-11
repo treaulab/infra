@@ -65,8 +65,7 @@ no pip, no clone needed (see `agent/README.md`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py -o /tmp/agent.py
-ROOM=$(openssl rand -hex 16)
-EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py
+UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share
 ```
 
 Prefer a bare `tunnel` on PATH? `npm link` (or keep the manual

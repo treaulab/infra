@@ -19,13 +19,12 @@ python3 /tmp/agent.py
 ```
 
 Want the trycloudflare-style one-command share instead (prints the URL for
-you)? That's `quick.py` — same deal, single file, auto-fetches `agent.py`
-if needed:
+you)? Same single file — `--share` mints a room and runs:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/quick.py \
-  -o /tmp/quick.py
-UPSTREAM="http://127.0.0.1:8080" python3 /tmp/quick.py [--json]
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \
+  -o /tmp/agent.py
+UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share [--json]
 ```
 
 * `agent.js` — HTTP origins (`UPSTREAM=http://127.0.0.1:8080`). Browsers use

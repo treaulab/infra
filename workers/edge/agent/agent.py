@@ -5,20 +5,32 @@ Pure Python standard library (no pip, no Node): needs only
 outbound 443 + DNS, like the Node agent.
 Long-URL-only: the room ID in EDGE_URL is the secret (no token).
 
+Persistent agent (EDGE_URL carries a pre-made room ID):
+
     EDGE_URL="wss://go.treau.me/t/<long-room-id>/__agent" \\
     UPSTREAM="http://127.0.0.1:8080" \\
     python3 agent.py
 
-Env: EDGE_URL (required), UPSTREAM (default http://127.0.0.1:8080),
-     UPSTREAM_TIMEOUT_MS (default 15000), NAME (default hostname).
+One-command ephemeral share (trycloudflare-style: mints a room, prints the
+public URL, runs the agent — single file, nothing else to download):
+
+    curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \\
+      -o /tmp/agent.py
+    UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share [--json]
+
+Env: EDGE_URL (required, unless --share), UPSTREAM (default http://127.0.0.1:8080),
+     UPSTREAM_TIMEOUT_MS (default 15000), NAME (default hostname),
+     TUNNEL_HOST (default https://go.treau.me, --share only).
 Works on Python 3.8+.
 """
 
+import argparse
 import base64
 import hashlib
 import json
 import os
 import random
+import secrets
 import socket
 import ssl
 import struct
@@ -30,6 +42,62 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from datetime import timezone
+
+DEFAULT_HOST = "https://go.treau.me"
+
+
+def _parse_cli(argv):
+    p = argparse.ArgumentParser(
+        description="Tunnel agent: serve a local upstream over one outbound websocket."
+    )
+    p.add_argument(
+        "--share",
+        action="store_true",
+        help="mint a fresh room ID, print the public URL, then run (ephemeral)",
+    )
+    p.add_argument(
+        "--upstream",
+        default=None,
+        help="local upstream (default: $UPSTREAM or http://127.0.0.1:8080)",
+    )
+    p.add_argument(
+        "--host",
+        default=None,
+        help="edge host, --share only (default: $TUNNEL_HOST or " + DEFAULT_HOST + ")",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        help="--share only: print {url, room, upstream} instead of text",
+    )
+    return p.parse_args(argv)
+
+
+_CLI = _parse_cli(sys.argv[1:])
+
+if _CLI.share:
+    _room = secrets.token_hex(16)  # 32 chars, matches edge ID_RE
+    _host = (_CLI.host or os.environ.get("TUNNEL_HOST") or DEFAULT_HOST).rstrip("/")
+    _upstream = (_CLI.upstream or os.environ.get("UPSTREAM") or "http://127.0.0.1:8080").rstrip("/")
+    _url = "%s/t/%s/" % (_host, _room)
+    os.environ["EDGE_URL"] = (
+        _host.replace("https://", "wss://").replace("http://", "ws://")
+        + "/t/"
+        + _room
+        + "/__agent"
+    )
+    os.environ["UPSTREAM"] = _upstream
+    if _CLI.json:
+        print(
+            json.dumps({"url": _url, "room": _room, "upstream": _upstream}), flush=True
+        )
+    else:
+        print("tunnel ready: %s" % _url, flush=True)
+        print(
+            "room: %s   upstream: %s   (ephemeral - stops with this process)"
+            % (_room, _upstream),
+            flush=True,
+        )
 
 EDGE_URL_RAW = os.environ.get("EDGE_URL")
 if not EDGE_URL_RAW:
@@ -47,7 +115,9 @@ if not (EDGE_URL.startswith("wss://") or EDGE_URL.startswith("ws://")):
     )
     sys.exit(1)
 
-UPSTREAM = os.environ.get("UPSTREAM", "http://127.0.0.1:8080").rstrip("/")
+UPSTREAM = (
+    (_CLI.upstream or os.environ.get("UPSTREAM") or "http://127.0.0.1:8080").rstrip("/")
+)
 UPSTREAM_TIMEOUT_MS = int(os.environ.get("UPSTREAM_TIMEOUT_MS", "15000"))
 NAME = os.environ.get("NAME") or socket.gethostname()
 MAX_BODY = 5 * 1024 * 1024
@@ -369,4 +439,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
