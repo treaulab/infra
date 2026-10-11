@@ -66,9 +66,10 @@ Manual equivalent (no CLI) below.
 1. Edge: deploy (`npm run deploy` or CI `edge.yml`), custom domain as usual.
    No secrets to set.
 2. Locked VPS: `python3 -m http.server 8080 --bind 127.0.0.1`, then
-   `ROOM=$(openssl rand -hex 16)` and
-   `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" node agent/agent.js`
-   (see `agent/README.md` for systemd).
+   `ROOM=$(openssl rand -hex 16)` and pick an agent:
+   * Node: `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" node agent/agent.js`
+   * Python, no installs: `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" python3 agent/agent.py`
+   (see `agent/README.md` for systemd + the zero-clone one-liner).
 3. Browse: `https://go.treau.me/t/$ROOM/`. Verify Azure silence via
    `docker logs caddy` / Azure Monitor.
 

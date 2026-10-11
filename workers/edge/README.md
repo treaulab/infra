@@ -60,6 +60,15 @@ npm run tunnel -- --url http://127.0.0.1:8080 [--name tmp] [--output json]
 Host defaults to `https://go.treau.me` (override per-box with
 `TUNNEL_HOST=https://...` or `tunnel config set host <URL>`).
 
+No Node on the origin box? The agent has a pure-stdlib Python twin —
+no pip, no clone needed (see `agent/README.md`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py -o /tmp/agent.py
+ROOM=$(openssl rand -hex 16)
+EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py
+```
+
 Prefer a bare `tunnel` on PATH? `npm link` (or keep the manual
 `ln -sf "$PWD/bin/tunnel" ~/.local/bin/tunnel`), then drop the
 `npm run tunnel --` prefix. Command parity with cloudflared:

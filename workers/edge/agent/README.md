@@ -3,6 +3,21 @@
 Two scripts, both zero-dep Node 22+, both dial **out** (outbound 443 + DNS
 only, no inbound). Azure TREAU is never involved.
 
+No Node on the box? Use the Python twin instead — pure standard library
+(no pip): `agent.py` mirrors `agent.js` exactly (same env, same protocol,
+same heartbeat). `python3 --version` is the only requirement (3.8+).
+
+```bash
+# zero-clone one-liner (no git, no Node, no pip):
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \
+  -o /tmp/agent.py
+ROOM=$(openssl rand -hex 16)   # 32-char long URL ID, the secret
+EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" \
+UPSTREAM="http://127.0.0.1:8080" \
+python3 /tmp/agent.py
+# browse: https://go.treau.me/t/$ROOM/
+```
+
 * `agent.js` — HTTP origins (`UPSTREAM=http://127.0.0.1:8080`). Browsers use
   plain URLs, see `../TUNNEL.md`.
 * `tcp-agent.js` — raw TCP, one dial to `SSH_HOST:SSH_PORT` (default
