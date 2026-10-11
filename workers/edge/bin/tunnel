@@ -1,0 +1,503 @@
+#!/usr/bin/env node
+// treaulab tunnel CLI: cloudflared-style ergonomics for the edge tunnels.
+// Zero dependencies, Node 20+. Local state (names, rooms, upstreams) lives in
+// ~/.config/treaulab/tunnels.json; secret VALUES live in secrets.json (0600)
+// or env (TUNNEL_RELAY_TOKEN / TUNNEL_PIPE_TOKEN / TUNNEL_HOST) — never in git.
+//
+//   tunnel quickstart        first-run checks + config
+//   tunnel login             verify wrangler auth + store host/tokens once
+//   tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room R]
+//   tunnel list | url <name> | run <name> | ssh <name> | ssh-config <name>
+//   tunnel logs | delete <name> | config [get|set] | doctor
+
+import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline";
+
+const HERE = path.dirname(new URL(import.meta.url).pathname);
+const EDGE_DIR = path.resolve(HERE, "..");
+const AGENTS = {
+	http: path.join(EDGE_DIR, "agent", "agent.js"),
+	tcp: path.join(EDGE_DIR, "agent", "tcp-agent.js"),
+};
+const PROXY = path.join(HERE, "ws-ssh-proxy.js");
+
+const CONF_DIR = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "treaulab");
+const STATE_FILE = path.join(CONF_DIR, "tunnels.json");
+const SECRETS_FILE = path.join(CONF_DIR, "secrets.json");
+const CONFIG_FILE = path.join(CONF_DIR, "config.json");
+
+const NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+const fail = (msg, code = 1) => {
+	console.error(`tunnel: ${msg}`);
+	process.exit(code);
+};
+const info = (...a) => console.log(...a);
+
+function readJson(file, fallback) {
+	try {
+		return JSON.parse(fs.readFileSync(file, "utf8"));
+	} catch {
+		return fallback;
+	}
+}
+function writeJson(file, obj, mode) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	fs.writeFileSync(file, JSON.stringify(obj, null, 2) + "\n", { mode });
+}
+
+const loadState = () => readJson(STATE_FILE, { tunnels: {} });
+const saveState = (s) => writeJson(STATE_FILE, s);
+const loadConfig = () => readJson(CONFIG_FILE, {});
+const saveConfig = (c) => writeJson(CONFIG_FILE, c);
+
+function loadSecrets() {
+	return {
+		relay: process.env.TUNNEL_RELAY_TOKEN || readJson(SECRETS_FILE, {}).relay || null,
+		pipe: process.env.TUNNEL_PIPE_TOKEN || readJson(SECRETS_FILE, {}).pipe || null,
+	};
+}
+function saveSecrets(s) {
+	writeJson(SECRETS_FILE, s, 0o600);
+	try {
+		fs.chmodSync(SECRETS_FILE, 0o600);
+	} catch {}
+}
+
+function edgeHost() {
+	const h = (process.env.TUNNEL_HOST || loadConfig().host || "").replace(/\/$/, "");
+	if (!h) fail("no edge host configured — run: tunnel login --host https://<worker-host>");
+	if (!/^https?:\/\//.test(h)) fail(`bad host ${JSON.stringify(h)} — want https://...`);
+	return h;
+}
+const wsBase = () => edgeHost().replace(/^http/, "ws");
+
+function tokenFor(kind) {
+	const s = loadSecrets();
+	const t = kind === "tcp" ? s.pipe : s.relay;
+	if (!t) {
+		fail(
+			`missing ${kind === "tcp" ? "PIPE" : "RELAY"}_TOKEN — run: tunnel login ` +
+				`(or export TUNNEL_${kind === "tcp" ? "PIPE" : "RELAY"}_TOKEN=...)`,
+		);
+	}
+	return t;
+}
+
+function getTunnel(name) {
+	const t = loadState().tunnels[name];
+	if (!t) fail(`unknown tunnel ${JSON.stringify(name)} — see: tunnel list`);
+	return t;
+}
+
+function prompt(question) {
+	return new Promise((resolve) => {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		rl.question(question, (ans) => {
+			rl.close();
+			resolve(ans.trim());
+		});
+	});
+}
+
+// Hidden input (no echo). Falls back to visible if stdin isn't a TTY.
+function promptHidden(question) {
+	if (!process.stdin.isTTY) return prompt(question);
+	return new Promise((resolve) => {
+		process.stdout.write(question);
+		const stdin = process.stdin;
+		stdin.setRawMode(true);
+		stdin.resume();
+		let buf = "";
+		const done = () => {
+			stdin.setRawMode(false);
+			stdin.pause();
+			stdin.removeListener("data", onData);
+			process.stdout.write("\n");
+			resolve(buf.trim());
+		};
+		function onData(c) {
+			const s = c.toString("utf8");
+			if (s === "\n" || s === "\r" || s === "\u0004") return done();
+			if (s === "\u0003") {
+				process.stdout.write("\n");
+				process.exit(130);
+			}
+			if (s === "\u007f") {
+				buf = buf.slice(0, -1);
+				return;
+			}
+			buf += s;
+		}
+		stdin.on("data", onData);
+	});
+}
+
+function checkNode() {
+	const [maj] = process.versions.node.split(".").map(Number);
+	if (maj < 20) fail(`node >= 20 required, have ${process.versions.node}`);
+}
+function haveBin(bin) {
+	return spawnSync(process.platform === "win32" ? "where" : "which", [bin]).status === 0;
+}
+
+// ---- commands ------------------------------------------------------------
+
+function cmdHelp() {
+	info(`usage: tunnel <command> [args]
+
+  quickstart                  first-run: checks + config + next steps
+  login [--host H] [--relay-token T --pipe-token P]
+                              verify wrangler auth, store host + tokens once
+  create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room R]
+                              remember a tunnel (room defaults to name)
+  list                        show remembered tunnels
+  url <name>                  print browser URL (http) or agent+ssh info (tcp)
+  run <name>                  run the origin agent in the foreground
+  ssh <name> [--print] [ssh-args...]
+                              ssh through the pipe (ProxyCommand built inline)
+  ssh-config <name> [--install]
+                              print (or append) an ~/.ssh/config block
+  logs                        tail live edge logs (wrangler tail)
+  delete <name>               forget a tunnel (rooms vanish when unused)
+  config [get <k> | set <k> <v>]
+                              inspect edge host config (key: host)
+  doctor                      self-check: node, ssh, auth, host, tokens
+
+state: ${STATE_FILE}
+secrets (0600): ${SECRETS_FILE}`);
+}
+
+function cmdLogin(argv) {
+	checkNode();
+	const get = (f) => {
+		const i = argv.indexOf(f);
+		return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
+	};
+	const cfg = loadConfig();
+	const host = get("--host") || cfg.host || process.env.TUNNEL_HOST || null;
+	const secrets = readJson(SECRETS_FILE, {});
+	let relay = get("--relay-token") || process.env.TUNNEL_RELAY_TOKEN || secrets.relay || null;
+	let pipe = get("--pipe-token") || process.env.TUNNEL_PIPE_TOKEN || secrets.pipe || null;
+
+	info(`node ${process.versions.node} OK`);
+	info(haveBin("wrangler") || haveBin("npx") ? "wrangler available" : "note: wrangler not found (only needed for `tunnel logs` / deploys)");
+	const who = spawnSync("npx", ["wrangler", "whoami"], { cwd: EDGE_DIR, encoding: "utf8" });
+	if (who.status === 0) {
+		const line = (who.stdout + who.stderr).split("\n").find((l) => /logged in|email/i.test(l));
+		info(line?.trim() ? `cloudflare auth: ${line.trim()}` : "cloudflare auth OK");
+	} else {
+		info("note: `npx wrangler login` not completed (needed for deploys + `tunnel logs`, not for using tunnels)");
+	}
+
+	return (async () => {
+		let h = host;
+		if (!h) {
+			if (!process.stdin.isTTY) fail("no host configured — re-run with: tunnel login --host https://<worker-host>");
+			h = await prompt("edge host (https://treaulab-edge.<acct>.workers.dev): ");
+			if (!h) fail("host is required");
+		}
+		saveConfig({ ...cfg, host: h.replace(/\/$/, "") });
+		if (!relay) {
+			relay = process.stdin.isTTY
+				? await promptHidden("RELAY_TOKEN (/ws + /t, hidden input): ")
+				: fail("no RELAY_TOKEN — re-run with --relay-token ...");
+		}
+		if (!pipe) {
+			pipe = process.stdin.isTTY
+				? await promptHidden("PIPE_TOKEN (/p terminals, hidden input): ")
+				: fail("no PIPE_TOKEN — re-run with --pipe-token ...");
+		}
+		if (!relay || !pipe) fail("both tokens are required");
+		saveSecrets({ relay, pipe });
+		info(`host: ${h}`);
+		info(`secrets stored (0600): ${SECRETS_FILE}`);
+		info("done. next: tunnel create <name> --http|--tcp ...");
+	})();
+}
+
+function cmdCreate(argv) {
+	const [name, ...rest] = argv;
+	if (!name || !NAME_RE.test(name)) fail("usage: tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room R]");
+	const get = (f) => {
+		const i = rest.indexOf(f);
+		return i >= 0 && rest[i + 1] ? rest[i + 1] : null;
+	};
+	const wantHttp = rest.includes("--http");
+	const wantTcp = rest.includes("--tcp");
+	const upstream = get("--upstream");
+	const to = get("--to");
+	const room = get("--room") || name;
+	if (!NAME_RE.test(room)) fail(`bad room ${JSON.stringify(room)} — want [A-Za-z0-9_-]{1,64}`);
+	let kind = wantTcp ? "tcp" : wantHttp ? "http" : upstream ? "http" : to ? "tcp" : null;
+	if (!kind) fail("say which kind: --http --upstream <URL>  or  --tcp --to <HOST:PORT>");
+	if (kind === "http" && !upstream) fail("--http needs --upstream <URL> (e.g. http://127.0.0.1:8080)");
+	if (kind === "tcp" && !to) fail("--tcp needs --to <HOST:PORT> (e.g. 127.0.0.1:22)");
+	const state = loadState();
+	if (state.tunnels[name] && !rest.includes("--force")) {
+		fail(`${JSON.stringify(name)} already exists — pick another name or re-run with --force`);
+	}
+	state.tunnels[name] = {
+		kind,
+		room,
+		...(kind === "http" ? { upstream } : { to }),
+		createdAt: new Date().toISOString(),
+	};
+	saveState(state);
+	info(`remembered ${kind} tunnel ${JSON.stringify(name)} (room ${JSON.stringify(room)})`);
+	info(kind === "http" ? `browser URL:  tunnel url ${name}` : `connect with:  tunnel ssh ${name}`);
+}
+
+function cmdList() {
+	const tunnels = loadState().tunnels;
+	const names = Object.keys(tunnels);
+	if (!names.length) return info("no tunnels yet — see: tunnel create <name> --http|--tcp ...");
+	const rows = [["NAME", "KIND", "ROOM", "TARGET"]];
+	for (const n of names.sort()) {
+		const t = tunnels[n];
+		rows.push([n, t.kind, t.room, t.kind === "http" ? t.upstream : t.to]);
+	}
+	const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
+	for (const r of rows) info(r.map((c, i) => c.padEnd(widths[i])).join("  "));
+}
+
+function agentUrl(t, token) {
+	const base = wsBase();
+	return t.kind === "http"
+		? `${base}/t/${token}/${t.room}/__agent`
+		: `${base}/p/${token}/${t.room}/__agent`;
+}
+
+function cmdUrl(argv) {
+	const [name] = argv;
+	if (!name) fail("usage: tunnel url <name>");
+	const t = getTunnel(name);
+	if (t.kind === "http") {
+		const token = tokenFor("http");
+		info(`${edgeHost()}/t/${token}/${t.room}/`);
+		info(`agent: EDGE_URL="${wsBase()}/t/${token}/${t.room}/__agent" UPSTREAM="${t.upstream}" node agent/agent.js`);
+	} else {
+		const token = tokenFor("tcp");
+		info(`agent: EDGE_URL="${wsBase()}/p/${token}/${t.room}/__agent" node agent/tcp-agent.js`);
+		info(`laptop: tunnel ssh ${name}   (or: tunnel ssh-config ${name})`);
+	}
+}
+
+function cmdRun(argv) {
+	const [name] = argv;
+	if (!name) fail("usage: tunnel run <name>");
+	const t = getTunnel(name);
+	const script = AGENTS[t.kind];
+	if (!fs.existsSync(script)) fail(`agent script missing: ${script}`);
+	const env = { ...process.env };
+	if (t.kind === "http") {
+		env.EDGE_URL = `${wsBase()}/t/${tokenFor("http")}/${t.room}/__agent`;
+		env.UPSTREAM = t.upstream;
+	} else {
+		env.EDGE_URL = `${wsBase()}/p/${tokenFor("tcp")}/${t.room}/__agent`;
+		const [h, p] = t.to.split(":");
+		env.SSH_HOST = h;
+		env.SSH_PORT = p || "22";
+	}
+	info(`running ${t.kind} agent for ${JSON.stringify(name)} (room ${JSON.stringify(t.room)}) — Ctrl-C to stop`);
+	const child = spawn("node", [script], { env, stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function sshProxyCmd(t) {
+	const token = tokenFor("tcp");
+	return `node ${JSON.stringify(path.join(HERE, "ws-ssh-proxy.js"))} ${wsBase()}/p/${token}/${t.room}`;
+}
+
+function cmdSsh(argv) {
+	const [name, ...rest] = argv;
+	if (!name) fail("usage: tunnel ssh <name> [--print] [ssh-args...]");
+	if (!haveBin("ssh")) fail("ssh binary not found on PATH");
+	const t = getTunnel(name);
+	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel — ssh needs a --tcp one`);
+	const proxy = sshProxyCmd(t);
+	if (rest.includes("--print")) {
+		return info(`ssh -o ${JSON.stringify(`ProxyCommand ${proxy}`)} -o ServerAliveInterval=25 -o ServerAliveCountMax=3 ${name}`);
+	}
+	const args = [
+		"-o",
+		`ProxyCommand ${proxy}`,
+		"-o",
+		"ServerAliveInterval=25",
+		"-o",
+		"ServerAliveCountMax=3",
+		name,
+		...rest,
+	];
+	const child = spawn("ssh", args, { stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function cmdSshConfig(argv) {
+	const [name, ...rest] = argv;
+	if (!name) fail("usage: tunnel ssh-config <name> [--install]");
+	const t = getTunnel(name);
+	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel`);
+	const block = `Host ${name}
+  HostName ${name}
+  ProxyCommand ${sshProxyCmd(t)}
+  ServerAliveInterval 25
+  ServerAliveCountMax 3`;
+	if (!rest.includes("--install")) return info(block + "\n");
+	const sshConfig = path.join(os.homedir(), ".ssh", "config");
+	const begin = `# >>> treaulab tunnel ${name} >>>`;
+	const end = `# <<< treaulab tunnel ${name} <<<`;
+	const entry = `${begin}\n${block}\n${end}\n`;
+	fs.mkdirSync(path.dirname(sshConfig), { recursive: true });
+	const cur = fs.existsSync(sshConfig) ? fs.readFileSync(sshConfig, "utf8") : "";
+	if (cur.includes(begin)) return info(`already installed in ${sshConfig}`);
+	fs.appendFileSync(sshConfig, (cur.endsWith("\n") || !cur ? "" : "\n") + entry);
+	try {
+		fs.chmodSync(sshConfig, 0o600);
+	} catch {}
+	info(`appended to ${sshConfig} — now plain \`ssh ${name}\` works`);
+}
+
+function cmdLogs() {
+	const child = spawn("npx", ["wrangler", "tail"], { cwd: EDGE_DIR, stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function cmdDelete(argv) {
+	const [name] = argv;
+	if (!name) fail("usage: tunnel delete <name>");
+	const state = loadState();
+	if (!state.tunnels[name]) fail(`unknown tunnel ${JSON.stringify(name)}`);
+	delete state.tunnels[name];
+	saveState(state);
+	info(`forgot ${JSON.stringify(name)} (rooms vanish when unused; to revoke access, rotate the secret)`);
+}
+
+function cmdConfig(argv) {
+	const [sub, k, v] = argv;
+	const cfg = loadConfig();
+	if (!sub || sub === "get") {
+		if (k) return info(`${k}=${cfg[k] ?? "(unset)"}`);
+		return info(`host=${cfg.host ?? "(unset)"}`);
+	}
+	if (sub === "set" && k && v !== undefined) {
+		if (k !== "host") fail(`unknown key ${JSON.stringify(k)} (only: host)`);
+		saveConfig({ ...cfg, host: v.replace(/\/$/, "") });
+		return info(`host=${v}`);
+	}
+	fail("usage: tunnel config [get [host] | set host <URL>]");
+}
+
+async function cmdDoctor() {
+	checkNode();
+	let ok = true;
+	const check = (label, pass, hint = "") => {
+		info(`${pass ? "PASS" : "FAIL"}  ${label}${pass || !hint ? "" : ` — ${hint}`}`);
+		if (!pass) ok = false;
+	};
+	check(`node >= 20 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 20);
+	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
+	const cfg = loadConfig();
+	const host = process.env.TUNNEL_HOST || cfg.host;
+	check("edge host configured", !!host, "tunnel login --host https://...");
+	const secrets = loadSecrets();
+	check("RELAY_TOKEN present", !!secrets.relay, "tunnel login");
+	check("PIPE_TOKEN present", !!secrets.pipe, "tunnel login");
+	if (host) {
+		const curl = (p) =>
+			spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", host + p], {
+				encoding: "utf8",
+			}).stdout.trim();
+		const health = haveBin("curl") ? curl("/health") : null;
+		if (health === null) {
+			info("SKIP  edge reachability (curl missing)");
+		} else {
+			check("edge reachable (/health → 200)", health === "200", `got ${health || "no response"}`);
+			// Token shape check: wrong token must 403; right token, no agent must 502/426.
+			// Either non-200 proves the gate answers; 200 would be surprising here.
+			if (secrets.relay) {
+				const bad = curl("/t/definitely-wrong-token/doctor/");
+				check("relay gate answers (bad token → 403)", bad === "403", `got ${bad || "no response"}`);
+				const good = curl(`/t/${secrets.relay}/doctor-room-xyz/`);
+				check(
+					"RELAY_TOKEN accepted shape (no agent → 502)",
+					good === "502",
+					`got ${good || "no response"} (403 = token mismatch, re-check saved value)`,
+				);
+			}
+			if (secrets.pipe) {
+				const bad = curl("/p/definitely-wrong-token/doctor-room-xyz");
+				check("pipe gate answers (bad token → 403)", bad === "403", `got ${bad || "no response"}`);
+			}
+		}
+	}
+	const state = loadState();
+	info(`remembered tunnels: ${Object.keys(state.tunnels).length} (tunnel list)`);
+	process.exit(ok ? 0 : 1);
+}
+
+async function cmdQuickstart(argv) {
+	checkNode();
+	info("1/4 node OK");
+	const host = (() => {
+		const i = argv.indexOf("--host");
+		return (i >= 0 && argv[i + 1]) || process.env.TUNNEL_HOST || loadConfig().host || null;
+	})();
+	if (!host) {
+		fail("quickstart needs the edge host: re-run as  tunnel quickstart --host https://treaulab-edge.<acct>.workers.dev");
+	}
+	saveConfig({ ...loadConfig(), host: host.replace(/\/$/, "") });
+	info(`2/4 host: ${host}`);
+	const secrets = readJson(SECRETS_FILE, {});
+	if (!secrets.relay || !secrets.pipe) {
+		info("3/4 paste tokens once (hidden input; stored 0600, never in git):");
+		if (!secrets.relay) {
+			secrets.relay = await promptHidden("  RELAY_TOKEN (/ws + /t): ");
+			if (!secrets.relay) fail("RELAY_TOKEN is required");
+		}
+		if (!secrets.pipe) {
+			secrets.pipe = await promptHidden("  PIPE_TOKEN (/p terminals): ");
+			if (!secrets.pipe) fail("PIPE_TOKEN is required");
+		}
+		saveSecrets(secrets);
+	} else {
+		info("3/4 tokens already stored");
+	}
+	info("4/4 next:");
+	info("  tunnel create site1 --http --upstream http://127.0.0.1:8080");
+	info("  tunnel create lockedvps --tcp --to 127.0.0.1:22");
+	info("  tunnel run lockedvps        # on the origin box");
+	info("  tunnel ssh lockedvps        # from the laptop");
+	info("  tunnel doctor               # self-check anytime");
+}
+
+// ---- main ---------------------------------------------------------------
+
+const [cmd, ...argv] = process.argv.slice(2);
+const cmds = {
+	help: cmdHelp,
+	login: cmdLogin,
+	create: cmdCreate,
+	list: cmdList,
+	url: cmdUrl,
+	run: cmdRun,
+	ssh: cmdSsh,
+	"ssh-config": cmdSshConfig,
+	logs: cmdLogs,
+	delete: cmdDelete,
+	config: cmdConfig,
+	doctor: cmdDoctor,
+	quickstart: cmdQuickstart,
+};
+if (!cmd || cmd === "--help" || cmd === "-h") {
+	cmdHelp();
+	process.exit(0);
+}
+if (!cmds[cmd]) {
+	cmdHelp();
+	fail(`unknown command ${JSON.stringify(cmd)}`);
+}
+await cmds[cmd](argv);

@@ -36,6 +36,21 @@ artifact synced by `npm run sync:public`, never edited by hand.
 * Wrong token → `403`. Non-websocket GET on a `/ws/` path → `426`.
 * Soft caps (`src/room.js`): 1000 sockets/room, 1 MiB/message (close `1009`).
 
+## Use it (`tunnel` CLI — the easy way)
+
+```bash
+ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # once (ensure on PATH)
+tunnel quickstart --host https://treau.me
+tunnel create site1 --http --upstream http://127.0.0.1:8080
+tunnel create lockedvps --tcp --to 127.0.0.1:22
+tunnel list && tunnel doctor
+tunnel run lockedvps     # on the origin box
+tunnel ssh lockedvps     # from the laptop — no ~/.ssh/config editing
+```
+
+Full command reference: `tunnel --help`. Manual (no-CLI) paths stay
+documented in `TUNNEL.md` / `PIPE.md` as fallback.
+
 ## Local dev
 
 ```bash

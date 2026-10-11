@@ -49,7 +49,17 @@ Rules: one agent per room (newcomer supersedes, old socket closed `4000`,
 in-flight fails `502`); binary WS frames are ignored; unknown types ignored;
 oversize response bodies fail `502` (never truncate).
 
-## Run it
+## Run it (easy way — `tunnel` CLI)
+
+```bash
+tunnel quickstart --host https://treau.me   # once: host + tokens
+tunnel create site1 --http --upstream http://127.0.0.1:8080
+tunnel run site1        # on the locked box (or: tunnel url site1 for the raw EDGE_URL)
+```
+
+Then browse the printed URL. Manual equivalent (no CLI) below.
+
+## Run it (manual)
 
 1. Edge: `wrangler secret put RELAY_TOKEN` (once), deploy (`npm run deploy`
    or CI `edge.yml`), custom domain as usual.

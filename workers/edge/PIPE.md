@@ -43,7 +43,23 @@ upstream TCP side but keeps delivering the response; exit is still driven by
 the far-end close. A 5-byte DATA payload colliding with that pattern is a
 2^-40 fluke.
 
-## Laptop setup (the magic way — once)
+## Laptop setup (the easy way — `tunnel` CLI)
+
+```bash
+# one-time: symlink + remember host/tokens (prompts once, stored 0600)
+ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # ensure ~/.local/bin is on PATH
+tunnel quickstart --host https://treau.me   # or your *.workers.dev preview host
+tunnel create lockedvps --tcp --to 127.0.0.1:22
+tunnel ssh lockedvps            # that's it — ProxyCommand built inline
+```
+
+`scp`/`sftp` ride the same path (`tunnel ssh lockedvps` covers `ssh`; for
+persistent config: `tunnel ssh-config lockedvps --install`, then plain
+`ssh lockedvps` / `scp f lockedvps:/tmp/`). `tunnel url lockedvps` shows the
+agent `EDGE_URL` for the locked box; `tunnel status`/`doctor`/`logs` cover
+observability. Manual equivalent (no CLI) below.
+
+## Laptop setup (manual, no CLI)
 
 ```bash
 node --version  # >= 20
