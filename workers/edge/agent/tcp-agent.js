@@ -2,9 +2,9 @@
 // treaulab pipe agent: runs on the locked-down box next to sshd, dials OUT one
 // WebSocket to the edge and dials 127.0.0.1:22 per accepted stream.
 // Zero dependencies, Node 22+. Only needs OUTBOUND 443 (wss) + DNS.
-// Azure TREAU is never involved.
+// Azure TREAU is never involved. Long-URL-only: box ID is the secret.
 //
-//   EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/<box>/__agent" \
+//   EDGE_URL="wss://treau.me/p/<long-box-id>/__agent" \
 //   SSH_HOST="127.0.0.1" SSH_PORT="22" \
 //   node tcp-agent.js
 //
@@ -15,7 +15,7 @@ import os from "node:os";
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
-	console.error("EDGE_URL is required, e.g. wss://treau.me/p/<TOKEN>/<box>/__agent");
+	console.error("EDGE_URL is required, e.g. wss://treau.me/p/<long-box-id>/__agent");
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.
@@ -24,7 +24,7 @@ if (EDGE_URL !== EDGE_URL_RAW) {
 	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
 }
 if (!/^wss?:\/\//.test(EDGE_URL)) {
-	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/p/<TOKEN>/<box>/__agent`);
+	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/p/<long-box-id>/__agent`);
 	process.exit(1);
 }
 if (typeof WebSocket === "undefined") {

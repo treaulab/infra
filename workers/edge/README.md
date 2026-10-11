@@ -26,27 +26,45 @@ workers/edge/
 Single source for the site stays `apps/website/src/` — `public/` is a build
 artifact synced by `npm run sync:public`, never edited by hand.
 
-## Protocol
+## Protocol (long-URL-only, trycloudflare-style)
 
-* Connect: `wss://<host>/ws/<TOKEN>` (room `main`) or `wss://<host>/ws/<TOKEN>/<room>`
-  (`room` = `[A-Za-z0-9_-]{1,64}`). Anything sent is broadcast raw to every
+* Connect: `wss://<host>/ws/<roomId>` (`roomId` = `[A-Za-z0-9_-]{20,64}`,
+  e.g. 32 hex chars). Anything sent is broadcast raw to every
   *other* socket in the same room. No persistence, no history.
+  The long ID *is* the secret — no token. Short IDs → `404`.
 * Heartbeat (doesn't wake a hibernated room): send exactly
   `__treaulab_ping__`, expect `__treaulab_pong__`.
-* Wrong token → `403`. Non-websocket GET on a `/ws/` path → `426`.
+* Non-websocket GET on a `/ws/` path → `426`.
 * Soft caps (`src/room.js`): 1000 sockets/room, 1 MiB/message (close `1009`).
 
-## Use it (`tunnel` CLI — the easy way)
+## Use it (`tunnel` CLI — mirrors `cloudflared tunnel`)
 
 ```bash
-ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # once (ensure on PATH)
-tunnel quickstart --host https://treau.me
-tunnel create site1 --http --upstream http://127.0.0.1:8080
-tunnel create lockedvps --tcp --to 127.0.0.1:22
-tunnel list && tunnel doctor
-tunnel run lockedvps     # on the origin box
-tunnel ssh lockedvps     # from the laptop — no ~/.ssh/config editing
+cd workers/edge && npm install          # exposes `tunnel` via npm run tunnel --
+npm run tunnel -- quickstart --host https://treau.me
+npm run tunnel -- create site1 --http --upstream http://127.0.0.1:8080
+npm run tunnel -- create lockedvps --tcp --to 127.0.0.1:22
+npm run tunnel -- route site1           # public URL (like: cloudflared tunnel route dns)
+npm run tunnel -- run lockedvps         # on the origin box (like: tunnel run)
+npm run tunnel -- access ssh lockedvps  # from the laptop (like: cloudflared access ssh)
 ```
+
+Instant share, no saving (trycloudflare-style):
+
+```bash
+npm run tunnel -- --url http://127.0.0.1:8080 [--name tmp] [--output json]
+```
+
+Prefer a bare `tunnel` on PATH? `npm link` (or keep the manual
+`ln -sf "$PWD/bin/tunnel" ~/.local/bin/tunnel`), then drop the
+`npm run tunnel --` prefix. Command parity with cloudflared:
+`login ≈ tunnel login`, `info ≈ tunnel info`, `delete [-f]`,
+`cleanup`, per-command `--help`, and `tunnel tunnel <sub>` nesting all work.
+Bare `tunnel ssh` / `tunnel url` / `tunnel status` stay as aliases.
+
+Where cloudflared keeps `~/.cloudflared/cert.pem` + `config.yml` + `<uuid>.json`,
+we keep `~/.config/treaulab/config.json` (edge host)
++ `tunnels.json` (named tunnels + long URL IDs + ingress). Same jobs, JSON only.
 
 Full command reference: `tunnel --help`. Manual (no-CLI) paths stay
 documented in `TUNNEL.md` / `PIPE.md` as fallback.
@@ -56,28 +74,28 @@ documented in `TUNNEL.md` / `PIPE.md` as fallback.
 ```bash
 cd workers/edge
 npm install
-cp .dev.vars.example .dev.vars   # fill RELAY_TOKEN (any long random string)
-npm run dev                      # http://127.0.0.1:8787
+npm run dev                      # http://127.0.0.1:8787 (no secrets needed)
 # static:  curl -sI http://127.0.0.1:8787/
-# relay:   npx wscat -c 'ws://127.0.0.1:8787/ws/<TOKEN>/test'  (x2 terminals)
+# relay:   ID=$(openssl rand -hex 16); npx wscat -c "ws://127.0.0.1:8787/ws/$ID"  (x2 terminals)
 ```
 
-Generate a token: `openssl rand -hex 32`.
+Generate a room ID: `openssl rand -hex 16` (32 chars, meets 20-64 rule).
 
-## Secrets / first deploy
+## Secrets / first deploy (none)
 
 ```bash
 cd workers/edge
 npx wrangler login
-npx wrangler secret put RELAY_TOKEN   # paste the openssl value (/ws/* + /t/*)
-npx wrangler secret put PIPE_TOKEN    # a DIFFERENT value (/p/* terminals)
 npm run deploy                        # → https://treaulab-edge.<acct>.workers.dev
 ```
 
+Long-URL-only: no `wrangler secret put` needed. If you previously set
+`RELAY_TOKEN` / `PIPE_TOKEN`, delete them once:
+`npx wrangler secret delete RELAY_TOKEN` + `PIPE_TOKEN`.
+
 CI (`edge.yml`, path-filtered to `workers/edge/**` + `apps/website/src/**`)
 needs repo secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`.
-`RELAY_TOKEN` / `PIPE_TOKEN` are set once via `wrangler secret put`, not
-through CI. SSH-pipe usage: `PIPE.md` (`ssh lockedvps` via ProxyCommand).
+SSH-pipe usage: `PIPE.md` (`ssh lockedvps` via ProxyCommand).
 
 Dry-run validation without uploading: `npm run deploy:dry`.
 
@@ -88,7 +106,7 @@ Dry-run validation without uploading: `npm run deploy:dry`.
 2. Verify on the custom domain before touching anything else:
    `curl -sI https://treau.me/` → `200`, `/robots.txt`, `/sitemap.xml`,
    `/.well-known/security.txt`, `/nope-123` → `404` + `noindex`,
-   `wss://treau.me/ws/<TOKEN>/smoke` echo across two clients.
+   `wss://treau.me/ws/<long-id>` echo across two clients.
 3. Azure is now out of the path (verify: `docker logs caddy` shows no new
    access; Azure Monitor egress flat). Leave the VPS running 48h.
 4. True zero: only after the soak, optionally stop Caddy / close NSG
@@ -101,8 +119,9 @@ Dry-run validation without uploading: `npm run deploy:dry`.
   Deploys **drop all connections** — clients must reconnect with backoff.
 * Plan caps: free ≈100k req/day, 10ms CPU, 5GB DO storage; real use wants
   Paid. 32 MiB runtime inbound cap; app enforces 1 MiB.
-* Abuse: secret-path gate is the only auth — rotate via
-  `wrangler secret put RELAY_TOKEN` + update clients. No open relay paths.
+* Abuse: long-URL obscurity is the only gate — anyone with the link can use
+  it. Rotate by creating a fresh ID (`tunnel create` / `--url`) and dropping
+  the old one. No open relay paths (short IDs → `404`).
 * ToS: generic client-relay is fine; don't repurpose as a circumvention VPN
   without checking Workers/Zero Trust terms — sanctioned private access is
   Tunnel + Access/WARP instead.

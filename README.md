@@ -50,15 +50,14 @@ once the VPS is stable (see `docs/runbooks.md`).
      ansible-playbook -i ansible/inventory/prod.yml ansible/playbooks/site.yml
      ```
 
-See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER` for VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for edge; `RELAY_TOKEN` via `wrangler secret put`, never committed).
+See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER` for VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for edge).
 
 ## Edge (full-edge relay, zero Azure egress)
 
 ```bash
 cd workers/edge && npm install
-cp .dev.vars.example .dev.vars   # fill RELAY_TOKEN
-npm run dev                      # local: http://127.0.0.1:8787
-npm run deploy                   # needs wrangler login + RELAY_TOKEN secret set
+npm run dev                      # local: http://127.0.0.1:8787 (no secrets)
+npm run deploy                   # needs wrangler login only (long-URL, no tokens)
 ```
 
 Details + DNS cutover/rollback: `workers/edge/README.md`.

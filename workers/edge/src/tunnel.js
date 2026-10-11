@@ -3,8 +3,8 @@
 // HTTP(S) URLs. No origin fetch anywhere: Azure stays at zero egress.
 //
 // Roles (set by worker.js in the X-Tunnel-Role header, trusted same-account):
-//   agent  -> WS only,  path /t/<TOKEN>/<room>/__agent
-//   client -> HTTP only, path /ws untouched, /t/<TOKEN>/<room>/[...rest]
+//   agent  -> WS only,  path /t/<roomId>/__agent
+//   client -> HTTP only, path /ws untouched, /t/<roomId>/[...rest]
 // Plain WS upgrades on client paths get 426 (this tunnel is HTTP-only).
 
 const MAX_REQ_BODY = 2 * 1024 * 1024; // browser -> agent
@@ -142,8 +142,8 @@ export class TunnelRoom {
 			if (buf.length) reqBodyB64 = b64encode(buf);
 		}
 
-		// Upstream path = everything after /t/<TOKEN>/<room>, default "/".
-		const m = url.pathname.match(/^\/t\/[^/]+\/[^/]+(\/.*)?$/);
+		// Upstream path = everything after /t/<roomId>, default "/".
+		const m = url.pathname.match(/^\/t\/[^/]+(\/.*)?$/);
 		const upstreamPath = (m?.[1] ?? "/") + url.search;
 
 		const id = crypto.randomUUID();

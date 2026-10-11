@@ -4,7 +4,7 @@
 //
 //   Host lockedvps
 //     HostName lockedvps
-//     ProxyCommand node /path/to/ws-ssh-proxy.js wss://treau.me/p/<PIPE_TOKEN>/<box>
+//     ProxyCommand node /path/to/ws-ssh-proxy.js wss://treau.me/p/<long-box-id>
 //     ServerAliveInterval 25
 //     ServerAliveCountMax 3
 //
@@ -13,7 +13,7 @@
 
 const EDGE_URL_RAW = process.argv[2];
 if (!EDGE_URL_RAW || !/^wss?:\/\//.test(EDGE_URL_RAW)) {
-	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<TOKEN>/<box>");
+	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<long-box-id>");
 	process.exit(2);
 }
 const EDGE_URL = EDGE_URL_RAW;
@@ -93,6 +93,6 @@ ws.onclose = (e) => {
 ws.onerror = () => {
 	// onclose follows with the real code; this just guards silence.
 	setTimeout(() => {
-		if (!wsClosed) fail("websocket error (no agent? wrong token?)");
+		if (!wsClosed) fail("websocket error (no agent? wrong URL?)");
 	}, 500);
 };

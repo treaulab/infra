@@ -20,14 +20,15 @@ is never involved (stays at zero egress).
 ```bash
 # on the locked-down VPS, next to your :8080:
 node --version   # need >= 22 (global WebSocket + fetch)
-EDGE_URL="wss://treau.me/t/<TOKEN>/<room>/__agent" \
+ROOM=$(openssl rand -hex 16)   # 32-char long URL ID, the secret
+EDGE_URL="wss://treau.me/t/$ROOM/__agent" \
 UPSTREAM="http://127.0.0.1:8080" \
 node agent.js
 ```
 
-Then from anywhere: `https://treau.me/t/<TOKEN>/<room>/` serves the `:8080`
-content as plain HTTP. Same `<TOKEN>` as `RELAY_TOKEN`, same `<room>` for
-agent and browsers (agent connects to `.../<room>/__agent`).
+Then from anywhere: `https://treau.me/t/$ROOM/` serves the `:8080`
+content as plain HTTP. Same `$ROOM` for agent and browsers
+(agent connects to `.../$ROOM/__agent`). No token.
 
 Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `UPSTREAM_TIMEOUT_MS`
 (default `15000`), `NAME` (default hostname, shown in edge logs).
@@ -43,7 +44,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/usr/bin/node /opt/tunnel/agent.js
-Environment=EDGE_URL=wss://treau.me/t/<TOKEN>/<room>/__agent
+Environment=EDGE_URL=wss://treau.me/t/<long-room-id>/__agent
 Environment=UPSTREAM=http://127.0.0.1:8080
 Restart=always
 RestartSec=5
@@ -65,7 +66,8 @@ belt-and-braces.)
 
 ```bash
 # on the locked-down box, next to sshd on 127.0.0.1:22:
-EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/<box>/__agent" \
+BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel create`
+EDGE_URL="wss://treau.me/p/$BOX/__agent" \
 SSH_HOST="127.0.0.1" SSH_PORT="22" \
 node tcp-agent.js
 ```

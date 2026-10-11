@@ -30,49 +30,53 @@ function isWebSocketUpgrade(request) {
 	return request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 }
 
-// Path shapes: /t/<TOKEN> -> room "main", / -> upstream "/",
-// /t/<TOKEN>/<room>[/...rest] -> named room, rest defaults to "/".
-// /t/<TOKEN>/<room>/__agent is the agent-only control endpoint.
+// Path shapes (long-URL-only, trycloudflare-style: the room/box ID itself
+// is the secret — no separate token):
+// /t/<roomId> -> room, upstream "/",
+// /t/<roomId>/[...rest] -> named room, rest defaults to "/".
+// /t/<roomId>/__agent is the agent-only control endpoint (websocket).
+// IDs must be 20-64 chars [A-Za-z0-9_-] so short guessable names fail fast.
+const ID_RE = /^[A-Za-z0-9_-]{20,64}$/;
+
 function parseTunnelPath(pathname) {
-	const m = pathname.match(/^\/t\/([^/]+)(?:\/([^/]+))?((?:\/.*)?)$/);
+	const m = pathname.match(/^\/t\/([^/]+)((?:\/.*)?)$/);
 	if (!m) return null;
-	const room = m[2] ?? "main";
-	if (!/^[A-Za-z0-9_-]{1,64}$/.test(room) || room === "__agent") return null;
-	const rest = m[3] || "";
+	const room = m[1];
+	if (!ID_RE.test(room)) return null;
+	const rest = m[2] || "";
 	if (rest === "/__agent" || rest.startsWith("/__agent/")) return null;
-	return { token: m[1], room, agent: false };
+	return { room, agent: false };
 }
 
 function parseAgentPath(pathname) {
-	const m = pathname.match(/^\/t\/([^/]+)\/([^/]+)\/__agent\/?$/);
-	if (!m || !/^[A-Za-z0-9_-]{1,64}$/.test(m[2])) return null;
-	return { token: m[1], room: m[2] };
+	const m = pathname.match(/^\/t\/([^/]+)\/__agent\/?$/);
+	if (!m || !ID_RE.test(m[1])) return null;
+	return { room: m[1] };
 }
 
-// Path shapes: /p/<TOKEN>/<box> -> client pipe, /p/<TOKEN>/<box>/__agent.
-// One room per locked box; box names keep DO names predictable and safe.
-// Separate PIPE_TOKEN: a leaked chat-room token must never open terminals.
+// Path shapes: /p/<boxId> -> client pipe, /p/<boxId>/__agent.
+// One room per locked box; box IDs keep DO names unpredictable.
+// No token: knowledge of the long box ID is the only gate.
 function parsePipePath(pathname) {
-	const agent = pathname.match(/^\/p\/([^/]+)\/([^/]+)\/__agent\/?$/);
+	const agent = pathname.match(/^\/p\/([^/]+)\/__agent\/?$/);
 	if (agent) {
-		if (!/^[A-Za-z0-9_-]{1,64}$/.test(agent[2])) return null;
-		return { token: agent[1], box: agent[2], agent: true };
+		if (!ID_RE.test(agent[1])) return null;
+		return { box: agent[1], agent: true };
 	}
-	const client = pathname.match(/^\/p\/([^/]+)\/([^/]+)\/?$/);
-	if (!client || !/^[A-Za-z0-9_-]{1,64}$/.test(client[2]) || client[2] === "__agent") {
+	const client = pathname.match(/^\/p\/([^/]+)\/?$/);
+	if (!client || !ID_RE.test(client[1])) {
 		return null;
 	}
-	return { token: client[1], box: client[2], agent: false };
+	return { box: client[1], agent: false };
 }
 
-// Path shapes: /ws/<TOKEN> -> room "main", /ws/<TOKEN>/<room> -> named room.
-// Room names are restricted to keep DO names predictable and safe.
+// Path shapes: /ws/<roomId> -> one room. Long ID is the secret.
 function parseRelayPath(pathname) {
-	const m = pathname.match(/^\/ws\/([^/]+)(?:\/([^/]+))?\/?$/);
+	const m = pathname.match(/^\/ws\/([^/]+)\/?$/);
 	if (!m) return null;
-	const room = m[2] ?? "main";
-	if (!/^[A-Za-z0-9_-]{1,64}$/.test(room)) return null;
-	return { token: m[1], room };
+	const room = m[1];
+	if (!ID_RE.test(room)) return null;
+	return { room };
 }
 
 export default {
@@ -94,11 +98,6 @@ export default {
 		if (url.pathname === "/p" || url.pathname.startsWith("/p/")) {
 			const parsed = parsePipePath(url.pathname);
 			if (!parsed) return new Response("Not found", { status: 404 });
-			if (!env.PIPE_TOKEN) {
-				console.error("PIPE_TOKEN secret not set");
-				return new Response("Pipe misconfigured", { status: 500 });
-			}
-			if (parsed.token !== env.PIPE_TOKEN) return new Response("Forbidden", { status: 403 });
 			if (!isWebSocketUpgrade(request)) {
 				return new Response("Expected Upgrade: websocket", { status: 426 });
 			}
@@ -117,11 +116,6 @@ export default {
 					? { ...client, agent: false }
 					: null;
 			if (!parsed) return new Response("Not found", { status: 404 });
-			if (!env.RELAY_TOKEN) {
-				console.error("RELAY_TOKEN secret not set");
-				return new Response("Relay misconfigured", { status: 500 });
-			}
-			if (parsed.token !== env.RELAY_TOKEN) return new Response("Forbidden", { status: 403 });
 			const stub = env.TUNNEL.getByName(parsed.room);
 			const fwd = new Request(request);
 			fwd.headers.set("X-Tunnel-Role", parsed.agent ? "agent" : "client");
@@ -131,11 +125,6 @@ export default {
 		if (url.pathname === "/ws" || url.pathname.startsWith("/ws/")) {
 			const parsed = parseRelayPath(url.pathname);
 			if (!parsed) return new Response("Not found", { status: 404 });
-			if (!env.RELAY_TOKEN) {
-				console.error("RELAY_TOKEN secret not set");
-				return new Response("Relay misconfigured", { status: 500 });
-			}
-			if (parsed.token !== env.RELAY_TOKEN) return new Response("Forbidden", { status: 403 });
 			if (!isWebSocketUpgrade(request)) {
 				return new Response("Expected Upgrade: websocket", { status: 426 });
 			}

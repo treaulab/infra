@@ -13,12 +13,13 @@ locked box (sshd :22)                    edge (PipeRoom)                  laptop
                                                           └── ssh lockedvps
 ```
 
-## Endpoints (gated by separate `PIPE_TOKEN`, never the relay token)
+## Endpoints (long-URL-only, no token — the box ID is the secret)
 
-* Agent (WS only): `wss://<host>/p/<TOKEN>/<box>/__agent`
-* Client (WS only, raw bytes): `wss://<host>/p/<TOKEN>/<box>`
-* Wrong token → `403` (HTTP) / refused upgrade. No agent → client upgrade
-  answers HTTP `502` (ssh fails fast, never hangs). Plain GET → `426`.
+* Agent (WS only): `wss://<host>/p/<boxId>/__agent`
+* Client (WS only, raw bytes): `wss://<host>/p/<boxId>`
+* `boxId` = `[A-Za-z0-9_-]{20,64}`. Short IDs → `404`.
+  No agent → client upgrade answers HTTP `502` (ssh fails fast, never hangs).
+  Plain GET → `426`.
 
 ## Frame (binary only): `[type:u8][stream:u32be][payload]`
 
@@ -46,17 +47,17 @@ the far-end close. A 5-byte DATA payload colliding with that pattern is a
 ## Laptop setup (the easy way — `tunnel` CLI)
 
 ```bash
-# one-time: symlink + remember host/tokens (prompts once, stored 0600)
+# one-time: symlink + remember host (no tokens)
 ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # ensure ~/.local/bin is on PATH
 tunnel quickstart --host https://treau.me   # or your *.workers.dev preview host
 tunnel create lockedvps --tcp --to 127.0.0.1:22
-tunnel ssh lockedvps            # that's it — ProxyCommand built inline
+tunnel access ssh lockedvps   # that's it — ProxyCommand built inline (alias: tunnel ssh)
 ```
 
-`scp`/`sftp` ride the same path (`tunnel ssh lockedvps` covers `ssh`; for
-persistent config: `tunnel ssh-config lockedvps --install`, then plain
-`ssh lockedvps` / `scp f lockedvps:/tmp/`). `tunnel url lockedvps` shows the
-agent `EDGE_URL` for the locked box; `tunnel status`/`doctor`/`logs` cover
+`scp`/`sftp` ride the same path (`tunnel access ssh lockedvps` covers `ssh`; for
+persistent config: `tunnel access ssh-config lockedvps --install`, then plain
+`ssh lockedvps` / `scp f lockedvps:/tmp/`). `tunnel route lockedvps` shows the
+agent `EDGE_URL` for the locked box; `tunnel info`/`doctor`/`logs` cover
 observability. Manual equivalent (no CLI) below.
 
 ## Laptop setup (manual, no CLI)
@@ -70,7 +71,7 @@ mkdir -p ~/bin && cp workers/edge/bin/ws-ssh-proxy.js ~/bin/
 # ~/.ssh/config
 Host lockedvps
   HostName lockedvps
-  ProxyCommand node ~/bin/ws-ssh-proxy.js wss://treau.me/p/<PIPE_TOKEN>/lockedvps
+  ProxyCommand node ~/bin/ws-ssh-proxy.js wss://treau.me/p/<long-box-id>
   ServerAliveInterval 25
   ServerAliveCountMax 3
 ```
@@ -88,7 +89,8 @@ Verify the server fingerprint out-of-band on first connect, as always.
 
 ```bash
 node --version  # >= 22, and sshd listening on 127.0.0.1:22
-EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/lockedvps/__agent" \
+BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel route`
+EDGE_URL="wss://treau.me/p/$BOX/__agent" \
 SSH_HOST="127.0.0.1" SSH_PORT="22" \
 node agent/tcp-agent.js
 ```
@@ -101,8 +103,8 @@ connect supersedes the first.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ssh` exits at once, proxy says `502`/closed | no agent in that room | start `tcp-agent.js` on the box |
-| `403` / refused | wrong `PIPE_TOKEN` or path typo | compare URL with agent's `EDGE_URL` |
+| `ssh` exits at once, proxy says `502`/closed | no agent in that room | start `tcp-agent.js` on the box with the same box ID |
+| `404` | short ID or path typo | IDs must be 20-64 chars; compare URL with agent's `EDGE_URL` |
 | session drops on every deploy | expected: deploys drop all pipes | reconnect (agent redials itself) |
 | second terminal fails while first is open | shouldn't happen (multiplexed) — report as bug | check edge logs |
 | hangs forever | shouldn't happen (fail-fast everywhere) — report as bug | `wrangler tail` |

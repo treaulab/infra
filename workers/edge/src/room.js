@@ -2,7 +2,7 @@
 // One Durable Object instance = one room. Hibernation API keeps idle rooms
 // asleep (clients stay connected, no duration billing while hibernated).
 //
-// Protocol: connect to /ws/<TOKEN>[/<room>], send anything, everyone else in
+// Protocol: connect to /ws/<roomId>, send anything, everyone else in
 // the same room receives the raw message. Built-in heartbeat: send the exact
 // string "__treaulab_ping__", get "__treaulab_pong__" back without waking us.
 
