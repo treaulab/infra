@@ -12,6 +12,19 @@
 
 import net from "node:net";
 import os from "node:os";
+import {
+	BACKOFF_BASE_MS,
+	F_ACCEPT,
+	F_DATA,
+	F_FIN,
+	F_HB,
+	F_OPEN,
+	F_RST,
+	HEARTBEAT_MS,
+	backoffAfterSession,
+	isValidEdgeUrl,
+	normalizeEdgeUrl,
+} from "../lib/shared.js";
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
@@ -19,11 +32,11 @@ if (!EDGE_URL_RAW) {
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.
-const EDGE_URL = EDGE_URL_RAW.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+const EDGE_URL = normalizeEdgeUrl(EDGE_URL_RAW);
 if (EDGE_URL !== EDGE_URL_RAW) {
 	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
 }
-if (!/^wss?:\/\//.test(EDGE_URL)) {
+if (!isValidEdgeUrl(EDGE_URL)) {
 	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/p/<long-box-id>/__agent`);
 	process.exit(1);
 }
@@ -35,16 +48,8 @@ const SSH_HOST = process.env.SSH_HOST ?? "127.0.0.1";
 const SSH_PORT = Number(process.env.SSH_PORT ?? 22);
 const NAME = process.env.NAME ?? os.hostname();
 
-const F_OPEN = 1;
-const F_ACCEPT = 2;
-const F_DATA = 3;
-const F_FIN = 4;
-const F_RST = 5;
-const F_HB = 0; // heartbeat, ignored by the edge (see src/pipe.js)
-
 // Keepalive: idle control sockets get reaped (~60s Cloudflare/NAT idle
 // timeout, close 1006). A heartbeat frame every 20s keeps it warm.
-const HEARTBEAT_MS = 20_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString(), "-", ...a);
@@ -65,6 +70,7 @@ function parse(buf) {
 
 function connectOnce() {
 	return new Promise((resolve) => {
+		const startedAt = Date.now();
 		const sockets = new Map(); // stream -> net.Socket
 		let dead = false;
 		let hb;
@@ -89,7 +95,7 @@ function connectOnce() {
 			clearInterval(hb);
 			killAll();
 			log("control socket closed:", why);
-			resolve();
+			resolve(Date.now() - startedAt);
 		};
 
 		ws.onopen = () => {
@@ -135,11 +141,11 @@ function connectOnce() {
 }
 
 log("pipe agent starting:", NAME, "->", `${SSH_HOST}:${SSH_PORT}`);
-let backoff = 1000;
+let backoff = BACKOFF_BASE_MS;
 for (;;) {
-	await connectOnce();
+	const sessionMs = await connectOnce();
 	const wait = Math.min(backoff, 30_000) * (0.8 + Math.random() * 0.4);
 	log(`redial in ${(wait / 1000).toFixed(1)}s`);
 	await sleep(wait);
-	backoff = Math.min(backoff * 2, 30_000);
+	backoff = backoffAfterSession(backoff, sessionMs);
 }

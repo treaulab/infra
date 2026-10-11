@@ -26,10 +26,11 @@ locked box (sshd :22)                    edge (PipeRoom)                  laptop
 | Type | Value | Direction | Meaning |
 |------|-------|-----------|---------|
 | OPEN | 1 | client→edge (`stream`=0) | open a stream; edge assigns id, forwards |
-| ACCEPT | 2 | agent→edge | TCP dial to `:22` succeeded |
+| ACCEPT | 2 | agent→edge | TCP dial to `:22` succeeded, clears the 10 s accept timer |
 | DATA | 3 | both | raw bytes (SSH ciphertext; never logged) |
 | FIN | 4 | both | clean close, forward + tear down |
 | RST | 5 | both | abort now |
+| HB | 0 | agent→edge only | keepalive, dropped silently (no stream) |
 
 Client→edge messages carry **no header** (raw payload, edge wraps DATA+id);
 agent→edge is always framed. Caps: 256 KiB/frame (oversize → `RST` + close
@@ -38,11 +39,12 @@ supersedes old with close `4000`, in-flight streams fail loud). Pairing
 rebuilds from socket attachments after hibernation wake, so idle boxes stay
 connected without billing.
 
-Half-close: the laptop helper sends the exact 5-byte frame `[FIN,0,0,0,0]`
+Half-close: the laptop helper sends TEXT `__half_close__`
 on stdin EOF (ssh parity for `ssh host cmd < file`) — the edge ends the
 upstream TCP side but keeps delivering the response; exit is still driven by
-the far-end close. A 5-byte DATA payload colliding with that pattern is a
-2^-40 fluke.
+the far-end close. A text frame can never collide with binary DATA, so no
+fluke window. The legacy exact 5-byte binary `[FIN,0,0,0,0]` is still
+accepted for old proxies.
 
 ## Laptop setup (the easy way — `tunnel` CLI)
 

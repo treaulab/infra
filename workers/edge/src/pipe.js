@@ -13,46 +13,22 @@
 // Hibernation-safe: pairing is rebuilt from socket attachments on wake
 // (constructor), stream ids are random 31-bit so they survive counter reset.
 
-const F_OPEN = 1;
-const F_ACCEPT = 2;
-const F_DATA = 3;
-const F_FIN = 4;
-const F_RST = 5;
-// Heartbeat (agent -> edge only): keeps idle control sockets from being
-// reaped. Never references a stream; the edge drops it silently.
-const F_HB = 0;
-
-const MAX_DATA = 256 * 1024;
-const ACCEPT_TIMEOUT_MS = 10_000;
+import {
+	F_ACCEPT,
+	F_DATA,
+	F_FIN,
+	F_HB,
+	F_OPEN,
+	F_RST,
+	HALF_CLOSE_TEXT,
+	PIPE_ACCEPT_TIMEOUT_MS,
+	PIPE_MAX_DATA,
+	newStreamId,
+	parsePipeFrame as parseFrame,
+	pipeFrame as frame,
+} from "../lib/shared.js";
 
 // Edge -> client close codes: 1000 = clean FIN, 1011 = error/RST.
-function frame(type, stream, payload) {
-	const body = payload ?? new Uint8Array(0);
-	const out = new Uint8Array(5 + body.length);
-	out[0] = type;
-	new DataView(out.buffer).setUint32(1, stream >>> 0);
-	out.set(body, 5);
-	return out;
-}
-
-function parseFrame(message) {
-	const bytes =
-		typeof message === "string" ? new TextEncoder().encode(message) : new Uint8Array(message);
-	if (bytes.length < 5) return null;
-	return {
-		type: bytes[0],
-		stream: new DataView(bytes.buffer, bytes.byteOffset, 5).getUint32(1),
-		payload: bytes.subarray(5),
-	};
-}
-
-function newStreamId(taken) {
-	let id = 0;
-	do {
-		id = (crypto.getRandomValues(new Uint32Array(1))[0] & 0x7fffffff) >>> 0;
-	} while (id === 0 || taken.has(id));
-	return id >>> 0;
-}
 
 export class PipeRoom {
 	constructor(ctx, env) {
@@ -60,7 +36,8 @@ export class PipeRoom {
 		this.env = env;
 		this.agent = null;
 		this.agentGen = null;
-		this.streams = new Map(); // id -> {ws, timer}
+		this.streams = new Map(); // id -> {ws, timer, halfClosed, accepted, id}
+		this.wsToId = new WeakMap();
 		// Rebuild pairing after hibernation wake (memory was wiped).
 		for (const ws of this.ctx.getWebSockets()) {
 			let a;
@@ -74,7 +51,24 @@ export class PipeRoom {
 				this.agent = ws;
 				this.agentGen = a.gen;
 			} else if (a.role === "client" && Number.isInteger(a.stream)) {
-				this.streams.set(a.stream, { ws, timer: null });
+				const entry = {
+					ws,
+					timer: null,
+					halfClosed: !!a.halfClosed,
+					accepted: !!a.accepted,
+					id: a.stream,
+				};
+				this.streams.set(a.stream, entry);
+				this.wsToId.set(ws, a.stream);
+				// Accept timer does not survive hibernation. Re-arm it for
+				// streams the agent never ACCEPTed so dead dials still fail
+				// fast instead of hanging forever.
+				if (!entry.accepted) {
+					entry.timer = setTimeout(
+						() => this.acceptTimeout(a.stream),
+						PIPE_ACCEPT_TIMEOUT_MS,
+					);
+				}
 			}
 		}
 	}
@@ -91,10 +85,11 @@ export class PipeRoom {
 		const pair = new WebSocketPair();
 		const [client, server] = Object.values(pair);
 		const id = newStreamId(this.streams);
-		server.serializeAttachment({ role: "client", stream: id });
+		server.serializeAttachment({ role: "client", stream: id, accepted: false });
 		this.ctx.acceptWebSocket(server);
-		const timer = setTimeout(() => this.acceptTimeout(id), ACCEPT_TIMEOUT_MS);
-		this.streams.set(id, { ws: server, timer, halfClosed: false });
+		const timer = setTimeout(() => this.acceptTimeout(id), PIPE_ACCEPT_TIMEOUT_MS);
+		this.streams.set(id, { ws: server, timer, halfClosed: false, accepted: false, id });
+		this.wsToId.set(server, id);
 		try {
 			this.agent.send(frame(F_OPEN, id));
 		} catch {
@@ -135,17 +130,49 @@ export class PipeRoom {
 	}
 
 	streamOf(ws) {
+		const cached = this.wsToId.get(ws);
+		if (Number.isInteger(cached) && this.streams.has(cached)) return cached;
 		try {
 			const a = ws.deserializeAttachment();
-			if (a?.role === "client" && Number.isInteger(a?.stream)) return a.stream;
+			if (a?.role === "client" && Number.isInteger(a?.stream)) {
+				this.wsToId.set(ws, a.stream);
+				return a.stream;
+			}
 		} catch {
 			/* fall through */
 		}
-		for (const [id, s] of this.streams) if (s.ws === ws) return id;
+		for (const [id, s] of this.streams) {
+			if (s.ws === ws) {
+				this.wsToId.set(ws, id);
+				return id;
+			}
+		}
 		return null;
 	}
 
+	markAccepted(id) {
+		const s = this.streams.get(id);
+		if (!s || s.accepted) return;
+		s.accepted = true;
+		if (s.timer) {
+			clearTimeout(s.timer);
+			s.timer = null;
+		}
+		// Persist so a hibernation wake does not re-arm a timer for live streams.
+		try {
+			s.ws.serializeAttachment({
+				role: "client",
+				stream: id,
+				accepted: true,
+				halfClosed: !!s.halfClosed,
+			});
+		} catch {
+			/* attachment update is best-effort */
+		}
+	}
+
 	sendAgent(bytes) {
+		if (!this.agent) return false;
 		try {
 			this.agent.send(bytes);
 			return true;
@@ -159,6 +186,7 @@ export class PipeRoom {
 		const s = this.streams.get(id);
 		if (!s) return;
 		this.streams.delete(id);
+		this.wsToId.delete(s.ws);
 		if (s.timer) clearTimeout(s.timer);
 		try {
 			s.ws.close(code, reason);
@@ -169,7 +197,7 @@ export class PipeRoom {
 
 	acceptTimeout(id) {
 		const s = this.streams.get(id);
-		if (!s) return;
+		if (!s || s.accepted) return;
 		this.sendAgent(frame(F_RST, id));
 		this.closeClient(id, 1011, "agent accept timeout");
 	}
@@ -194,14 +222,23 @@ export class PipeRoom {
 		const f = parseFrame(message);
 		if (!f) return;
 		if (f.type === F_HB) return; // keepalive, no stream involved
+		if (f.type === F_ACCEPT) {
+			// TCP dial succeeded: stream is live. Clear the accept timer so
+			// healthy streams are not RST after 10s (previous bug: ACCEPT was
+			// ignored and the timer always fired).
+			const s = this.streams.get(f.stream);
+			if (s) this.markAccepted(f.stream);
+			else this.sendAgent(frame(F_RST, f.stream));
+			return;
+		}
 		const s = this.streams.get(f.stream);
-		if (f.type === F_ACCEPT) return; // stream already mapped; nothing to forward
 		if (!s) {
 			// Stale/unknown stream: tell the agent to tear it down.
 			this.sendAgent(frame(F_RST, f.stream));
 			return;
 		}
 		if (f.type === F_DATA) {
+			this.markAccepted(f.stream);
 			try {
 				s.ws.send(f.payload);
 			} catch {
@@ -209,6 +246,7 @@ export class PipeRoom {
 				this.sendAgent(frame(F_RST, f.stream));
 			}
 		} else if (f.type === F_FIN) {
+			this.markAccepted(f.stream);
 			this.closeClient(f.stream, 1000, "done");
 		} else if (f.type === F_RST) {
 			this.closeClient(f.stream, 1011, "reset by agent");
@@ -216,17 +254,61 @@ export class PipeRoom {
 		// OPEN from agent is meaningless; ignore.
 	}
 
+	isHalfCloseMagic(raw) {
+		return (
+			raw &&
+			raw.length === 5 &&
+			raw[0] === F_FIN &&
+			raw[1] === 0 &&
+			raw[2] === 0 &&
+			raw[3] === 0 &&
+			raw[4] === 0
+		);
+	}
+
 	onClientMessage(ws, message) {
-		// Client->edge is raw payload (no header) with ONE exception: the exact
-		// 5-byte frame [FIN,0,0,0,0] means "stdin EOF, keep delivering to me"
-		// (half-close, ssh parity). A 5-byte DATA payload colliding with that
-		// pattern is a 2^-40 fluke; documented in PIPE.md.
-		// Agent->edge is always framed; see onAgentMessage.
+		// Client->edge is raw payload (no header) with a half-close signal for
+		// stdin EOF (ssh parity for `ssh host cmd < file`): keep delivering
+		// the response after EOF. New clients send TEXT `__half_close__`
+		// (a text frame can never collide with binary DATA). The legacy exact
+		// 5-byte binary [FIN,0,0,0,0] is still accepted for old proxies.
 		const id = this.streamOf(ws);
 		if (id === null) return;
-		const raw = typeof message === "string" ? null : new Uint8Array(message);
-		if (raw && raw.length === 5 && raw[0] === F_FIN &&
-			raw[1] === 0 && raw[2] === 0 && raw[3] === 0 && raw[4] === 0) {
+		if (typeof message === "string") {
+			if (message === HALF_CLOSE_TEXT) {
+				const s = this.streams.get(id);
+				if (s) {
+					s.halfClosed = true;
+					try {
+						s.ws.serializeAttachment({
+							role: "client",
+							stream: id,
+							accepted: !!s.accepted,
+							halfClosed: true,
+						});
+					} catch {
+						/* best-effort */
+					}
+				}
+				this.sendAgent(frame(F_FIN, id));
+				return;
+			}
+			// Other text frames: ssh is binary; encode as UTF-8 DATA.
+			const s = this.streams.get(id);
+			if (s?.halfClosed) return;
+			const payload = new TextEncoder().encode(message);
+			if (payload.length > PIPE_MAX_DATA) {
+				this.sendAgent(frame(F_RST, id));
+				this.closeClient(id, 1009, "frame too big");
+				return;
+			}
+			if (!this.sendAgent(frame(F_DATA, id, payload))) {
+				this.closeClient(id, 1011, "agent unreachable");
+			}
+			return;
+		}
+		const raw = new Uint8Array(message);
+		if (this.isHalfCloseMagic(raw)) {
 			const s = this.streams.get(id);
 			if (s) s.halfClosed = true;
 			this.sendAgent(frame(F_FIN, id));
@@ -234,28 +316,17 @@ export class PipeRoom {
 		}
 		const s = this.streams.get(id);
 		if (s?.halfClosed) return; // ignore post-EOF writes (proxy bug if any)
-		const payload =
-			typeof message === "string"
-				? new TextEncoder().encode(message)
-				: new Uint8Array(message);
-		if (payload.length > MAX_DATA) {
+		if (raw.length > PIPE_MAX_DATA) {
 			this.sendAgent(frame(F_RST, id));
 			this.closeClient(id, 1009, "frame too big");
 			return;
 		}
-		if (!this.sendAgent(frame(F_DATA, id, payload))) {
+		if (!this.sendAgent(frame(F_DATA, id, raw))) {
 			this.closeClient(id, 1011, "agent unreachable");
 		}
 	}
 
 	async webSocketClose(ws, code) {
-		// Explicit ack: no-op in production (already CLOSED there), but it
-		// completes the handshake on runtimes that fire this handler early.
-		try {
-			ws.close(1000, "bye");
-		} catch {
-			/* already gone */
-		}
 		if (this.isLiveAgent(ws)) {
 			this.dropAgent();
 			return;
@@ -264,6 +335,7 @@ export class PipeRoom {
 		if (id === null) return;
 		const s = this.streams.get(id);
 		this.streams.delete(id);
+		if (s?.ws) this.wsToId.delete(s.ws);
 		if (s?.timer) clearTimeout(s.timer);
 		this.sendAgent(frame(F_FIN, id));
 	}
@@ -277,6 +349,7 @@ export class PipeRoom {
 		if (id === null) return;
 		const s = this.streams.get(id);
 		this.streams.delete(id);
+		if (s?.ws) this.wsToId.delete(s.ws);
 		if (s?.timer) clearTimeout(s.timer);
 		this.sendAgent(frame(F_RST, id));
 	}

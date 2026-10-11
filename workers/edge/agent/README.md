@@ -71,9 +71,11 @@ content as plain HTTP. Same `$ROOM` for agent and browsers
 (agent connects to `.../$ROOM/__agent`). No token.
 
 Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `UPSTREAM_TIMEOUT_MS`
-(default `15000`), `NAME` (default hostname, shown in edge logs).
+(default `15000`, time to first byte — bodies stream with no total cap),
+`NAME` (default hostname), `MAX_CONCURRENT` (default `16`),
+`MAX_TUNNEL_BYTES` (default 500 MiB safety ceiling per stream).
 
-Keepalive: both agents send a heartbeat every 20s (`pong` / empty frame),
+Keepalive: both agents send a binary heartbeat frame every 20s,
 so idle control sockets survive Cloudflare/NAT idle timeouts instead of
 flapping with `1006` redials. Quiet tunnels stay up indefinitely.
 
@@ -119,9 +121,14 @@ node tcp-agent.js
 Laptop side + full protocol: `../PIPE.md`. Same systemd shape as above with
 `ExecStart=/usr/bin/node /opt/tunnel/tcp-agent.js`.
 
-## Limits (v1, HTTP agent)
+## Limits (v3 binary, no backward compat)
 
-HTTP only (`GET HEAD POST PUT PATCH DELETE OPTIONS`), 2 MiB request bodies,
-5 MiB response bodies, 20 s agent timeout. One agent per room — a second
+Binary multiplex over one control socket (11-byte frame header, 64 KiB
+DATA, no Base64 tax), streaming both directions, 60 s sliding idle timeout,
+500 MiB safety ceiling (`MAX_TUNNEL_BYTES`), up to `MAX_CONCURRENT` (16)
+streams. HTTP uploads stream (chunked in Python, ReadableStream in Node);
+visitor WS streams (`method: "WS"`) bridge to a local `ws://` upstream with
+text frames preserved. One agent per room — a second
 connect supersedes the first. Browsers get `502` when no agent is connected,
-`504` on agent timeout.
+`504` on agent idle timeout. Agent mismatch (non-binary / wrong version)
+closes the control socket `4400` — upgrade both sides together.

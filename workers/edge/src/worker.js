@@ -1,5 +1,6 @@
 import { TunnelRoom } from "./tunnel.js";
 import { PipeRoom } from "./pipe.js";
+import { ID_RE } from "../lib/shared.js";
 
 export { TunnelRoom, PipeRoom };
 
@@ -35,7 +36,7 @@ function isWebSocketUpgrade(request) {
 // /t/<roomId>/[...rest] -> named room, rest defaults to "/".
 // /t/<roomId>/__agent is the agent-only control endpoint (websocket).
 // IDs must be 20-64 chars [A-Za-z0-9_-] so short guessable names fail fast.
-const ID_RE = /^[A-Za-z0-9_-]{20,64}$/;
+// (ID_RE lives in lib/shared.js so edge/agents/CLI validate identically.)
 
 function parseTunnelPath(pathname) {
 	const m = pathname.match(/^\/t\/([^/]+)((?:\/.*)?)$/);

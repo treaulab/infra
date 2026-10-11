@@ -13,11 +13,16 @@
 //   tunnel logs | delete <name> | config [get|set] | doctor
 
 import { spawn, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
+import {
+	DEFAULT_HOST,
+	ID_RE,
+	NAME_RE,
+	newRoomId,
+} from "../lib/shared.js";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const EDGE_DIR = path.resolve(HERE, "..");
@@ -25,21 +30,13 @@ const AGENTS = {
 	http: path.join(EDGE_DIR, "agent", "agent.js"),
 	tcp: path.join(EDGE_DIR, "agent", "tcp-agent.js"),
 };
-const PROXY = path.join(HERE, "ws-ssh-proxy.js");
 
 const CONF_DIR = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "treaulab");
 const STATE_FILE = path.join(CONF_DIR, "tunnels.json");
 const CONFIG_FILE = path.join(CONF_DIR, "config.json");
 
-const NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
-// Default edge host (go.treau.me). Precedence everywhere: TUNNEL_HOST env >
-// config.json host > this default. Override per-box, never edit here.
-const DEFAULT_HOST = "https://go.treau.me";
-// Long URL IDs: 20-64 chars, must match edge worker ID_RE in src/worker.js.
-const ID_RE = /^[A-Za-z0-9_-]{20,64}$/;
-function newRoomId() {
-	return crypto.randomBytes(24).toString("hex").slice(0, 32);
-}
+// (NAME_RE, ID_RE, DEFAULT_HOST, newRoomId live in lib/shared.js so the
+// edge worker, agents, and CLI validate identically. newRoomId is 128-bit.)
 
 const fail = (msg, code = 1) => {
 	console.error(`tunnel: ${msg}`);
@@ -56,7 +53,11 @@ function readJson(file, fallback) {
 }
 function writeJson(file, obj, mode) {
 	fs.mkdirSync(path.dirname(file), { recursive: true });
-	fs.writeFileSync(file, JSON.stringify(obj, null, 2) + "\n", { mode });
+	// Atomic write (tmp + rename) so concurrent `tunnel` invocations don't
+	// leave half-written JSON.
+	const tmp = `${file}.${process.pid}.tmp`;
+	fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", { mode });
+	fs.renameSync(tmp, file);
 }
 
 const loadState = () => readJson(STATE_FILE, { tunnels: {} });
@@ -85,39 +86,6 @@ function prompt(question) {
 			rl.close();
 			resolve(ans.trim());
 		});
-	});
-}
-
-// Hidden input (no echo). Falls back to visible if stdin isn't a TTY.
-function promptHidden(question) {
-	if (!process.stdin.isTTY) return prompt(question);
-	return new Promise((resolve) => {
-		process.stdout.write(question);
-		const stdin = process.stdin;
-		stdin.setRawMode(true);
-		stdin.resume();
-		let buf = "";
-		const done = () => {
-			stdin.setRawMode(false);
-			stdin.pause();
-			stdin.removeListener("data", onData);
-			process.stdout.write("\n");
-			resolve(buf.trim());
-		};
-		function onData(c) {
-			const s = c.toString("utf8");
-			if (s === "\n" || s === "\r" || s === "\u0004") return done();
-			if (s === "\u0003") {
-				process.stdout.write("\n");
-				process.exit(130);
-			}
-			if (s === "\u007f") {
-				buf = buf.slice(0, -1);
-				return;
-			}
-			buf += s;
-		}
-		stdin.on("data", onData);
 	});
 }
 
@@ -259,13 +227,6 @@ function cmdList() {
 	for (const r of rows) info(r.map((c, i) => c.padEnd(widths[i])).join("  "));
 }
 
-function agentUrl(t) {
-	const base = wsBase();
-	return t.kind === "http"
-		? `${base}/t/${t.room}/__agent`
-		: `${base}/p/${t.room}/__agent`;
-}
-
 function cmdRoute(argv) {
 	// cloudflared parity: `tunnel route dns <NAME> <hostname>` creates a CNAME.
 	// We have no DNS step (the Worker URL *is* the route), so `route` prints it.
@@ -296,11 +257,18 @@ function cmdInfo(argv) {
 		const url = `${edgeHost()}/t/${t.room}/`;
 		info(`route: ${url}`);
 		if (haveBin("curl")) {
-			const code = spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", url], { encoding: "utf8" }).stdout.trim();
-			if (code === "502") info("agent: offline (no connector — run: tunnel run " + name + ")");
+			// Probe header answers locally at the edge (never forwarded), so
+			// edge-404 and upstream-404 are no longer conflated.
+			const probe = spawnSync(
+				"curl",
+				["-s", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code} %{header_json}", "-H", "X-Tunnel-Probe: status", url],
+				{ encoding: "utf8" },
+			).stdout.trim();
+			const live = probe.includes("x-tunnel-status") && probe.includes("live");
+			const code = probe.split(" ")[0];
+			if (live) info(`agent: live (edge probe ${code} — connector connected)`);
 			else if (code === "404") info("agent: unknown (404 = bad room ID shape — re-check saved value)");
-			else if (code) info(`agent: responding (HTTP ${code} — connector live)`);
-			else info("agent: unknown (no response)");
+			else info(`agent: offline (probe ${code || "no response"} — run: tunnel run ${name})`);
 		} else {
 			info("agent: unknown (curl missing; run: tunnel run " + name + ")");
 		}

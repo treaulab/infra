@@ -21,9 +21,19 @@ name = "PIPE"
 class_name = "PipeRoom"
 
 [[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayRoom"]
+
+[[migrations]]
 tag = "v2"
 new_sqlite_classes = ["TunnelRoom"]
 
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["PipeRoom"]
+
+# RelayRoom (old client relay) was removed from code in 97b57d0 with no
+# users; delete its class so deploys stop depending on the export.
+[[migrations]]
+tag = "v4"
+deleted_classes = ["RelayRoom"]

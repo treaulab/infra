@@ -12,8 +12,11 @@ workers/edge/
 ├── src/worker.js      # routing: www→apex, /health, /t/*, /p/*, assets+404
 ├── src/tunnel.js      # TunnelRoom DO: HTTP reverse tunnel over agent socket
 ├── src/pipe.js        # PipeRoom DO: multiplexed raw-TCP pipe (ssh), one room/box
+├── lib/shared.js      # shared protocol: IDs, hop headers, backoff, v2 streaming, pipe frames
 ├── agent/agent.js     # zero-dep dial-out agent for locked-down HTTP origins
 ├── agent/tcp-agent.js # zero-dep dial-out agent: per-stream TCP dial to :22
+├── agent/agent.py     # stdlib-only Python twin of agent.js (same protocol)
+├── bin/tunnel         # cloudflared-style CLI (create/route/run/ssh/doctor)
 ├── bin/ws-ssh-proxy.js# zero-dep laptop stdio helper (ssh ProxyCommand)
 ├── TUNNEL.md          # HTTP tunnel protocol + ops (worse-cloudflared)
 ├── PIPE.md            # SSH pipe protocol + ops (ProxyCommand UX)
