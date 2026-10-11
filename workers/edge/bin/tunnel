@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-// treaulab tunnel CLI: cloudflared-style ergonomics for the edge tunnels.
-// Zero dependencies, Node 22+. Local state (names, rooms, upstreams) lives in
-// ~/.config/treaulab/tunnels.json; host defaults to https://go.treau.me
-// (override with TUNNEL_HOST env or `tunnel config set host`).
-// Long-URL-only: the room/box ID in the URL is the secret (no tokens).
+// treaulab tunnel CLI: expose a local port (HTTP) or ssh (TCP) via the edge.
+// Zero dependencies, Node 22+. Names + ids live in ~/.config/treaulab/tunnels.json.
+// Host rule everywhere: --host flag > TUNNEL_HOST env > https://go.treau.me.
 //
-//   tunnel --url <UPSTREAM>  instant share, zero setup (trycloudflare-style)
-//   tunnel quickstart        first-run checks + next steps (host optional)
-//   tunnel login [--host H]  verify wrangler auth + override default host
-//   tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room ID]
-//   tunnel list | url <name> | run <name> | ssh <name> | ssh-config <name>
-//   tunnel logs | delete <name> | config [get|set] | doctor
+//   tunnel share [TARGET] [--name N] [--host H] [--json]   ephemeral share + run
+//   tunnel add <name> <target>                             remember (http URL or HOST:PORT)
+//   tunnel up <name> [--host H]                            run the agent (foreground)
+//   tunnel info <name> [--host H]                          details + live check
+//   tunnel ssh <name> [--install] [--print] [ssh-args...]  ssh through the pipe
+//   tunnel list | rm <name> | doctor | logs
 
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import readline from "node:readline";
 import {
 	DEFAULT_HOST,
 	ID_RE,
 	NAME_RE,
+	detectKind,
 	newRoomId,
+	parseTcpTarget,
+	resolveHost,
 } from "../lib/shared.js";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -31,12 +31,11 @@ const AGENTS = {
 	tcp: path.join(EDGE_DIR, "agent", "tcp-agent.js"),
 };
 
-const CONF_DIR = path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), "treaulab");
+const CONF_DIR = path.join(
+	process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+	"treaulab",
+);
 const STATE_FILE = path.join(CONF_DIR, "tunnels.json");
-const CONFIG_FILE = path.join(CONF_DIR, "config.json");
-
-// (NAME_RE, ID_RE, DEFAULT_HOST, newRoomId live in lib/shared.js so the
-// edge worker, agents, and CLI validate identically. newRoomId is 128-bit.)
 
 const fail = (msg, code = 1) => {
 	console.error(`tunnel: ${msg}`);
@@ -51,42 +50,34 @@ function readJson(file, fallback) {
 		return fallback;
 	}
 }
-function writeJson(file, obj, mode) {
+function writeJson(file, obj) {
 	fs.mkdirSync(path.dirname(file), { recursive: true });
-	// Atomic write (tmp + rename) so concurrent `tunnel` invocations don't
-	// leave half-written JSON.
 	const tmp = `${file}.${process.pid}.tmp`;
-	fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", { mode });
+	fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n");
 	fs.renameSync(tmp, file);
 }
 
-const loadState = () => readJson(STATE_FILE, { tunnels: {} });
-const saveState = (s) => writeJson(STATE_FILE, s);
-const loadConfig = () => readJson(CONFIG_FILE, {});
-const saveConfig = (c) => writeJson(CONFIG_FILE, c);
-
-function edgeHost() {
-	// Default host: override with TUNNEL_HOST env or `tunnel config set host`.
-	const h = (process.env.TUNNEL_HOST || loadConfig().host || DEFAULT_HOST).replace(/\/$/, "");
-	if (!/^https?:\/\//.test(h)) fail(`bad host ${JSON.stringify(h)} — want https://...`);
-	return h;
+// State schema: { tunnels: { <name>: { kind: "http"|"tcp", id, target } } }.
+// One-way upgrade from the old shape ({ room, upstream/to }) on load.
+function loadState() {
+	const raw = readJson(STATE_FILE, { tunnels: {} });
+	const out = { tunnels: {} };
+	for (const [name, t] of Object.entries(raw.tunnels ?? {})) {
+		if (!t || typeof t !== "object") continue;
+		const kind = t.kind === "tcp" || t.kind === "http" ? t.kind : detectKind(t.upstream ?? t.target ?? "");
+		const id = t.id ?? t.room;
+		const target = t.target ?? t.upstream ?? t.to;
+		if (!NAME_RE.test(name) || !id || !target) continue;
+		out.tunnels[name] = { kind, id, target };
+	}
+	return out;
 }
-const wsBase = () => edgeHost().replace(/^http/, "ws");
+const saveState = (s) => writeJson(STATE_FILE, s);
 
 function getTunnel(name) {
 	const t = loadState().tunnels[name];
 	if (!t) fail(`unknown tunnel ${JSON.stringify(name)} — see: tunnel list`);
 	return t;
-}
-
-function prompt(question) {
-	return new Promise((resolve) => {
-		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-		rl.question(question, (ans) => {
-			rl.close();
-			resolve(ans.trim());
-		});
-	});
 }
 
 function checkNode() {
@@ -97,307 +88,219 @@ function haveBin(bin) {
 	return spawnSync(process.platform === "win32" ? "where" : "which", [bin]).status === 0;
 }
 
+// Minimal flag parser: --host H, --name N, --json, --install, --print.
+// First non-flag arg is positional; unknown --flags are rejected.
+function parseArgs(argv, { flags = [] } = {}) {
+	const out = { positionals: [] };
+	for (let i = 0; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === "--host" || a === "--name" || a === "--id") {
+			if (!flags.includes(a.slice(2))) fail(`unknown flag ${JSON.stringify(a)} — see: tunnel help`);
+			const v = argv[i + 1];
+			if (!v || v.startsWith("--")) fail(`${a} needs a value`);
+			out[a.slice(2)] = v;
+			i++;
+		} else if (a === "--json" || a === "--install" || a === "--print") {
+			if (!flags.includes(a.slice(2))) fail(`usage: see tunnel help`);
+			out[a.slice(2)] = true;
+		} else if (a.startsWith("--")) {
+			fail(`unknown flag ${JSON.stringify(a)} — see: tunnel help`);
+		} else {
+			out.positionals.push(a);
+		}
+	}
+	return out;
+}
+
+const hostOf = (o) => {
+	const h = (o.host || resolveHost(null)).replace(/\/$/, "");
+	if (!/^https?:\/\//.test(h)) fail(`bad host ${JSON.stringify(h)} — want https://...`);
+	return h;
+};
+const wsBase = (host) => host.replace(/^http/, "ws");
+
+function validateTarget(kind, target) {
+	if (kind === "http") {
+		if (!/^https?:\/\/[^/]+/.test(target)) fail(`bad target ${JSON.stringify(target)} — want http(s)://host[:port]`);
+		return target.replace(/\/$/, "");
+	}
+	if (!parseTcpTarget(target)) fail(`bad target ${JSON.stringify(target)} — want HOST:PORT (e.g. 127.0.0.1:22)`);
+	return target;
+}
+
 // ---- commands ------------------------------------------------------------
 
-function cmdHelp(cmd) {
-	const per = {
-		login: "usage: tunnel login [--host H]\n  like `cloudflared tunnel login`: override the default edge host (go.treau.me).",
-		create: "usage: tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room ID]\n  like `cloudflared tunnel create`: remember a named tunnel + its ingress.\n  Room ID defaults to a fresh 32-char secret (the long URL). Pass --room to reuse one.\n  aliases: tunnel add-site <name> <port> | tunnel add-ssh <name> [HOST:PORT]",
-		list: "usage: tunnel list\n  like `cloudflared tunnel list`: show named tunnels.",
-		info: "usage: tunnel info <name>\n  like `cloudflared tunnel info`: details + live agent check.",
-		route: "usage: tunnel route <name>\n  like `cloudflared tunnel route dns`: print the public URL for a tunnel.\n  (alias: tunnel url <name>)",
-		run: "usage: tunnel run <name>\n  like `cloudflared tunnel run`: run the origin connector in the foreground.",
-		delete: "usage: tunnel delete <name> [-f]\n  like `cloudflared tunnel delete`: forget a tunnel (rooms vanish when unused).",
-		cleanup: "usage: tunnel cleanup <name>\n  like `cloudflared tunnel cleanup`: clear stale state (rooms are ephemeral;\n  reports agent liveness, drops nothing that matters).",
-		access: "usage: tunnel access ssh <name> [--print] [ssh-args...]\n       tunnel access ssh-config <name> [--install]\n  like `cloudflared access ssh`: connect through the pipe.",
-		logs: "usage: tunnel logs\n  tail live edge logs (wrangler tail).",
-		config: "usage: tunnel config [get [host] | set host <URL>]",
-		doctor: "usage: tunnel doctor\n  self-check: node, ssh, host (+ tunnel status).",
-		quickstart: "usage: tunnel quickstart [--host H]\n  first-run: checks + next steps (host defaults to go.treau.me).",
-	};
-	if (cmd && per[cmd]) return info(per[cmd]);
-	info(`usage: tunnel [--url <UPSTREAM>] [command] [args]   (mirrors cloudflared tunnel)
-
-  quick (no setup, like trycloudflare — host defaults to go.treau.me):
-    tunnel --url http://127.0.0.1:8080 [--name tmp] [--output json]
-                                ephemeral share: prints public URL, runs agent
-
-  manage tunnels (like cloudflared tunnel login/create/list/info/delete):
-    login [--host H]            override the default edge host
-    create <name> [--http --upstream URL | --tcp --to HOST:PORT]
-                                remember a tunnel (room ID auto-generated, long URL)
-    list                        show named tunnels
-    info <name>                 details + live agent check
-    delete <name> [-f]          forget a tunnel
-    cleanup <name>              clear stale state (ephemeral rooms)
-
-  route + run (like cloudflared tunnel route dns / run):
-    route <name>                print the public URL (alias: url)
-    run <name>                  run the origin connector (foreground)
-
-  access (like cloudflared access ssh):
-    access ssh <name>           ssh through the pipe (alias: ssh)
-    access ssh-config <name>    print/install ~/.ssh/config block
-
-  maintain:
-    quickstart [--host H]       first-run wizard (host optional, defaults work)
-    logs | config | doctor      tail logs, inspect host, self-check
-
-  cloudflared muscle memory also works: tunnel tunnel <subcommand>
-  per-command help: tunnel <command> --help
-
-state: ${STATE_FILE}`);
-}
-
-function cmdLogin(argv) {
+function cmdShare(argv) {
 	checkNode();
-	const get = (f) => {
-		const i = argv.indexOf(f);
-		return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
-	};
-	const cfg = loadConfig();
-	const host = get("--host") || process.env.TUNNEL_HOST || cfg.host || DEFAULT_HOST;
-
-	info(`node ${process.versions.node} OK`);
-	info(haveBin("wrangler") || haveBin("npx") ? "wrangler available" : "note: wrangler not found (only needed for `tunnel logs` / deploys)");
-	const who = spawnSync("npx", ["wrangler", "whoami"], { cwd: EDGE_DIR, encoding: "utf8" });
-	if (who.status === 0) {
-		const line = (who.stdout + who.stderr).split("\n").find((l) => /logged in|email/i.test(l));
-		info(line?.trim() ? `cloudflare auth: ${line.trim()}` : "cloudflare auth OK");
-	} else {
-		info("note: `npx wrangler login` not completed (needed for deploys + `tunnel logs`, not for using tunnels)");
+	const o = parseArgs(argv, { flags: ["name", "host", "json"] });
+	const rawTarget = o.positionals[0] ?? process.env.UPSTREAM ?? "http://127.0.0.1:8080";
+	const kind = detectKind(rawTarget);
+	const target = validateTarget(kind, rawTarget);
+	const host = hostOf(o);
+	const id = newRoomId();
+	if (o.name) {
+		if (!NAME_RE.test(o.name)) fail(`bad name ${JSON.stringify(o.name)} — want [A-Za-z0-9_-]{1,64}`);
+		const state = loadState();
+		state.tunnels[o.name] = { kind, id, target };
+		saveState(state);
 	}
-
-	return (async () => {
-		let h = host;
-		// Interactive: offer to override the default. Non-interactive with no
-		// --host just keeps the default (no setup required anymore).
-		if (process.stdin.isTTY && !get("--host")) {
-			const ans = await prompt(`edge host [${DEFAULT_HOST}]: `);
-			if (ans) h = ans;
-		}
-		saveConfig({ ...cfg, host: h.replace(/\/$/, "") });
-		info(`host: ${h}`);
-		info("done. next: tunnel create <name> --http|--tcp ... (room ID is the long URL secret)");
-	})();
+	if (o.json) {
+		console.log(JSON.stringify(kind === "http"
+			? { url: `${host}/t/${id}/`, id, target, ...(o.name ? { name: o.name } : {}) }
+			: { id, target, ...(o.name ? { name: o.name } : {}) }));
+	} else if (kind === "http") {
+		info(`tunnel ready: ${host}/t/${id}/`);
+		info(`id: ${id}   target: ${target}${o.name ? `   (saved as ${JSON.stringify(o.name)})` : "   (ephemeral — stops with this process)"}`);
+	} else {
+		info(`pipe ready (id ${id}, target ${target})`);
+		info(`agent will serve ${target}; connect with: tunnel ssh ${o.name ?? "<name>"}${o.name ? "" : "  (save first: re-run with --name <name>)"}`);
+	}
+	runAgent(kind, id, target, host);
 }
 
-function cmdCreate(argv) {
-	const [name, ...rest] = argv;
-	if (!name || !NAME_RE.test(name)) fail("usage: tunnel create <name> [--http --upstream URL | --tcp --to HOST:PORT] [--room ID]");
-	const get = (f) => {
-		const i = rest.indexOf(f);
-		return i >= 0 && rest[i + 1] ? rest[i + 1] : null;
-	};
-	const wantHttp = rest.includes("--http");
-	const wantTcp = rest.includes("--tcp");
-	const upstream = get("--upstream");
-	const to = get("--to");
-	const room = get("--room") || newRoomId();
-	if (!ID_RE.test(room)) fail(`bad room ID ${JSON.stringify(room)} — want 20-64 chars [A-Za-z0-9_-] (default is auto-generated; rotate by re-creating)`);
-	let kind = wantTcp ? "tcp" : wantHttp ? "http" : upstream ? "http" : to ? "tcp" : null;
-	if (!kind) fail("say which kind: --http --upstream <URL>  or  --tcp --to <HOST:PORT>");
-	if (kind === "http" && !upstream) fail("--http needs --upstream <URL> (e.g. http://127.0.0.1:8080)");
-	if (kind === "tcp" && !to) fail("--tcp needs --to <HOST:PORT> (e.g. 127.0.0.1:22)");
+function cmdAdd(argv) {
+	const o = parseArgs(argv, { flags: ["host", "id"] });
+	const [name, rawTarget] = o.positionals;
+	if (!name || !rawTarget || o.positionals.length !== 2 || !NAME_RE.test(name)) {
+		fail("usage: tunnel add <name> <target> [--id ID]   (target: http(s)://… or HOST:PORT)");
+	}
+	const kind = detectKind(rawTarget);
+	const target = validateTarget(kind, rawTarget);
+	const id = o.id ?? newRoomId();
+	if (!ID_RE.test(id)) fail(`bad id ${JSON.stringify(id)} — want 20-64 chars [A-Za-z0-9_-]`);
 	const state = loadState();
-	if (state.tunnels[name] && !rest.includes("--force")) {
-		fail(`${JSON.stringify(name)} already exists — pick another name or re-run with --force`);
-	}
-	state.tunnels[name] = {
-		kind,
-		room,
-		...(kind === "http" ? { upstream } : { to }),
-		createdAt: new Date().toISOString(),
-	};
+	if (state.tunnels[name]) fail(`${JSON.stringify(name)} already exists — tunnel rm ${name} first`);
+	state.tunnels[name] = { kind, id, target };
 	saveState(state);
-	info(`remembered ${kind} tunnel ${JSON.stringify(name)} (long URL ID ${room})`);
-	info(kind === "http" ? `route:  tunnel route ${name}   (public URL)` : `connect:  tunnel access ssh ${name}`);
+	info(`added ${kind} tunnel ${JSON.stringify(name)} -> ${target}`);
+	info(kind === "http" ? `run it: tunnel up ${name}` : `serve it on the box: tunnel up ${name}   then: tunnel ssh ${name}`);
 }
 
-function cmdList() {
-	const tunnels = loadState().tunnels;
-	const names = Object.keys(tunnels);
-	if (!names.length) return info("no tunnels yet — see: tunnel create <name> --http|--tcp ...");
-	const rows = [["NAME", "KIND", "ROOM", "TARGET"]];
-	for (const n of names.sort()) {
-		const t = tunnels[n];
-		rows.push([n, t.kind, t.room, t.kind === "http" ? t.upstream : t.to]);
-	}
-	const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
-	for (const r of rows) info(r.map((c, i) => c.padEnd(widths[i])).join("  "));
-}
-
-function cmdRoute(argv) {
-	// cloudflared parity: `tunnel route dns <NAME> <hostname>` creates a CNAME.
-	// We have no DNS step (the Worker URL *is* the route), so `route` prints it.
-	const [name] = argv;
-	if (!name) fail("usage: tunnel route <name>   (alias: tunnel url <name>)");
-	const t = getTunnel(name);
-	if (t.kind === "http") {
-		info(`${edgeHost()}/t/${t.room}/`);
-		info(`agent: EDGE_URL="${wsBase()}/t/${t.room}/__agent" UPSTREAM="${t.upstream}" node agent/agent.js`);
-		info(`run it: tunnel run ${name}   (then open the URL above)`);
-	} else {
-		info(`agent: EDGE_URL="${wsBase()}/p/${t.room}/__agent" SSH_HOST=127.0.0.1 SSH_PORT=22 node agent/tcp-agent.js`);
-		info(`laptop: tunnel access ssh ${name}   (alias: tunnel ssh ${name})`);
-	}
-}
-const cmdUrl = cmdRoute;
-
-function cmdInfo(argv) {
-	// cloudflared parity: `tunnel info <NAME>` — details + live agent probe.
-	const [name] = argv;
-	if (!name) fail("usage: tunnel info <name>");
-	const t = getTunnel(name);
-	const created = t.createdAt ?? "(unknown)";
-	info(`name: ${name}`);
-	info(`kind: ${t.kind}   room: ${t.room}   created: ${created}`);
-	info(`target: ${t.kind === "http" ? t.upstream : t.to}`);
-	if (t.kind === "http") {
-		const url = `${edgeHost()}/t/${t.room}/`;
-		info(`route: ${url}`);
-		if (haveBin("curl")) {
-			// Probe header answers locally at the edge (never forwarded), so
-			// edge-404 and upstream-404 are no longer conflated.
-			const probe = spawnSync(
-				"curl",
-				["-s", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code} %{header_json}", "-H", "X-Tunnel-Probe: status", url],
-				{ encoding: "utf8" },
-			).stdout.trim();
-			const live = probe.includes("x-tunnel-status") && probe.includes("live");
-			const code = probe.split(" ")[0];
-			if (live) info(`agent: live (edge probe ${code} — connector connected)`);
-			else if (code === "404") info("agent: unknown (404 = bad room ID shape — re-check saved value)");
-			else info(`agent: offline (probe ${code || "no response"} — run: tunnel run ${name})`);
-		} else {
-			info("agent: unknown (curl missing; run: tunnel run " + name + ")");
-		}
-	} else {
-		info(`route: (tcp pipe — no browser URL; use: tunnel access ssh ${name})`);
-		info("agent: unknown over plain HTTP (pipes are WS-only; try: tunnel access ssh " + name + ")");
-	}
-}
-
-function cmdCleanup(argv) {
-	// cloudflared parity: `tunnel cleanup <NAME>` drops stale connections.
-	// Our rooms are ephemeral server-side (no replica set to prune), so this
-	// is a liveness report + local no-op, kept so muscle memory works.
-	const [name] = argv;
-	if (!name) fail("usage: tunnel cleanup <name>");
-	getTunnel(name); // validates name
-	info("rooms are ephemeral: nothing stale to delete server-side.");
-	info("if an agent looks stuck, restart it (Ctrl-C + tunnel run) — a fresh");
-	info("connect supersedes the old one. To forget the name: tunnel delete " + name);
-}
-
-function cmdRun(argv) {
-	const [name] = argv;
-	if (!name) fail("usage: tunnel run <name>");
-	const t = getTunnel(name);
-	const script = AGENTS[t.kind];
+function runAgent(kind, id, target, host) {
+	const script = AGENTS[kind];
 	if (!fs.existsSync(script)) fail(`agent script missing: ${script}`);
 	const env = { ...process.env };
-	if (t.kind === "http") {
-		env.EDGE_URL = `${wsBase()}/t/${t.room}/__agent`;
-		env.UPSTREAM = t.upstream;
+	if (kind === "http") {
+		env.EDGE_URL = `${wsBase(host)}/t/${id}/__agent`;
+		env.UPSTREAM = target;
 	} else {
-		env.EDGE_URL = `${wsBase()}/p/${t.room}/__agent`;
-		const [h, p] = t.to.split(":");
-		env.SSH_HOST = h;
-		env.SSH_PORT = p || "22";
+		const p = parseTcpTarget(target);
+		env.EDGE_URL = `${wsBase(host)}/p/${id}/__agent`;
+		env.SSH_HOST = p.host;
+		env.SSH_PORT = String(p.port);
 	}
-	info(`running ${t.kind} agent for ${JSON.stringify(name)} (room ${JSON.stringify(t.room)}) — Ctrl-C to stop`);
-	const child = spawn("node", [script], { env, stdio: "inherit" });
+	// Pass target + id + host explicitly so the agent serves THIS tunnel
+	// (no second mint, no double URL print).
+	const child = spawn("node", [script, target, "--id", id, "--host", host], { env, stdio: "inherit" });
 	child.on("exit", (code) => process.exit(code ?? 1));
 }
 
-function sshProxyCmd(t) {
-	return `node ${JSON.stringify(path.join(HERE, "ws-ssh-proxy.js"))} ${wsBase()}/p/${t.room}`;
+function cmdUp(argv) {
+	checkNode();
+	const o = parseArgs(argv, { flags: ["host"] });
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel up <name>");
+	const t = getTunnel(name);
+	const host = hostOf(o);
+	info(`serving ${t.kind} tunnel ${JSON.stringify(name)} -> ${t.target} (Ctrl-C to stop)`);
+	runAgent(t.kind, t.id, t.target, host);
+}
+
+function curlCode(url, extra = []) {
+	return spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", ...extra, url], {
+		encoding: "utf8",
+	}).stdout.trim();
+}
+
+function cmdInfo(argv) {
+	const o = parseArgs(argv, { flags: ["host"] });
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel info <name>");
+	const t = getTunnel(name);
+	const host = hostOf(o);
+	info(`name: ${name}`);
+	info(`kind: ${t.kind}   id: ${t.id}`);
+	info(`target: ${t.target}`);
+	if (!haveBin("curl")) {
+		info("agent: unknown (curl missing)");
+		return;
+	}
+	if (t.kind === "http") {
+		const url = `${host}/t/${t.id}/`;
+		info(`url: ${url}`);
+		const probe = spawnSync(
+			"curl",
+			["-s", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code} %{header_json}", "-H", "X-Tunnel-Probe: status", url],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		const code = probe.split(" ")[0];
+		if (probe.includes("x-tunnel-status") && probe.includes("live")) info("agent: live");
+		else if (code === "404") info("agent: unknown (404 = bad id — re-check saved value)");
+		else info(`agent: offline (run: tunnel up ${name})`);
+	} else {
+		// WS-upgrade probe (http1.1 — curl strips Upgrade over h2):
+		// 101 = agent live, 502 = no agent, 404 = bad id.
+		const code = spawnSync(
+			"curl",
+			["-s", "--http1.1", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code}",
+				"-H", "Connection: Upgrade", "-H", "Upgrade: websocket",
+				"-H", "Sec-WebSocket-Version: 13", "-H", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+				`${host}/p/${t.id}`],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		if (code === "101") info(`agent: live (connect: tunnel ssh ${name})`);
+		else if (code === "502") info(`agent: offline (serve it on the box: tunnel up ${name})`);
+		else if (code === "404") info("agent: unknown (404 = bad id — re-check saved value)");
+		else info(`agent: unknown (probe ${code || "no response"})`);
+	}
+}
+
+function sshProxyCmd(t, host) {
+	return `node ${JSON.stringify(path.join(HERE, "ws-ssh-proxy.js"))} ${wsBase(host)}/p/${t.id}`;
 }
 
 function cmdSsh(argv) {
-	const [name, ...rest] = argv;
-	if (!name) fail("usage: tunnel ssh <name> [--print] [ssh-args...]");
-	if (!haveBin("ssh")) fail("ssh binary not found on PATH");
-	const t = getTunnel(name);
-	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel — ssh needs a --tcp one`);
-	const proxy = sshProxyCmd(t);
-	if (rest.includes("--print")) {
-		return info(`ssh -o ${JSON.stringify(`ProxyCommand ${proxy}`)} -o ServerAliveInterval=25 -o ServerAliveCountMax=3 ${name}`);
+	// tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]
+	// Our flags are consumed wherever they appear; everything else after
+	// the name passes through to ssh (including -p, --other-flags).
+	let hostFlag = null;
+	let wantInstall = false;
+	let wantPrint = false;
+	let name = null;
+	const extra = [];
+	for (let i = 0; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === "--host") {
+			hostFlag = argv[i + 1];
+			if (!hostFlag || hostFlag.startsWith("--")) fail("--host needs a value");
+			i++;
+		} else if (a === "--install") {
+			wantInstall = true;
+		} else if (a === "--print") {
+			wantPrint = true;
+		} else if (!name && !a.startsWith("-")) {
+			name = a;
+		} else if (!name && a.startsWith("-")) {
+			fail("usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]");
+		} else {
+			extra.push(a);
+		}
 	}
-	const args = [
-		"-o",
-		`ProxyCommand ${proxy}`,
-		"-o",
-		"ServerAliveInterval=25",
-		"-o",
-		"ServerAliveCountMax=3",
-		name,
-		...rest,
-	];
+	if (!name) fail("usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]");
+	const t = getTunnel(name);
+	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel — ssh needs a HOST:PORT one (tunnel add <name> 127.0.0.1:22)`);
+	const host = hostOf({ host: hostFlag });
+	const proxy = sshProxyCmd(t, host);
+	if (wantInstall) return cmdSshInstall(name, proxy);
+	if (wantPrint) return info(`ssh -o ${JSON.stringify(`ProxyCommand ${proxy}`)} -o ServerAliveInterval=25 -o ServerAliveCountMax=3 ${name}`);
+	if (!haveBin("ssh")) fail("ssh binary not found on PATH");
+	const args = ["-o", `ProxyCommand ${proxy}`, "-o", "ServerAliveInterval=25", "-o", "ServerAliveCountMax=3", name, ...extra];
 	const child = spawn("ssh", args, { stdio: "inherit" });
 	child.on("exit", (code) => process.exit(code ?? 1));
 }
 
-function cmdAccess(argv) {
-	// cloudflared parity: `cloudflared access ssh --hostname ...`.
-	// Ours: `tunnel access ssh <name>` (+ ssh-config). Bare `tunnel ssh`
-	// stays as an alias.
-	const [sub, ...rest] = argv;
-	if (sub === "ssh") return cmdSsh(rest);
-	if (sub === "ssh-config") return cmdSshConfig(rest);
-	if (!sub || sub === "--help" || sub === "-h") {
-		cmdHelp("access");
-		process.exit(0);
-	}
-	fail(`unknown access subcommand ${JSON.stringify(sub)} — see: tunnel access ssh --help`);
-}
-
-function cmdQuickTunnel(argv) {
-	// cloudflared parity: `cloudflared tunnel --url http://localhost:8080`
-	// (trycloudflare quick tunnel). Ephemeral: random long room ID, prints
-	// public URL, runs the http agent in the foreground.
-	// `--name X` persists it as named.
-	checkNode();
-	const get = (f) => {
-		const i = argv.indexOf(f);
-		return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
-	};
-	const upstream = get("--url");
-	if (!upstream) fail("usage: tunnel --url http://127.0.0.1:8080 [--name tmp] [--output json]");
-	const jsonOut = get("--output") === "json";
-	const savedName = get("--name");
-	const room = newRoomId();
-	const url = `${edgeHost()}/t/${room}/`;
-	if (savedName) {
-		const state = loadState();
-		state.tunnels[savedName] = { kind: "http", room, upstream, createdAt: new Date().toISOString() };
-		saveState(state);
-	}
-	if (jsonOut) {
-		console.log(JSON.stringify({ url, room, upstream, ...(savedName ? { name: savedName } : {}) }));
-	} else {
-		info(`tunnel ready: ${url}`);
-		info(`room: ${room}   upstream: ${upstream}${savedName ? `   (saved as ${JSON.stringify(savedName)})` : "   (ephemeral — stops with this process)"}`);
-	}
-	const env = { ...process.env, EDGE_URL: `${wsBase()}/t/${room}/__agent`, UPSTREAM: upstream };
-	const script = AGENTS.http;
-	if (!fs.existsSync(script)) fail(`agent script missing: ${script}`);
-	const child = spawn("node", [script], { env, stdio: "inherit" });
-	child.on("exit", (code) => process.exit(code ?? 1));
-}
-
-function cmdSshConfig(argv) {
-	const [name, ...rest] = argv;
-	if (!name) fail("usage: tunnel ssh-config <name> [--install]");
-	const t = getTunnel(name);
-	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel`);
-	const block = `Host ${name}
-  HostName ${name}
-  ProxyCommand ${sshProxyCmd(t)}
-  ServerAliveInterval 25
-  ServerAliveCountMax 3`;
-	if (!rest.includes("--install")) return info(block + "\n");
+function cmdSshInstall(name, proxy) {
+	const block = `Host ${name}\n  HostName ${name}\n  ProxyCommand ${proxy}\n  ServerAliveInterval 25\n  ServerAliveCountMax 3`;
 	const sshConfig = path.join(os.homedir(), ".ssh", "config");
 	const begin = `# >>> treaulab tunnel ${name} >>>`;
 	const end = `# <<< treaulab tunnel ${name} <<<`;
@@ -412,38 +315,35 @@ function cmdSshConfig(argv) {
 	info(`appended to ${sshConfig} — now plain \`ssh ${name}\` works`);
 }
 
+function cmdList() {
+	const tunnels = loadState().tunnels;
+	const names = Object.keys(tunnels);
+	if (!names.length) return info("no tunnels yet — see: tunnel add <name> <target>");
+	const rows = [["NAME", "KIND", "TARGET"]];
+	for (const n of names.sort()) rows.push([n, tunnels[n].kind, tunnels[n].target]);
+	const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
+	for (const r of rows) info(r.map((c, i) => c.padEnd(widths[i])).join("  "));
+}
+
+function cmdRm(argv) {
+	const o = parseArgs(argv, {});
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel rm <name>");
+	const state = loadState();
+	if (!state.tunnels[name]) fail(`unknown tunnel ${JSON.stringify(name)}`);
+	delete state.tunnels[name];
+	saveState(state);
+	info(`removed ${JSON.stringify(name)} (ids vanish when unused; access dies with the agent)`);
+}
+
 function cmdLogs() {
 	const child = spawn("npx", ["wrangler", "tail"], { cwd: EDGE_DIR, stdio: "inherit" });
 	child.on("exit", (code) => process.exit(code ?? 1));
 }
 
-function cmdDelete(argv) {
-	const [name] = argv;
-	if (!name) fail("usage: tunnel delete <name> [-f]");
-	const state = loadState();
-	if (!state.tunnels[name]) fail(`unknown tunnel ${JSON.stringify(name)}`);
-	delete state.tunnels[name];
-	saveState(state);
-	info(`forgot ${JSON.stringify(name)} (rooms vanish when unused; to revoke access, delete + create a fresh long ID)`);
-}
-
-function cmdConfig(argv) {
-	const [sub, k, v] = argv;
-	const cfg = loadConfig();
-	if (!sub || sub === "get") {
-		if (k) return info(`${k}=${cfg[k] ?? "(unset)"}`);
-		return info(`host=${cfg.host ?? "(unset)"}`);
-	}
-	if (sub === "set" && k && v !== undefined) {
-		if (k !== "host") fail(`unknown key ${JSON.stringify(k)} (only: host)`);
-		saveConfig({ ...cfg, host: v.replace(/\/$/, "") });
-		return info(`host=${v}`);
-	}
-	fail("usage: tunnel config [get [host] | set host <URL>]");
-}
-
-async function cmdDoctor() {
+function cmdDoctor(argv) {
 	checkNode();
+	const o = parseArgs(argv, { flags: ["host"] });
 	let ok = true;
 	const check = (label, pass, hint = "") => {
 		info(`${pass ? "PASS" : "FAIL"}  ${label}${pass || !hint ? "" : ` — ${hint}`}`);
@@ -451,102 +351,68 @@ async function cmdDoctor() {
 	};
 	check(`node >= 22 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 22);
 	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
-	const cfg = loadConfig();
-	const host = process.env.TUNNEL_HOST || cfg.host || DEFAULT_HOST;
-	check("edge host configured", !!host, "tunnel config set host https://...");
-	info(`edge host: ${host} (default ${DEFAULT_HOST}; override with TUNNEL_HOST or tunnel config set host)`);
-	if (host) {
-		const curl = (p) =>
-			spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", host + p], {
-				encoding: "utf8",
-			}).stdout.trim();
-		const health = haveBin("curl") ? curl("/health") : null;
-		if (health === null) {
-			info("SKIP  edge reachability (curl missing)");
-		} else {
-			check("edge reachable (/health → 200)", health === "200", `got ${health || "no response"}`);
-			// Long-URL shape check: short IDs must 404; well-formed unused ID must 502/426.
-			const short = curl("/t/short/");
-			check("short IDs rejected (→ 404)", short === "404", `got ${short || "no response"}`);
-			const fresh = newRoomId();
-			const good = curl(`/t/${fresh}/`);
-			check(
-				"long-URL gate answers (unused ID → 502)",
-				good === "502",
-				`got ${good || "no response"}`,
-			);
-		}
+	const host = hostOf(o);
+	info(`edge host: ${host} (override: --host H or TUNNEL_HOST)`);
+	if (haveBin("curl")) {
+		check("edge reachable (/health → 200)", curlCode(`${host}/health`) === "200", "is the worker deployed?");
+		check("short IDs rejected (→ 404)", curlCode(`${host}/t/short/`) === "404", "unexpected routing");
+		check("http gate answers (unused ID → 502)", curlCode(`${host}/t/${newRoomId()}/`) === "502", "unexpected status");
+		// Pipe gate needs a real WS-upgrade handshake (http1.1 — curl strips
+		// Upgrade over h2); no agent → 502.
+		const pipeCode = spawnSync(
+			"curl",
+			["-s", "--http1.1", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code}",
+				"-H", "Connection: Upgrade", "-H", "Upgrade: websocket",
+				"-H", "Sec-WebSocket-Version: 13", "-H", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+				`${host}/p/${newRoomId()}`],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		check("pipe gate answers (unused ID → 502)", pipeCode === "502", `got ${pipeCode || "no response"}`);
+	} else {
+		info("SKIP  edge reachability (curl missing)");
 	}
-	const state = loadState();
-	info(`remembered tunnels: ${Object.keys(state.tunnels).length} (tunnel list)`);
+	info(`remembered tunnels: ${Object.keys(loadState().tunnels).length} (tunnel list)`);
 	process.exit(ok ? 0 : 1);
 }
 
-async function cmdQuickstart(argv) {
-	checkNode();
-	info("1/3 node OK");
-	const host = (() => {
-		const i = argv.indexOf("--host");
-		return ((i >= 0 && argv[i + 1]) || process.env.TUNNEL_HOST || loadConfig().host || DEFAULT_HOST).replace(/\/$/, "");
-	})();
-	saveConfig({ ...loadConfig(), host });
-	info(`2/3 host: ${host} (default; override with --host)`);
-	info("3/3 next (mirrors cloudflared):");
-	info("  tunnel --url http://127.0.0.1:8080        # instant share, no save (trycloudflare-style)");
-	info("  tunnel create site1 --http --upstream http://127.0.0.1:8080");
-	info("  tunnel route site1                        # public URL (like: route dns)");
-	info("  tunnel run site1                          # on the origin box (like: tunnel run)");
-	info("  tunnel access ssh lockedvps               # from the laptop (like: access ssh)");
-	info("  tunnel doctor                             # self-check anytime");
+function cmdHelp(cmd) {
+	const per = {
+		share: "usage: tunnel share [TARGET] [--name N] [--host H] [--json]\n  expose TARGET (default http://127.0.0.1:8080) and run the agent.\n  TARGET http(s)://… shares a website; HOST:PORT shares ssh. --name saves it.",
+		add: "usage: tunnel add <name> <target> [--id ID]\n  remember a tunnel. target: http(s)://… or HOST:PORT (e.g. 127.0.0.1:22).\n  --id reuses a box-side minted id (tcp-agent.js prints one).",
+		up: "usage: tunnel up <name> [--host H]\n  run the agent for a saved tunnel (foreground, Ctrl-C stops).",
+		info: "usage: tunnel info <name> [--host H]\n  details + live agent check (http and tcp).",
+		ssh: "usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]\n  ssh through a tcp tunnel. --install writes ~/.ssh/config, --print shows the command.",
+		list: "usage: tunnel list",
+		rm: "usage: tunnel rm <name>",
+		doctor: "usage: tunnel doctor [--host H]",
+		logs: "usage: tunnel logs   (wrangler tail)",
+	};
+	if (cmd && per[cmd]) return info(per[cmd]);
+	info(`usage: tunnel <command> [args] [--host H]
+
+  share [TARGET] [--name N] [--json]  instant share + run (default http://127.0.0.1:8080)
+  add <name> <target> [--id ID]       remember (URL or HOST:PORT)
+  up <name>                           run the agent (foreground)
+  info <name>                         details + live check
+  ssh <name> [--install] [--print]    ssh through a tcp tunnel
+  list | rm <name>                    manage saved tunnels
+  doctor | logs                       self-check / tail edge logs
+
+host: --host H > TUNNEL_HOST env > ${DEFAULT_HOST}
+state: ${STATE_FILE}`);
 }
 
 // ---- main ---------------------------------------------------------------
 
-let raw = process.argv.slice(2);
-// Top-level quick tunnel, like `cloudflared tunnel --url ...` (any position).
-if (raw.includes("--url")) {
-	await cmdQuickTunnel(raw);
-	process.exit(0);
-}
-let [cmd, ...argv] = raw;
-// cloudflared muscle memory: `tunnel tunnel <sub>` == `tunnel <sub>`.
-if (cmd === "tunnel") {
-	[cmd, ...argv] = argv.length ? argv : [undefined];
-}
-const cmds = {
-	help: cmdHelp,
-	login: cmdLogin,
-	create: cmdCreate,
-	list: cmdList,
-	info: cmdInfo,
-	route: cmdRoute,
-	url: cmdUrl,
-	run: cmdRun,
-	delete: cmdDelete,
-	cleanup: cmdCleanup,
-	access: cmdAccess,
-	ssh: cmdSsh,
-	"ssh-config": cmdSshConfig,
-	logs: cmdLogs,
-	config: cmdConfig,
-	doctor: cmdDoctor,
-	status: cmdDoctor,
-	quickstart: cmdQuickstart,
-};
+const [cmd, ...argv] = process.argv.slice(2);
+const cmds = { share: cmdShare, add: cmdAdd, up: cmdUp, info: cmdInfo, ssh: cmdSsh, list: cmdList, rm: cmdRm, logs: cmdLogs, doctor: cmdDoctor, help: (a) => cmdHelp(a[0]) };
 if (!cmd || cmd === "--help" || cmd === "-h") {
 	cmdHelp();
 	process.exit(0);
 }
-if (cmd === "help") {
-	cmdHelp(argv[0]);
+if ((argv.includes("--help") || argv.includes("-h")) && cmds[cmd]) {
+	cmdHelp(cmd);
 	process.exit(0);
-}
-// Per-command help, like cloudflared: `tunnel run --help`.
-if (argv.includes("--help") || argv.includes("-h")) {
-	if (cmds[cmd]) {
-		cmdHelp(cmd);
-		process.exit(0);
-	}
 }
 if (!cmds[cmd]) {
 	cmdHelp();

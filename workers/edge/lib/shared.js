@@ -58,12 +58,40 @@ export function normalizeEdgeUrl(raw) {
 	return converted;
 }
 
+export function normalizeClientUrl(raw) {
+	// Laptop-side helper (ws-ssh-proxy, ssh clients): accept https:// too,
+	// the wire is always WebSocket.
+	return normalizeEdgeUrl(raw);
+}
+
 export function isValidEdgeUrl(url) {
 	return /^wss?:\/\//.test(url);
 }
 
 export function wsBaseFromHttp(host) {
 	return String(host).replace(/\/$/, "").replace(/^http/, "ws");
+}
+
+// Single host rule everywhere: --host flag > TUNNEL_HOST env > default.
+// No config file. `flag` is the already-parsed --host value (or null).
+export function resolveHost(flag) {
+	const h = String(flag || "").trim() || process.env.TUNNEL_HOST || DEFAULT_HOST;
+	return h.replace(/\/$/, "");
+}
+
+// Target kind: http(s)://... -> "http", anything else (HOST:PORT) -> "tcp".
+export function detectKind(target) {
+	if (/^https?:\/\//i.test(String(target || ""))) return "http";
+	return "tcp";
+}
+
+// Validate a tcp target shaped like HOST:PORT (port optional, default 22).
+export function parseTcpTarget(target) {
+	const m = String(target || "").match(/^([A-Za-z0-9_.-]+)(?::(\d{1,5}))?$/);
+	if (!m) return null;
+	const port = m[2] ? Number(m[2]) : 22;
+	if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+	return { host: m[1], port };
 }
 
 // ---- headers ------------------------------------------------------------

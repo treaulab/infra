@@ -16,7 +16,7 @@ workers/edge/
 ├── agent/agent.js     # zero-dep dial-out agent for locked-down HTTP origins
 ├── agent/tcp-agent.js # zero-dep dial-out agent: per-stream TCP dial to :22
 ├── agent/agent.py     # stdlib-only Python twin of agent.js (same protocol)
-├── bin/tunnel         # cloudflared-style CLI (create/route/run/ssh/doctor)
+├── bin/tunnel         # CLI (share/add/up/info/ssh/list/rm/doctor)
 ├── bin/ws-ssh-proxy.js# zero-dep laptop stdio helper (ssh ProxyCommand)
 ├── TUNNEL.md          # HTTP tunnel protocol + ops (worse-cloudflared)
 ├── PIPE.md            # SSH pipe protocol + ops (ProxyCommand UX)
@@ -28,50 +28,45 @@ workers/edge/
 Single source for the site stays `apps/website/src/` — `public/` is a build
 artifact synced by `npm run sync:public`, never edited by hand.
 
-## Use it (`tunnel` CLI — mirrors `cloudflared tunnel`)
+## Use it (`tunnel` CLI)
 
 ```bash
 cd workers/edge && npm install          # exposes `tunnel` via npm run tunnel --
-npm run tunnel -- --url http://127.0.0.1:8080   # zero setup: host defaults to go.treau.me
-npm run tunnel -- create site1 --http --upstream http://127.0.0.1:8080
-npm run tunnel -- create lockedvps --tcp --to 127.0.0.1:22
-npm run tunnel -- route site1           # public URL (like: cloudflared tunnel route dns)
-npm run tunnel -- run lockedvps         # on the origin box (like: tunnel run)
-npm run tunnel -- access ssh lockedvps  # from the laptop (like: cloudflared access ssh)
+npm run tunnel -- share http://127.0.0.1:8080   # zero setup: host defaults to go.treau.me
+npm run tunnel -- add site1 http://127.0.0.1:8080
+npm run tunnel -- add lockedvps 127.0.0.1:22
+npm run tunnel -- info site1            # public URL + live check
+npm run tunnel -- up lockedvps          # on the origin box (foreground)
+npm run tunnel -- ssh lockedvps         # from the laptop
 ```
 
-Instant share needs no saving and no setup (trycloudflare-style) —
-`--url` alone is enough; add `--name tmp` to remember it, `--output json`
-for scripts:
+Instant share needs no saving and no setup — `share` alone is enough
+(defaults to `http://127.0.0.1:8080`); add `--name tmp` to remember it,
+`--json` for scripts:
 
 ```bash
-npm run tunnel -- --url http://127.0.0.1:8080 [--name tmp] [--output json]
+npm run tunnel -- share [TARGET] [--name tmp] [--json]
 ```
 
-Host defaults to `https://go.treau.me` (override per-box with
-`TUNNEL_HOST=https://...` or `tunnel config set host <URL>`).
+Host defaults to `https://go.treau.me` (override with `--host H` or
+`TUNNEL_HOST=https://...`).
 
 No Node on the origin box? The agent has a pure-stdlib Python twin —
 no pip, no clone needed (see `agent/README.md`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py -o /tmp/agent.py
-UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share
+python3 /tmp/agent.py http://127.0.0.1:8080
 ```
 
 Prefer a bare `tunnel` on PATH? `npm link` (or keep the manual
 `ln -sf "$PWD/bin/tunnel" ~/.local/bin/tunnel`), then drop the
-`npm run tunnel --` prefix. Command parity with cloudflared:
-`login ≈ tunnel login`, `info ≈ tunnel info`, `delete [-f]`,
-`cleanup`, per-command `--help`, and `tunnel tunnel <sub>` nesting all work.
-Bare `tunnel ssh` / `tunnel url` / `tunnel status` stay as aliases.
+`npm run tunnel --` prefix. Per-command help: `tunnel <command> --help`.
 
-Where cloudflared keeps `~/.cloudflared/cert.pem` + `config.yml` + `<uuid>.json`,
-we keep `~/.config/treaulab/config.json` (edge host)
-+ `tunnels.json` (named tunnels + long URL IDs + ingress). Same jobs, JSON only.
+State lives in `~/.config/treaulab/tunnels.json` (named tunnels + ids).
 
-Full command reference: `tunnel --help`. Manual (no-CLI) paths stay
-documented in `TUNNEL.md` / `PIPE.md` as fallback.
+Full command reference: `tunnel help`. Protocol details (no-CLI fallback):
+`TUNNEL.md` / `PIPE.md`.
 
 ## Local dev
 
@@ -98,7 +93,7 @@ Long-URL-only: no `wrangler secret put` needed. If you previously set
 
 CI (`edge.yml`, path-filtered to `workers/edge/**` + `apps/website/src/**`)
 needs repo secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`.
-SSH-pipe usage: `PIPE.md` (`ssh lockedvps` via ProxyCommand).
+SSH-pipe usage: `PIPE.md` (`tunnel ssh lockedvps`).
 
 Dry-run validation without uploading: `npm run deploy:dry`.
 

@@ -82,11 +82,11 @@ jobs:
           mkdir -p /tmp/up && echo ok > /tmp/up/index.html
           (python3 -m http.server 18102 --bind 127.0.0.1 --directory /tmp/up &)
           sleep 2
-          (UPSTREAM=http://127.0.0.1:18102 timeout 60 /tmp/tunnel-agent \
-            --share --host http://127.0.0.1:18787 --json > /tmp/share.log 2>&1 &)
+          (timeout 60 /tmp/tunnel-agent http://127.0.0.1:18102 \
+            --host http://127.0.0.1:18787 --json > /tmp/share.log 2>&1 &)
           sleep 6
-          ROOM=$(head -n 1 /tmp/share.log | python3 -c "import json,sys;print(json.load(sys.stdin)['room'])")
-          test "$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://127.0.0.1:18787/t/$ROOM/")" = "200"
+          ID=$(head -n 1 /tmp/share.log | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+          test "$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://127.0.0.1:18787/t/$ID/")" = "200"
       - name: Dump dev/agent logs on failure
         if: failure()
         run: |

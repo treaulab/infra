@@ -51,24 +51,25 @@ accepted for old proxies.
 ```bash
 # one-time: symlink (host defaults to go.treau.me, no tokens)
 ln -sf "$PWD/workers/edge/bin/tunnel" ~/.local/bin/tunnel  # ensure ~/.local/bin is on PATH
-tunnel create lockedvps --tcp --to 127.0.0.1:22
-tunnel access ssh lockedvps   # that's it — ProxyCommand built inline (alias: tunnel ssh)
+tunnel add lockedvps 127.0.0.1:22
+tunnel ssh lockedvps   # that's it — ProxyCommand built inline
 ```
 
 (Host defaults to `go.treau.me`; point elsewhere with
-`TUNNEL_HOST=https://...` or `tunnel config set host <URL>`.)
+`--host H` or `TUNNEL_HOST=https://...`.)
 
-`scp`/`sftp` ride the same path (`tunnel access ssh lockedvps` covers `ssh`; for
-persistent config: `tunnel access ssh-config lockedvps --install`, then plain
-`ssh lockedvps` / `scp f lockedvps:/tmp/`). `tunnel route lockedvps` shows the
-agent `EDGE_URL` for the locked box; `tunnel info`/`doctor`/`logs` cover
-observability. Manual equivalent (no CLI) below.
+`scp`/`sftp` ride the same path; for persistent config:
+`tunnel ssh lockedvps --install`, then plain `ssh lockedvps` /
+`scp f lockedvps:/tmp/`. `tunnel info lockedvps` shows agent liveness;
+`tunnel doctor`/`logs` cover observability. Manual equivalent (no CLI) below.
 
 ## Laptop setup (manual, no CLI)
 
 ```bash
 node --version  # >= 22
-mkdir -p ~/bin && cp workers/edge/bin/ws-ssh-proxy.js ~/bin/
+mkdir -p ~/bin && cp workers/edge/bin/ws-ssh-proxy.js workers/edge/lib/shared.js ~/bin/
+# (ws-ssh-proxy.js imports ../lib/shared.js — keep the two files side by side,
+# or just use `tunnel ssh` which handles this for you)
 ```
 
 ```sshconfig
@@ -93,10 +94,10 @@ Verify the server fingerprint out-of-band on first connect, as always.
 
 ```bash
 node --version  # >= 22, and sshd listening on 127.0.0.1:22
-BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel route`
-EDGE_URL="wss://go.treau.me/p/$BOX/__agent" \
-SSH_HOST="127.0.0.1" SSH_PORT="22" \
-node agent/tcp-agent.js
+node agent/tcp-agent.js 127.0.0.1:22   # prints the box id
+# reuse it on the laptop: tunnel add lockedvps 127.0.0.1:22 --id <printed-id>
+# or skip minting: tunnel add lockedvps 127.0.0.1:22 on the laptop first,
+# then serve it here with: tunnel up lockedvps
 ```
 
 systemd unit mirrors `agent/README.md` (same shape, `ExecStart` pointing at

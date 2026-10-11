@@ -12,42 +12,29 @@ involved.
   # linux amd64 (or tunnel-agent-linux-arm64):
   curl -fsSL https://github.com/treaulab/infra/releases/latest/download/tunnel-agent-linux-amd64 \
     -o /tmp/agent && chmod +x /tmp/agent
-  UPSTREAM="http://127.0.0.1:8080" /tmp/agent --share
+  /tmp/agent http://127.0.0.1:8080
   ```
-* `agent.js` — Node 22+, zero deps. Same flags work under plain Node:
-  `node agent.js --share`.
+* `agent.js` — Node 22+, zero deps: `node agent.js [UPSTREAM]`.
 * `agent.py` — pure Python stdlib (no pip), for boxes with neither Node
   nor download freedom. See below.
 
 No Node on the box? Use the Python twin instead — pure standard library
-(no pip): `agent.py` mirrors `agent.js` exactly (same env, same protocol,
+(no pip): `agent.py` mirrors `agent.js` exactly (same args, same protocol,
 same heartbeat). `python3 --version` is the only requirement (3.8+).
 
 ```bash
 # zero-clone one-liner (no git, no Node, no pip):
 curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \
   -o /tmp/agent.py
-ROOM=$(openssl rand -hex 16)   # 32-char long URL ID, the secret
-EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" \
-UPSTREAM="http://127.0.0.1:8080" \
-python3 /tmp/agent.py
-# browse: https://go.treau.me/t/$ROOM/
+python3 /tmp/agent.py http://127.0.0.1:8080
+# prints the public URL and serves it — browse https://go.treau.me/t/<id>/
 ```
 
-Want the trycloudflare-style one-command share instead (prints the URL for
-you)? Same single file — `--share` mints a room and runs:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \
-  -o /tmp/agent.py
-UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share [--json]
-```
-
-* `agent.js` — HTTP origins (`UPSTREAM=http://127.0.0.1:8080`). Browsers use
-  plain URLs, see `../TUNNEL.md`.
-* `tcp-agent.js` — raw TCP, one dial to `SSH_HOST:SSH_PORT` (default
-  `127.0.0.1:22`) per accepted stream. Laptops connect via
-  `../bin/ws-ssh-proxy.js` as an ssh `ProxyCommand`, see `../PIPE.md`.
+* `agent.js` / `agent.py` — HTTP origins (default `http://127.0.0.1:8080`).
+  Browsers use plain URLs, see `../TUNNEL.md`.
+* `tcp-agent.js` — raw TCP, one dial to `HOST:PORT` (default
+  `127.0.0.1:22`) per accepted stream: `node tcp-agent.js [HOST:PORT]`.
+  Laptops connect via `tunnel ssh`, see `../PIPE.md`.
 
 One file, zero dependencies, Node 22+. Runs **on the locked-down VPS** next to
 whatever you want to expose (e.g. `python3 -m http.server 8080`), dials **out**
@@ -60,17 +47,16 @@ is never involved (stays at zero egress).
 ```bash
 # on the locked-down VPS, next to your :8080:
 node --version   # need >= 22 (global WebSocket + fetch)
-ROOM=$(openssl rand -hex 16)   # 32-char long URL ID, the secret
-EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" \
-UPSTREAM="http://127.0.0.1:8080" \
-node agent.js
+node agent.js http://127.0.0.1:8080
+# prints e.g. https://go.treau.me/t/<id>/ — browse it from anywhere.
+# flags: [--host H] [--id ID] (reuse an id) [--json] (script output)
 ```
 
-Then from anywhere: `https://go.treau.me/t/$ROOM/` serves the `:8080`
-content as plain HTTP. Same `$ROOM` for agent and browsers
-(agent connects to `.../$ROOM/__agent`). No token.
+No args at all mints a fresh id and prints the URL (ephemeral — Ctrl-C
+stops it). `--id <id>` reuses a room (e.g. the id from `tunnel info`).
 
-Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `UPSTREAM_TIMEOUT_MS`
+Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `TUNNEL_HOST`
+(default `https://go.treau.me`), `UPSTREAM_TIMEOUT_MS`
 (default `15000`, time to first byte — bodies stream with no total cap),
 `NAME` (default hostname), `MAX_CONCURRENT` (default `16`),
 `MAX_TUNNEL_BYTES` (default 500 MiB safety ceiling per stream).
@@ -89,9 +75,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/node /opt/tunnel/agent.js
-Environment=EDGE_URL=wss://go.treau.me/t/<long-room-id>/__agent
-Environment=UPSTREAM=http://127.0.0.1:8080
+ExecStart=/usr/bin/node /opt/tunnel/agent.js http://127.0.0.1:8080 --id <long-id>
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
@@ -112,10 +96,7 @@ belt-and-braces.)
 
 ```bash
 # on the locked-down box, next to sshd on 127.0.0.1:22:
-BOX=$(openssl rand -hex 16)   # or reuse the ID from `tunnel create`
-EDGE_URL="wss://go.treau.me/p/$BOX/__agent" \
-SSH_HOST="127.0.0.1" SSH_PORT="22" \
-node tcp-agent.js
+node tcp-agent.js 127.0.0.1:22   # prints the box id; reuse via --id
 ```
 
 Laptop side + full protocol: `../PIPE.md`. Same systemd shape as above with

@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "bin": {
-    "tunnel": "./bin/tunnel",
-    "treaulab-tunnel": "./bin/tunnel"
+    "tunnel": "./bin/tunnel"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "sync:public": "rm -rf public && mkdir -p public && cp -r ../../apps/website/src/. ./public/",

@@ -71,8 +71,9 @@ everything; browsers retry and the agent redials with stable-reset backoff.
 ## Run it (easy way — `tunnel` CLI)
 
 ```bash
-tunnel create site1 --http --upstream http://127.0.0.1:8080   # host defaults to go.treau.me
-tunnel run site1        # on the locked box (or: tunnel route site1 for the URL)
+tunnel share http://127.0.0.1:8080   # prints the public URL, runs; host defaults to go.treau.me
+# or named: tunnel add site1 http://127.0.0.1:8080 && tunnel up site1   # on the locked box
+#           tunnel info site1        # the URL, from anywhere
 ```
 
 ## Run it (static binary, no runtime)
@@ -80,16 +81,16 @@ tunnel run site1        # on the locked box (or: tunnel route site1 for the URL)
 ```bash
 curl -fsSL https://github.com/treaulab/infra/releases/latest/download/tunnel-agent-linux-amd64 \
   -o /tmp/agent && chmod +x /tmp/agent
-UPSTREAM="http://127.0.0.1:8080" /tmp/agent --share
+/tmp/agent http://127.0.0.1:8080
 # (arm64 boxes: tunnel-agent-linux-arm64. Cut with `git tag agent-vX.Y.Z`.)
 ```
 
-No Node on the box? `agent.py --share` is the same one-command share in
+No Node on the box? `agent.py` is the same one-command share in
 pure stdlib Python (single file, nothing else to download):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py -o /tmp/agent.py
-UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py --share
+python3 /tmp/agent.py http://127.0.0.1:8080
 ```
 
 Then browse the printed long URL (`https://go.treau.me/t/<32-char-id>/`).
@@ -100,12 +101,12 @@ below.
 
 1. Edge: deploy (`npm run deploy` or CI `edge.yml`), custom domain as usual.
    No secrets to set.
-2. Locked VPS: `python3 -m http.server 8080 --bind 127.0.0.1`, then
-   `ROOM=$(openssl rand -hex 16)` and pick an agent:
-   * Node: `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" node agent/agent.js`
-   * Python, no installs: `EDGE_URL="wss://go.treau.me/t/$ROOM/__agent" UPSTREAM="http://127.0.0.1:8080" python3 agent/agent.py`
+2. Locked VPS: `python3 -m http.server 8080 --bind 127.0.0.1`, then run an
+   agent with no args (mints a room and prints the URL) or `--id` to reuse one:
+   * Node: `node agent/agent.js http://127.0.0.1:8080`
+   * Python, no installs: `python3 agent/agent.py http://127.0.0.1:8080`
    (see `agent/README.md` for systemd + the zero-clone one-liner).
-3. Browse: `https://go.treau.me/t/$ROOM/`. Verify Azure silence via
+3. Browse the printed `https://go.treau.me/t/<id>/`. Verify Azure silence via
    `docker logs caddy` / Azure Monitor.
 
 ## Limits vs real cloudflared

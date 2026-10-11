@@ -3,29 +3,28 @@
 // WebSocket to the edge and serves the local upstream over it.
 // Zero dependencies, Node 22+ (global WebSocket + fetch). Also compiles to a
 // standalone binary with `bun build --compile` (no runtime needed on the box).
-// Long-URL-only: the room ID in EDGE_URL is the secret (no token).
+// Long-URL-only: the room ID in the URL is the secret (no token).
 //
-// Persistent agent (EDGE_URL carries a pre-made room ID):
-//   EDGE_URL="wss://go.treau.me/t/<long-room-id>/__agent" \
-//   UPSTREAM="http://127.0.0.1:8080" \
-//   node agent.js
+//   node agent.js [UPSTREAM] [--host H] [--id ID] [--json]
+//   UPSTREAM defaults to http://127.0.0.1:8080. Omit --id to mint a fresh
+//   room, print the public URL, and run (ephemeral — Ctrl-C stops it).
+//   Pass --id to reuse a room (e.g. the id from `tunnel info <name>`).
 //
-// One-command ephemeral share (trycloudflare-style, also the compiled binary):
-//   node agent.js --share [--upstream URL] [--host H] [--json]
-//   (mints a room, prints the public URL, runs; Ctrl-C stops it)
+//   UPSTREAM="http://127.0.0.1:8080" node agent.js --host https://go.treau.me
 //
-// Env: EDGE_URL (required, unless --share), UPSTREAM (default http://127.0.0.1:8080),
-//      UPSTREAM_TIMEOUT_MS (default 15000, time to first byte; bodies stream
-//      with no total cap), NAME (default hostname),
-//      TUNNEL_HOST (default https://go.treau.me, --share only),
-//      MAX_CONCURRENT (default 16),
-//      MAX_TUNNEL_BYTES (default 500 MiB safety ceiling per stream).
+// Env fallback (systemd, `tunnel up`): EDGE_URL + UPSTREAM work as before.
+// Other env: UPSTREAM_TIMEOUT_MS (default 15000, time to first byte; bodies
+// stream with no total cap), NAME (default hostname),
+// TUNNEL_HOST (default https://go.treau.me, used when --host is absent),
+// MAX_CONCURRENT (default 16),
+// MAX_TUNNEL_BYTES (default 500 MiB safety ceiling per stream).
 
 import {
 	BACKOFF_BASE_MS,
 	DEFAULT_HOST,
 	HEARTBEAT_MS,
 	HOP_HEADERS as HOP,
+	ID_RE,
 	TUNNEL_CHUNK_BYTES,
 	TUNNEL_VERSION,
 	T_DATA,
@@ -43,37 +42,72 @@ import {
 	newRoomId,
 	normalizeEdgeUrl,
 	parseTunnelHeaders,
+	resolveHost,
 	tunnelHeadersPayload,
+	wsBaseFromHttp,
 } from "../lib/shared.js";
 
 const _te = new TextEncoder();
 const _td = new TextDecoder();
 
 const _argv = process.argv.slice(2);
-const _has = (f) => _argv.includes(f);
+if (_argv.includes("--share") || _argv.includes("--url") || _argv.includes("--upstream")) {
+	console.error("usage: agent.js [UPSTREAM] [--host H] [--id ID] [--json]  (--share/--url/--upstream are gone; pass UPSTREAM positionally)");
+	process.exit(2);
+}
 const _get = (f) => {
 	const i = _argv.indexOf(f);
 	return i >= 0 && _argv[i + 1] && !_argv[i + 1].startsWith("--") ? _argv[i + 1] : null;
 };
-if (_has("--share")) {
-	const room = newRoomId();
-	const host = (_get("--host") || process.env.TUNNEL_HOST || DEFAULT_HOST).replace(/\/$/, "");
-	const upstream = (_get("--upstream") || process.env.UPSTREAM || "http://127.0.0.1:8080").replace(/\/$/, "");
-	const url = `${host}/t/${room}/`;
-	process.env.EDGE_URL =
-		host.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") + `/t/${room}/__agent`;
+let _positional = null;
+for (let i = 0; i < _argv.length; i++) {
+	const a = _argv[i];
+	if (a === "--host" || a === "--id") {
+		if (!_argv[i + 1] || _argv[i + 1].startsWith("--")) {
+			console.error(`${a} needs a value — usage: agent.js [UPSTREAM] [--host H] [--id ID] [--json]`);
+			process.exit(2);
+		}
+		i++; // skip its value
+		continue;
+	}
+	if (a === "--json") continue;
+	if (a.startsWith("--")) {
+		console.error(`unknown flag ${JSON.stringify(a)} — usage: agent.js [UPSTREAM] [--host H] [--id ID] [--json]`);
+		process.exit(2);
+	}
+	if (_positional === null) _positional = a;
+	else {
+		console.error(`unexpected argument ${JSON.stringify(a)} — usage: agent.js [UPSTREAM] [--host H] [--id ID] [--json]`);
+		process.exit(2);
+	}
+}
+// Bare run with no EDGE_URL mints a room (one-command share); a set
+// EDGE_URL means persistent mode. Any explicit arg forces the new style.
+const _newStyle =
+	_positional !== null || _get("--host") !== null || _get("--id") !== null || !process.env.EDGE_URL;
+if (_newStyle) {
+	const host = resolveHost(_get("--host")).replace(/\/$/, "");
+	const id = _get("--id") ?? newRoomId();
+	if (!ID_RE.test(id)) {
+		console.error(`bad id ${JSON.stringify(id)} — want 20-64 chars [A-Za-z0-9_-]`);
+		process.exit(2);
+	}
+	const upstream = (_positional || process.env.UPSTREAM || "http://127.0.0.1:8080").replace(/\/$/, "");
+	process.env.EDGE_URL = `${wsBaseFromHttp(host)}/t/${id}/__agent`;
 	process.env.UPSTREAM = upstream;
-	if (_has("--json")) {
-		console.log(JSON.stringify({ url, room, upstream }));
-	} else {
-		console.log(`tunnel ready: ${url}`);
-		console.log(`room: ${room}   upstream: ${upstream}   (ephemeral - stops with this process)`);
+	if (_get("--id") === null) {
+		const url = `${host}/t/${id}/`;
+		if (_argv.includes("--json")) console.log(JSON.stringify({ url, id, upstream }));
+		else {
+			console.log(`tunnel ready: ${url}`);
+			console.log(`id: ${id}   upstream: ${upstream}   (ephemeral - stops with this process)`);
+		}
 	}
 }
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
-	console.error("EDGE_URL is required, e.g. wss://go.treau.me/t/<long-room-id>/__agent");
+	console.error("give an upstream (e.g. node agent.js http://127.0.0.1:8080) or set EDGE_URL, e.g. wss://go.treau.me/t/<long-id>/__agent");
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.

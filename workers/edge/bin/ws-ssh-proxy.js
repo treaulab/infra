@@ -11,14 +11,15 @@
 // Then: ssh lockedvps   |   scp file lockedvps:/tmp/   |   sftp lockedvps
 // Exit 0 = clean FIN from the far end; 1 = anything else (never silent).
 
-import { HALF_CLOSE_TEXT } from "../lib/shared.js";
+import { HALF_CLOSE_TEXT, normalizeClientUrl } from "../lib/shared.js";
 
 const EDGE_URL_RAW = process.argv[2];
-if (!EDGE_URL_RAW || !/^wss?:\/\//.test(EDGE_URL_RAW)) {
-	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<long-box-id>");
+if (!EDGE_URL_RAW || !/^(wss?|https?):\/\//.test(EDGE_URL_RAW)) {
+	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<long-box-id>  (https:// also accepted)");
 	process.exit(2);
 }
-const EDGE_URL = EDGE_URL_RAW;
+// Accept https:// too (common paste mistake) — the wire is always WebSocket.
+const EDGE_URL = normalizeClientUrl(EDGE_URL_RAW);
 if (EDGE_URL.startsWith("ws://")) {
 	console.error("ws-ssh-proxy: warning: cleartext ws:// (local dev only)");
 }

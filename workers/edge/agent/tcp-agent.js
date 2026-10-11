@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // treaulab pipe agent: runs on the locked-down box next to sshd, dials OUT one
-// WebSocket to the edge and dials 127.0.0.1:22 per accepted stream.
+// WebSocket to the edge and dials HOST:PORT per accepted stream.
 // Zero dependencies, Node 22+. Only needs OUTBOUND 443 (wss) + DNS.
-// Azure TREAU is never involved. Long-URL-only: box ID is the secret.
+// Long-URL-only: box ID is the secret.
 //
-//   EDGE_URL="wss://go.treau.me/p/<long-box-id>/__agent" \
-//   SSH_HOST="127.0.0.1" SSH_PORT="22" \
-//   node tcp-agent.js
+//   node tcp-agent.js [HOST:PORT] [--host H] [--id ID]
+//   HOST:PORT defaults to 127.0.0.1:22. Omit --id to mint a fresh box id
+//   and print it (pass that id to `tunnel add <name>`, or reuse via --id).
+//   Env fallback (systemd, `tunnel up`): EDGE_URL + SSH_HOST/SSH_PORT.
 //
 // Frame: [type:u8][stream:u32be][payload]  OPEN=1 ACCEPT=2 DATA=3 FIN=4 RST=5
 
@@ -21,14 +22,69 @@ import {
 	F_OPEN,
 	F_RST,
 	HEARTBEAT_MS,
+	ID_RE,
 	backoffAfterSession,
 	isValidEdgeUrl,
+	newRoomId,
 	normalizeEdgeUrl,
+	parseTcpTarget,
+	resolveHost,
+	wsBaseFromHttp,
 } from "../lib/shared.js";
+
+const _argv = process.argv.slice(2);
+let _positional = null;
+const _get = (f) => {
+	const i = _argv.indexOf(f);
+	return i >= 0 && _argv[i + 1] && !_argv[i + 1].startsWith("--") ? _argv[i + 1] : null;
+};
+for (let i = 0; i < _argv.length; i++) {
+	const a = _argv[i];
+	if (a === "--host" || a === "--id") {
+		if (!_argv[i + 1] || _argv[i + 1].startsWith("--")) {
+			console.error(`${a} needs a value — usage: tcp-agent.js [HOST:PORT] [--host H] [--id ID]`);
+			process.exit(2);
+		}
+		i++;
+		continue;
+	}
+	if (a.startsWith("--")) {
+		console.error(`unknown flag ${JSON.stringify(a)} — usage: tcp-agent.js [HOST:PORT] [--host H] [--id ID]`);
+		process.exit(2);
+	}
+	if (_positional === null) _positional = a;
+	else {
+		console.error(`unexpected argument ${JSON.stringify(a)} — usage: tcp-agent.js [HOST:PORT] [--host H] [--id ID]`);
+		process.exit(2);
+	}
+}
+// Bare run with no EDGE_URL mints a box id; a set EDGE_URL means
+// persistent mode. Any explicit arg forces the new style.
+if (_positional !== null || _get("--host") !== null || _get("--id") !== null || !process.env.EDGE_URL) {
+	const host = resolveHost(_get("--host")).replace(/\/$/, "");
+	const id = _get("--id") ?? newRoomId();
+	if (!ID_RE.test(id)) {
+		console.error(`bad id ${JSON.stringify(id)} — want 20-64 chars [A-Za-z0-9_-]`);
+		process.exit(2);
+	}
+	const target = _positional ?? `${process.env.SSH_HOST ?? "127.0.0.1"}:${process.env.SSH_PORT ?? "22"}`;
+	const parsed = parseTcpTarget(target);
+	if (!parsed) {
+		console.error(`bad target ${JSON.stringify(target)} — want HOST:PORT (e.g. 127.0.0.1:22)`);
+		process.exit(2);
+	}
+	process.env.EDGE_URL = `${wsBaseFromHttp(host)}/p/${id}/__agent`;
+	process.env.SSH_HOST = parsed.host;
+	process.env.SSH_PORT = String(parsed.port);
+	if (_get("--id") === null) {
+		console.log(`pipe ready: box id ${id}   target ${parsed.host}:${parsed.port}   (ephemeral - stops with this process)`);
+		console.log(`laptop: save it with \`tunnel add <name> ${parsed.host}:${parsed.port}\` using this id, then \`tunnel ssh <name>\``);
+	}
+}
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {
-	console.error("EDGE_URL is required, e.g. wss://go.treau.me/p/<long-box-id>/__agent");
+	console.error("give a target (e.g. node tcp-agent.js 127.0.0.1:22) or set EDGE_URL, e.g. wss://go.treau.me/p/<long-box-id>/__agent");
 	process.exit(1);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.
