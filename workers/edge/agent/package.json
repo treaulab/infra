@@ -1,0 +1,8 @@
+{
+  "name": "treaulab-tunnel-agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}

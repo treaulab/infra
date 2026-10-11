@@ -8,11 +8,18 @@ The VPS/Caddy stack stays warm only as an instant DNS rollback target.
 
 ```
 workers/edge/
-├── wrangler.toml      # Worker + Static Assets + Durable Object binding/migration
-├── src/worker.js      # routing: www→apex, /health, /ws/<TOKEN>[/<room>], assets+404
+├── wrangler.toml      # Worker + Static Assets + Durable Object bindings/migrations
+├── src/worker.js      # routing: www→apex, /health, /ws/*, /t/*, /p/*, assets+404
 ├── src/room.js        # RelayRoom DO: hibernating broadcast relay, heartbeat, caps
+├── src/tunnel.js      # TunnelRoom DO: HTTP reverse tunnel over agent socket
+├── src/pipe.js        # PipeRoom DO: multiplexed raw-TCP pipe (ssh), one room/box
+├── agent/agent.js     # zero-dep dial-out agent for locked-down HTTP origins
+├── agent/tcp-agent.js # zero-dep dial-out agent: per-stream TCP dial to :22
+├── bin/ws-ssh-proxy.js# zero-dep laptop stdio helper (ssh ProxyCommand)
+├── TUNNEL.md          # HTTP tunnel protocol + ops (worse-cloudflared)
+├── PIPE.md            # SSH pipe protocol + ops (ProxyCommand UX)
 ├── public/            # GENERATED (gitignored) from apps/website/src via sync:public
-├── .dev.vars.example  # local-dev secret template (real value never committed)
+├── .dev.vars.example  # local-dev secret template (real values never committed)
 └── package.json       # sync/dev/deploy scripts
 ```
 
@@ -47,13 +54,15 @@ Generate a token: `openssl rand -hex 32`.
 ```bash
 cd workers/edge
 npx wrangler login
-npx wrangler secret put RELAY_TOKEN   # paste the openssl value
+npx wrangler secret put RELAY_TOKEN   # paste the openssl value (/ws/* + /t/*)
+npx wrangler secret put PIPE_TOKEN    # a DIFFERENT value (/p/* terminals)
 npm run deploy                        # → https://treaulab-edge.<acct>.workers.dev
 ```
 
 CI (`edge.yml`, path-filtered to `workers/edge/**` + `apps/website/src/**`)
 needs repo secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`.
-`RELAY_TOKEN` is set once via `wrangler secret put`, not through CI.
+`RELAY_TOKEN` / `PIPE_TOKEN` are set once via `wrangler secret put`, not
+through CI. SSH-pipe usage: `PIPE.md` (`ssh lockedvps` via ProxyCommand).
 
 Dry-run validation without uploading: `npm run deploy:dry`.
 

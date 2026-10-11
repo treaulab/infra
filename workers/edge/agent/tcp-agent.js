@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+// treaulab pipe agent: runs on the locked-down box next to sshd, dials OUT one
+// WebSocket to the edge and dials 127.0.0.1:22 per accepted stream.
+// Zero dependencies, Node 20+. Only needs OUTBOUND 443 (wss) + DNS.
+// Azure TREAU is never involved.
+//
+//   EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/<box>/__agent" \
+//   SSH_HOST="127.0.0.1" SSH_PORT="22" \
+//   node tcp-agent.js
+//
+// Frame: [type:u8][stream:u32be][payload]  OPEN=1 ACCEPT=2 DATA=3 FIN=4 RST=5
+
+import net from "node:net";
+import os from "node:os";
+
+const EDGE_URL = process.env.EDGE_URL;
+if (!EDGE_URL) {
+	console.error("EDGE_URL is required, e.g. wss://treau.me/p/<TOKEN>/<box>/__agent");
+	process.exit(1);
+}
+const SSH_HOST = process.env.SSH_HOST ?? "127.0.0.1";
+const SSH_PORT = Number(process.env.SSH_PORT ?? 22);
+const NAME = process.env.NAME ?? os.hostname();
+
+const F_OPEN = 1;
+const F_ACCEPT = 2;
+const F_DATA = 3;
+const F_FIN = 4;
+const F_RST = 5;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const log = (...a) => console.log(new Date().toISOString(), "-", ...a);
+
+function frame(type, stream, payload) {
+	const body = payload ? Buffer.from(payload) : Buffer.alloc(0);
+	const out = Buffer.allocUnsafe(5 + body.length);
+	out[0] = type;
+	out.writeUInt32BE(stream >>> 0, 1);
+	body.copy(out, 5);
+	return out;
+}
+
+function parse(buf) {
+	if (buf.length < 5) return null;
+	return { type: buf[0], stream: buf.readUInt32BE(1), payload: buf.subarray(5) };
+}
+
+function connectOnce() {
+	return new Promise((resolve) => {
+		const sockets = new Map(); // stream -> net.Socket
+		let dead = false;
+		const ws = new WebSocket(EDGE_URL);
+		ws.binaryType = "arraybuffer";
+
+		const send = (buf) => {
+			try {
+				ws.send(buf);
+				return true;
+			} catch {
+				return false;
+			}
+		};
+		const killAll = () => {
+			for (const [, s] of sockets) s.destroy();
+			sockets.clear();
+		};
+		const done = (why) => {
+			if (dead) return;
+			dead = true;
+			killAll();
+			log("control socket closed:", why);
+			resolve();
+		};
+
+		ws.onopen = () => log("control socket open, serving", `${SSH_HOST}:${SSH_PORT}`);
+		ws.onmessage = (ev) => {
+			const f = parse(Buffer.from(ev.data));
+			if (!f) return;
+			if (f.type === F_OPEN) {
+				log(`stream ${f.stream}: opening -> ${SSH_HOST}:${SSH_PORT}`);
+				const sock = net.connect(SSH_PORT, SSH_HOST);
+				sockets.set(f.stream, sock);
+				sock.on("connect", () => {
+					if (!send(frame(F_ACCEPT, f.stream))) sock.destroy();
+				});
+				sock.on("data", (chunk) => {
+					if (!send(frame(F_DATA, f.stream, chunk))) sock.destroy();
+				});
+				sock.on("close", () => {
+					sockets.delete(f.stream);
+					send(frame(F_FIN, f.stream));
+				});
+				sock.on("error", () => {
+					sockets.delete(f.stream);
+					send(frame(F_RST, f.stream));
+				});
+			} else if (f.type === F_DATA) {
+				sockets.get(f.stream)?.write(f.payload);
+			} else if (f.type === F_FIN) {
+				log(`stream ${f.stream}: FIN, ending`);
+				sockets.get(f.stream)?.end();
+			} else if (f.type === F_RST) {
+				log(`stream ${f.stream}: RST, destroying`);
+				const s = sockets.get(f.stream);
+				sockets.delete(f.stream);
+				s?.destroy();
+			}
+		};
+		ws.onclose = (e) => done(`code=${e.code} reason=${e.reason || "-"}`);
+		ws.onerror = () => {};
+	});
+}
+
+log("pipe agent starting:", NAME, "->", `${SSH_HOST}:${SSH_PORT}`);
+let backoff = 1000;
+for (;;) {
+	await connectOnce();
+	const wait = Math.min(backoff, 30_000) * (0.8 + Math.random() * 0.4);
+	log(`redial in ${(wait / 1000).toFixed(1)}s`);
+	await sleep(wait);
+	backoff = Math.min(backoff * 2, 30_000);
+}

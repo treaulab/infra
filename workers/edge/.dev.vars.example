@@ -1,3 +1,6 @@
 # cp .dev.vars.example .dev.vars (gitignored) — local `wrangler dev` only.
-# Production uses:  wrangler secret put RELAY_TOKEN  (never commit the real value)
+# Production uses `wrangler secret put <NAME>` for each (never commit values).
+# RELAY_TOKEN gates /ws/* + /t/* ; PIPE_TOKEN gates /p/* (separate on purpose:
+# a leaked chat-room token must never open terminals).
 RELAY_TOKEN="change-me-to-64-hex-chars"
+PIPE_TOKEN="change-me-to-a-DIFFERENT-64-hex-chars"

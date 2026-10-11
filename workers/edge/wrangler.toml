@@ -15,6 +15,22 @@ run_worker_first = true
 name = "ROOM"
 class_name = "RelayRoom"
 
+[[durable_objects.bindings]]
+name = "TUNNEL"
+class_name = "TunnelRoom"
+
+[[durable_objects.bindings]]
+name = "PIPE"
+class_name = "PipeRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelayRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TunnelRoom"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["PipeRoom"]
