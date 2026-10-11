@@ -1,6 +1,6 @@
 # tunnel agents (locked-down origin side)
 
-Two scripts, both zero-dep Node 20+, both dial **out** (outbound 443 + DNS
+Two scripts, both zero-dep Node 22+, both dial **out** (outbound 443 + DNS
 only, no inbound). Azure TREAU is never involved.
 
 * `agent.js` — HTTP origins (`UPSTREAM=http://127.0.0.1:8080`). Browsers use
@@ -9,7 +9,7 @@ only, no inbound). Azure TREAU is never involved.
   `127.0.0.1:22`) per accepted stream. Laptops connect via
   `../bin/ws-ssh-proxy.js` as an ssh `ProxyCommand`, see `../PIPE.md`.
 
-One file, zero dependencies, Node 20+. Runs **on the locked-down VPS** next to
+One file, zero dependencies, Node 22+. Runs **on the locked-down VPS** next to
 whatever you want to expose (e.g. `python3 -m http.server 8080`), dials **out**
 a single `wss:` control socket to the edge, and serves the local upstream over
 it. Needs only **outbound 443 + DNS** — no inbound ports. Your Azure TREAU box
@@ -19,7 +19,7 @@ is never involved (stays at zero egress).
 
 ```bash
 # on the locked-down VPS, next to your :8080:
-node --version   # need >= 20 (global WebSocket + fetch)
+node --version   # need >= 22 (global WebSocket + fetch)
 EDGE_URL="wss://treau.me/t/<TOKEN>/<room>/__agent" \
 UPSTREAM="http://127.0.0.1:8080" \
 node agent.js

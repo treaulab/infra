@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // treaulab ssh ProxyCommand helper: shuttles stdio <-> edge pipe as raw bytes.
-// Zero dependencies, Node 20+. Usage in ~/.ssh/config:
+// Zero dependencies, Node 22+. Usage in ~/.ssh/config:
 //
 //   Host lockedvps
 //     HostName lockedvps
@@ -11,13 +11,18 @@
 // Then: ssh lockedvps   |   scp file lockedvps:/tmp/   |   sftp lockedvps
 // Exit 0 = clean FIN from the far end; 1 = anything else (never silent).
 
-const EDGE_URL = process.argv[2];
-if (!EDGE_URL || !/^wss?:\/\//.test(EDGE_URL)) {
+const EDGE_URL_RAW = process.argv[2];
+if (!EDGE_URL_RAW || !/^wss?:\/\//.test(EDGE_URL_RAW)) {
 	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<TOKEN>/<box>");
 	process.exit(2);
 }
+const EDGE_URL = EDGE_URL_RAW;
 if (EDGE_URL.startsWith("ws://")) {
 	console.error("ws-ssh-proxy: warning: cleartext ws:// (local dev only)");
+}
+if (typeof WebSocket === "undefined") {
+	console.error(`ws-ssh-proxy: node ${process.versions.node} has no global WebSocket — need Node 22+`);
+	process.exit(1);
 }
 
 const fail = (msg, code = 1) => {

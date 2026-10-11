@@ -62,7 +62,7 @@ observability. Manual equivalent (no CLI) below.
 ## Laptop setup (manual, no CLI)
 
 ```bash
-node --version  # >= 20
+node --version  # >= 22
 mkdir -p ~/bin && cp workers/edge/bin/ws-ssh-proxy.js ~/bin/
 ```
 
@@ -87,7 +87,7 @@ Verify the server fingerprint out-of-band on first connect, as always.
 ## Locked-box setup
 
 ```bash
-node --version  # >= 20, and sshd listening on 127.0.0.1:22
+node --version  # >= 22, and sshd listening on 127.0.0.1:22
 EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/lockedvps/__agent" \
 SSH_HOST="127.0.0.1" SSH_PORT="22" \
 node agent/tcp-agent.js

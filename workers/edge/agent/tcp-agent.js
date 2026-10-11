@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // treaulab pipe agent: runs on the locked-down box next to sshd, dials OUT one
 // WebSocket to the edge and dials 127.0.0.1:22 per accepted stream.
-// Zero dependencies, Node 20+. Only needs OUTBOUND 443 (wss) + DNS.
+// Zero dependencies, Node 22+. Only needs OUTBOUND 443 (wss) + DNS.
 // Azure TREAU is never involved.
 //
 //   EDGE_URL="wss://treau.me/p/<PIPE_TOKEN>/<box>/__agent" \
@@ -13,9 +13,22 @@
 import net from "node:net";
 import os from "node:os";
 
-const EDGE_URL = process.env.EDGE_URL;
-if (!EDGE_URL) {
+const EDGE_URL_RAW = process.env.EDGE_URL;
+if (!EDGE_URL_RAW) {
 	console.error("EDGE_URL is required, e.g. wss://treau.me/p/<TOKEN>/<box>/__agent");
+	process.exit(1);
+}
+// Accept https:// too (common paste mistake) — the wire is always WebSocket.
+const EDGE_URL = EDGE_URL_RAW.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+if (EDGE_URL !== EDGE_URL_RAW) {
+	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
+}
+if (!/^wss?:\/\//.test(EDGE_URL)) {
+	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/p/<TOKEN>/<box>/__agent`);
+	process.exit(1);
+}
+if (typeof WebSocket === "undefined") {
+	console.error(`node ${process.versions.node} has no global WebSocket — need Node 22+ (https://nodejs.org/)`);
 	process.exit(1);
 }
 const SSH_HOST = process.env.SSH_HOST ?? "127.0.0.1";

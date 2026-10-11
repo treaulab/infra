@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // treaulab tunnel CLI: cloudflared-style ergonomics for the edge tunnels.
-// Zero dependencies, Node 20+. Local state (names, rooms, upstreams) lives in
+// Zero dependencies, Node 22+. Local state (names, rooms, upstreams) lives in
 // ~/.config/treaulab/tunnels.json; secret VALUES live in secrets.json (0600)
 // or env (TUNNEL_RELAY_TOKEN / TUNNEL_PIPE_TOKEN / TUNNEL_HOST) — never in git.
 //
@@ -138,7 +138,7 @@ function promptHidden(question) {
 
 function checkNode() {
 	const [maj] = process.versions.node.split(".").map(Number);
-	if (maj < 20) fail(`node >= 20 required, have ${process.versions.node}`);
+	if (maj < 22) fail(`node >= 22 required, have ${process.versions.node}`);
 }
 function haveBin(bin) {
 	return spawnSync(process.platform === "win32" ? "where" : "which", [bin]).status === 0;
@@ -398,7 +398,7 @@ async function cmdDoctor() {
 		info(`${pass ? "PASS" : "FAIL"}  ${label}${pass || !hint ? "" : ` — ${hint}`}`);
 		if (!pass) ok = false;
 	};
-	check(`node >= 20 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 20);
+	check(`node >= 22 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 22);
 	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
 	const cfg = loadConfig();
 	const host = process.env.TUNNEL_HOST || cfg.host;

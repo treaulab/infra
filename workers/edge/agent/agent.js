@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // treaulab tunnel agent: runs on the locked-down origin, dials OUT one
 // WebSocket to the edge and serves the local upstream over it.
-// Zero dependencies, Node 20+. Only needs OUTBOUND 443 (wss) + DNS.
+// Zero dependencies, Node 22+ (global WebSocket + fetch).
 //
 //   EDGE_URL="wss://treau.me/t/<TOKEN>/<room>/__agent" \
 //   UPSTREAM="http://127.0.0.1:8080" \
@@ -10,9 +10,22 @@
 // Env: EDGE_URL (required), UPSTREAM (default http://127.0.0.1:8080),
 //      UPSTREAM_TIMEOUT_MS (default 15000), NAME (default hostname).
 
-const EDGE_URL = process.env.EDGE_URL;
-if (!EDGE_URL) {
+const EDGE_URL_RAW = process.env.EDGE_URL;
+if (!EDGE_URL_RAW) {
 	console.error("EDGE_URL is required, e.g. wss://treau.me/t/<TOKEN>/<room>/__agent");
+	process.exit(1);
+}
+// Accept https:// too (common paste mistake) — the wire is always WebSocket.
+const EDGE_URL = EDGE_URL_RAW.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+if (EDGE_URL !== EDGE_URL_RAW) {
+	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
+}
+if (!/^wss?:\/\//.test(EDGE_URL)) {
+	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/t/<TOKEN>/<room>/__agent`);
+	process.exit(1);
+}
+if (typeof WebSocket === "undefined") {
+	console.error(`node ${process.versions.node} has no global WebSocket — need Node 22+ (https://nodejs.org/)`);
 	process.exit(1);
 }
 const UPSTREAM = (process.env.UPSTREAM ?? "http://127.0.0.1:8080").replace(/\/$/, "");
