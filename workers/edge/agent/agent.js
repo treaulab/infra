@@ -1,15 +1,47 @@
 #!/usr/bin/env node
 // treaulab tunnel agent: runs on the locked-down origin, dials OUT one
 // WebSocket to the edge and serves the local upstream over it.
-// Zero dependencies, Node 22+ (global WebSocket + fetch).
+// Zero dependencies, Node 22+ (global WebSocket + fetch). Also compiles to a
+// standalone binary with `bun build --compile` (no runtime needed on the box).
 // Long-URL-only: the room ID in EDGE_URL is the secret (no token).
 //
+// Persistent agent (EDGE_URL carries a pre-made room ID):
 //   EDGE_URL="wss://go.treau.me/t/<long-room-id>/__agent" \
 //   UPSTREAM="http://127.0.0.1:8080" \
 //   node agent.js
 //
-// Env: EDGE_URL (required), UPSTREAM (default http://127.0.0.1:8080),
-//      UPSTREAM_TIMEOUT_MS (default 15000), NAME (default hostname).
+// One-command ephemeral share (trycloudflare-style, also the compiled binary):
+//   node agent.js --share [--upstream URL] [--host H] [--json]
+//   (mints a room, prints the public URL, runs; Ctrl-C stops it)
+//
+// Env: EDGE_URL (required, unless --share), UPSTREAM (default http://127.0.0.1:8080),
+//      UPSTREAM_TIMEOUT_MS (default 15000), NAME (default hostname),
+//      TUNNEL_HOST (default https://go.treau.me, --share only).
+
+import crypto from "node:crypto";
+
+const DEFAULT_HOST = "https://go.treau.me";
+const _argv = process.argv.slice(2);
+const _has = (f) => _argv.includes(f);
+const _get = (f) => {
+	const i = _argv.indexOf(f);
+	return i >= 0 && _argv[i + 1] && !_argv[i + 1].startsWith("--") ? _argv[i + 1] : null;
+};
+if (_has("--share")) {
+	const room = crypto.randomBytes(16).toString("hex"); // 32 chars, edge ID_RE
+	const host = (_get("--host") || process.env.TUNNEL_HOST || DEFAULT_HOST).replace(/\/$/, "");
+	const upstream = (_get("--upstream") || process.env.UPSTREAM || "http://127.0.0.1:8080").replace(/\/$/, "");
+	const url = `${host}/t/${room}/`;
+	process.env.EDGE_URL =
+		host.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://") + `/t/${room}/__agent`;
+	process.env.UPSTREAM = upstream;
+	if (_has("--json")) {
+		console.log(JSON.stringify({ url, room, upstream }));
+	} else {
+		console.log(`tunnel ready: ${url}`);
+		console.log(`room: ${room}   upstream: ${upstream}   (ephemeral - stops with this process)`);
+	}
+}
 
 const EDGE_URL_RAW = process.env.EDGE_URL;
 if (!EDGE_URL_RAW) {

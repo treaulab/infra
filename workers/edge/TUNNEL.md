@@ -58,6 +58,15 @@ tunnel create site1 --http --upstream http://127.0.0.1:8080   # host defaults to
 tunnel run site1        # on the locked box (or: tunnel route site1 for the URL)
 ```
 
+## Run it (static binary, no runtime)
+
+```bash
+curl -fsSL https://github.com/treaulab/infra/releases/latest/download/tunnel-agent-linux-amd64 \
+  -o /tmp/agent && chmod +x /tmp/agent
+UPSTREAM="http://127.0.0.1:8080" /tmp/agent --share
+# (arm64 boxes: tunnel-agent-linux-arm64. Cut with `git tag agent-vX.Y.Z`.)
+```
+
 No Node on the box? `agent.py --share` is the same one-command share in
 pure stdlib Python (single file, nothing else to download):
 

@@ -1,7 +1,23 @@
 # tunnel agents (locked-down origin side)
 
-Two scripts, both zero-dep Node 22+, both dial **out** (outbound 443 + DNS
-only, no inbound). Azure TREAU is never involved.
+Three flavors, same protocol, all dial **out** (outbound 443 + DNS only,
+no inbound). Pick the first one that runs on your box. Azure TREAU is never
+involved.
+
+* **Static binary** (easiest where downloads are allowed): `tunnel-agent`
+  needs no runtime at all — compiled from `agent.js` with
+  `bun build --compile`, released per `agent-v*` tag (see
+  `.github/workflows/agent-bin.yml`, Bun pinned):
+  ```bash
+  # linux amd64 (or tunnel-agent-linux-arm64):
+  curl -fsSL https://github.com/treaulab/infra/releases/latest/download/tunnel-agent-linux-amd64 \
+    -o /tmp/agent && chmod +x /tmp/agent
+  UPSTREAM="http://127.0.0.1:8080" /tmp/agent --share
+  ```
+* `agent.js` — Node 22+, zero deps. Same flags work under plain Node:
+  `node agent.js --share`.
+* `agent.py` — pure Python stdlib (no pip), for boxes with neither Node
+  nor download freedom. See below.
 
 No Node on the box? Use the Python twin instead — pure standard library
 (no pip): `agent.py` mirrors `agent.js` exactly (same env, same protocol,
