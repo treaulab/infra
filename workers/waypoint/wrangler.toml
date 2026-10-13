@@ -1,0 +1,40 @@
+"$schema" = "https://developers.cloudflare.com/workers/wrangler/configuration-schema.json"
+name = "waypoint"
+main = "src/worker.js"
+compatibility_date = "2024-09-25"
+workers_dev = true
+# Login-only deploy, no API tokens in repo:
+#   npx wrangler login   # spare-account profile only, then `npx wrangler whoami`
+#   npx wrangler secret put RELAY_TOKEN
+#   npm run deploy
+# No DO / R2 / Assets: keeps waypoint deploy small and isolated from
+# workers/edge (treaulab-edge). Spare account only — never point a treau.me domain here.
+# KV for runtime config + audit (allowedHosts/blockedHosts; last-50 audit trail).
+# Bound 2026-10-13 via `npx wrangler kv namespace create waypoint-config`.
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "b9d2e3cd68b34585a89bfb9b90a0851a"
+
+# [vars]
+# ENABLE_LOG = "0"
+# ADMIN_PATH = "admin"  # obscure admin routes: /<ADMIN_PATH>/config|metrics|init|vless|sub
+# ALLOWED_HOSTS = "example.com,api.example.com"  # empty = allow any https except blocked (relay + vless tcp)
+# BLOCKED_HOSTS = ""
+# RELAY_MAX_BODY = "1048576"
+# RELAY_TIMEOUT_MS = "10000"
+# RELAY_TOKEN is a secret — set via `wrangler secret put RELAY_TOKEN`, never in git.
+# UPSTREAM_* are optional and also secrets/vars, never committed:
+# UPSTREAM_FORWARDER_URL / UPSTREAM_AUTH_KEY / UPSTREAM_FAIL_MODE = "closed"
+# VLESS over WebSocket (./src/vless.js) — disabled unless VLESS_UUID is set:
+#   npx wrangler secret put VLESS_UUID   # single uuid or comma-separated; uuidgen once per waypoint
+# Clients connect WS to wss://<worker>/vless (or /<uuid>, or /<VLESS_PATH>),
+# encryption=none, security=tls, sni/host=<worker host>. UDP is DNS-only (port 53 via DoH).
+#   GET /<ADMIN_PATH>/vless?host=<worker host> (bearer auth) prints ready vless:// links.
+#   GET /<ADMIN_PATH>/sub?host=<worker host>&token=<RELAY_TOKEN> is the same
+#   batch as base64 for client subscription URLs (Hiddify / Clash Verge fetch
+#   it without headers). The token URL IS the secret — don't share it.
+# [vars]
+# VLESS_PATH = ""                 # custom WS path; empty = /vless + /<uuid>
+# VLESS_DOH = "https://1.1.1.1/dns-query"
+# VLESS_CONNECT_TIMEOUT_MS = "5000"  # tcp dial timeout, 1000..10000
+# VLESS_DIAL_CONCURRENCY = "2"        # parallel dials, 1..4 (fastest wins)
