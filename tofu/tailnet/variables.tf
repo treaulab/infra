@@ -7,7 +7,7 @@ variable "spoke_owner" {
 variable "spoke_repo" {
   description = "Spoke repo name (hand-created by the account owner BEFORE first apply; IaC never creates/deletes repos)."
   type        = string
-  default     = "tailnet-shell"
+  default     = "dotfiles"
 }
 
 variable "spoke_secret_name" {

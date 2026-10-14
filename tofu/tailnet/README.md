@@ -36,8 +36,8 @@ including `tag:ci-ephemeral`, shortest expiry. Fallback instead of the
 pair: a pre-minted access token as `TAILSCALE_API_KEY` (one path, not both).
 
 Plus one trust grant (burner side, one click): spoke repo
-`andrewwang2161/tailnet-shell` → Settings → Collaborators → invite
-`slancj` with **Write**. Direction is explicit: spoke trusts hub-admin
+`andrewwang2161/dotfiles` (private, innocuously named) → Settings →
+Collaborators → invite `slancj` with **Write**. Direction is explicit: spoke trusts hub-admin
 for secret delivery only. Revocable there anytime (breaks future rotations
 only — live runs continue until the key itself is revoked).
 

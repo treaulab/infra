@@ -59,10 +59,10 @@ itself. Each GitHub account owns a **spoke** repo that calls the hub:
    * Settings → Keys → reusable **ephemeral** key per account, own tag,
      short expiry → copy `tskey-auth-...`.
    * Name the NAT box `box` (`tailscale up --hostname=box`).
-2. Spoke repo (as that account, terminal, no GUI; pilot: `andrewwang2161/tailnet-shell`, private):
-   * Create repo, paste caller file, pin `@<sha>`.
-   * `gh secret set TS_AUTHKEY_EPHEMERAL` (that account's own key).
-   * No access grants on `treaulab/infra` needed (public read suffices).
+2. Spoke repo (as that account; pilot: `andrewwang2161/dotfiles`, private,
+   innocuously named): create repo, paste caller file, pin `@<sha>`, invite
+   `slancj` Write (secret delivery trust, revocable). The secret itself is
+   written by `tofu/tailnet` (never hand-set, never pasted).
    * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
      and burner's Write grant were removed — `infra` holds no credentials.
 3. Use: hourly fires on its own in the spoke (watch heartbeats); debug via
