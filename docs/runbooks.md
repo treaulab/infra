@@ -37,6 +37,34 @@ zero VPS egress, no card (CLI flow). Full runbook lives in
 6. Prove VPS silence: `docker logs caddy --tail 20` shows nothing new.
    Rollback = delete the two CNAMEs + stop NAT-box service (VPS unchanged).
 
+## Tailnet shell (ephemeral 20-min runner, NOT on VPS)
+
+On-demand GitHub-hosted job joins your tailnet as `gh-ci-<run-id>` so you
+can `tailscale ssh` into it when needed. Dies at 20 min, node vanishes.
+Workflow: `.github/workflows/tailnet-shell.yml` (dispatch only, burner-only).
+
+1. Tailscale admin (once):
+   * Access Controls → `tagOwners: {"tag:ci-ephemeral": ["you"]}`, SSH accept
+     `src: [you]` → `dst: [tag:ci-ephemeral]`, users `["runner","root"]`.
+     No exit-node / subnet routes.
+   * Settings → Keys → reusable **ephemeral** key, tag `tag:ci-ephemeral`,
+     short expiry → copy `tskey-auth-...`.
+   * Name the NAT box `box` (`tailscale up --hostname=box`).
+2. GitHub repo `treaulab/infra` (where the key goes):
+   * Settings → Secrets and variables → Actions → **Secrets** → New secret →
+     Name `TS_AUTHKEY_EPHEMERAL`, Value = the `tskey-auth-...` key. Or:
+     `gh secret set TS_AUTHKEY_EPHEMERAL --repo treaulab/infra`
+   * Same page → **Variables** → New variable → Name `BURNER_GH_USER`,
+     Value `andrewwang2161`. Or:
+     `gh variable set BURNER_GH_USER --body andrewwang2161 --repo treaulab/infra`
+   * Burner `andrewwang2161` needs Write on the repo (dispatch only).
+3. Use: as `andrewwang2161`, Actions → `tailnet-shell` → Run workflow →
+   read the `100.x` IP in logs → `tailscale ssh runner@gh-ci-<run-id>`
+   from your tailnet machine. Filler (`ping box`, `curl box.treau.me`)
+   runs holding the window; NO ssh/scp smoke by design.
+4. Rollback: cancel the run (node vanishes) + revoke the auth key.
+   VPS untouched throughout (`docker logs caddy` silent).
+
 ## Edge cutover (full-edge, zero Azure egress)
 1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`

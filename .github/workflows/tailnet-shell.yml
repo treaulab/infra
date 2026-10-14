@@ -1,0 +1,104 @@
+# On-demand tailnet shell: ephemeral GitHub-hosted runner joins your tailnet
+# for max 20 minutes so you can `tailscale ssh` into it when needed.
+#
+# - NOT on the VPS. Nothing persistent anywhere (hosted runner dies with job).
+# - Trigger: Actions → tailnet-shell → Run workflow, ONLY as burner
+#   `andrewwang2161` (enforced by the burner-gate step via repo variable
+#   BURNER_GH_USER). No push/PR triggers — forks can never reach this.
+# - Tailscale SSH IN enabled (`tailscale up --ssh`); tailnet policy must
+#   accept src you → dst tag:ci-ephemeral, users ["runner","root"].
+# - NO ssh/scp smoke into box here (explicitly out of scope): filler is
+#   `tailscale ping` (L3, not SSH) + `curl https://box.treau.me/`.
+# - Secrets: TS_AUTHKEY_EPHEMERAL only (tagged reusable ephemeral key).
+#   No SSH_PRIVATE_KEY, no Cloudflare tokens in this workflow.
+#
+# Where to put the key (repo treaulab/infra):
+#   Settings → Secrets and variables → Actions → Secrets → New repository
+#   secret → Name: TS_AUTHKEY_EPHEMERAL, Value: tskey-auth-<...>
+#   ... → Variables tab → New variable → Name: BURNER_GH_USER,
+#   Value: andrewwang2161
+# Or via gh CLI (repo already authenticated):
+#   gh secret set TS_AUTHKEY_EPHEMERAL --repo treaulab/infra
+#   gh variable set BURNER_GH_USER --body andrewwang2161 --repo treaulab/infra
+
+name: tailnet-shell
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tailnet-shell
+  cancel-in-progress: false
+
+jobs:
+  shell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Burner gate (andrewwang2161 only)
+        env:
+          ACTOR: ${{ github.actor }}
+          BURNER: ${{ vars.BURNER_GH_USER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BURNER:-}" ]; then
+            echo "Refusing: repo variable BURNER_GH_USER is not set (want andrewwang2161)."
+            exit 1
+          fi
+          if [ "$ACTOR" != "$BURNER" ]; then
+            echo "Refusing: actor=$ACTOR is not burner ($BURNER). Ask andrewwang2161 to dispatch."
+            exit 1
+          fi
+          echo "Burner gate PASS (actor=$ACTOR)."
+
+      - uses: actions/checkout@v5
+
+      - name: Install Tailscale (pinned apt, no action pin drift)
+        run: |
+          set -euo pipefail
+          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
+            | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
+            | sudo tee /etc/apt/sources.list.d/tailscale.list
+          sudo apt-get update
+          sudo apt-get install -y tailscale
+          tailscale version
+
+      - name: Join tailnet (ephemeral, Tailscale SSH in)
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TS_AUTHKEY:-}" ]; then
+            echo "Refusing: repo secret TS_AUTHKEY_EPHEMERAL is not set."
+            echo "Add it in Settings → Secrets and variables → Actions → Secrets."
+            exit 1
+          fi
+          # Key itself must be tagged tag:ci-ephemeral + ephemeral (set in
+          # Tailscale admin when the key is created). Hostname is per-run so
+          # each dispatch shows as gh-ci-<run-id> and vanishes on job end.
+          sudo tailscale up \
+            --auth-key="$TS_AUTHKEY" \
+            --hostname="gh-ci-${{ github.run_id }}" \
+            --accept-dns=false \
+            --ssh
+          tailscale status
+          echo "--- tailnet IPv4 (ssh in with: tailscale ssh runner@gh-ci-${{ github.run_id }}) ---"
+          tailscale ip -4
+
+      # Filler / demo: outbound only. No ssh/scp, no SSH_PRIVATE_KEY (per spec).
+      - name: Filler — tailnet ping + edge HTTP (no SSH smoke)
+        run: |
+          set -euo pipefail
+          tailscale ping --c 3 box || echo "(ping box failed — is the NAT box on the tailnet as 'box'?)"
+          curl -sI --max-time 10 https://box.treau.me/ | head -5 || echo "(curl box.treau.me failed — ok while tunnel/DNS still settling)"
+
+      - name: Hold window open (use it via tailscale ssh, then it self-destructs)
+        run: |
+          echo "Alive for ~17 more minutes."
+          echo "From your tailnet machine: tailscale ssh runner@gh-ci-${{ github.run_id }}"
+          echo "Job hard-kills at 20 min (timeout-minutes); node auto-vanishes (ephemeral key)."
+          sleep 1050
