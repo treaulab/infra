@@ -39,6 +39,9 @@ ansible/collections/
 *.p12
 *.pfx
 *.kdbx
+# cloudflared live credentials (examples stay committed)
+apps/cloudflared/config.yml
+apps/cloudflared/token.env
 secrets/
 .sops*
 

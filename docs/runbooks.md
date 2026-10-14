@@ -17,6 +17,26 @@ Snapshot example: `docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:
 Bump `CADDY_VERSION` in the inventory (`ansible/inventory/prod.yml`), re-run
 `./scripts/deploy.sh prod` (or `ansible-playbook -i ansible/inventory/prod.yml ansible/playbooks/site.yml`), check `docker logs caddy`.
 
+## NAT box (cloudflared, stable treau.me, VPS untouched)
+
+Computer behind NAT exposing **both** HTTP + SSH on stable subdomains,
+zero VPS egress, no card (CLI flow). Full runbook lives in
+`apps/cloudflared/README.md` — summary:
+
+1. On the NAT box only: `./apps/cloudflared/install.sh --check-only`
+   (needs outbound `7844/UDP` + `443/TCP`; inbound stays closed).
+2. `cloudflared tunnel login && cloudflared tunnel create nat-box`
+   then `route dns nat-box box.treau.me` + `route dns nat-box ssh-box.treau.me`.
+3. Copy `apps/cloudflared/config.yml.example` → `/etc/cloudflared/config.yml`,
+   fill `<YOUR-TUNNEL-UUID>` (ingress: `box` → `http://localhost:8080`,
+   `ssh-box` → `ssh://localhost:22`, plus `http_status:404` catch-all).
+4. Smoke test `cloudflared tunnel --config /etc/cloudflared/config.yml run nat-box`,
+   then persist via `apps/cloudflared/cloudflared.service.example` → systemd.
+5. Laptop SSH via `apps/cloudflared/ssh-client.example`
+   (`ProxyCommand cloudflared access ssh --hostname %h`).
+6. Prove VPS silence: `docker logs caddy --tail 20` shows nothing new.
+   Rollback = delete the two CNAMEs + stop NAT-box service (VPS unchanged).
+
 ## Edge cutover (full-edge, zero Azure egress)
 1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`

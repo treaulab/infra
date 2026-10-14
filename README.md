@@ -19,10 +19,11 @@ tofu/                  L1: Azure RG/VNet/NSG/IP/VM (imports existing VPS)
 ansible/               L2: hardening, docker, caddy, website
 apps/caddy/            compose + Caddyfile
 apps/website/          static src (single source; synced to edge public/ at deploy)
+apps/cloudflared/        NAT box (behind NAT, VPS-untouched): cloudflared HTTP+SSH on treau.me subs
 workers/edge/          L0: Cloudflare Worker + Durable Object tunnels + edge assets
 scripts/               bootstrap.sh, deploy.sh
 .github/workflows/    tofu.yml, deploy.yml, edge.yml
-docs/runbooks.md       first boot, backups, upgrades, edge cutover
+docs/runbooks.md       first boot, backups, upgrades, edge cutover, NAT box
 ```
 
 ## Quickstart

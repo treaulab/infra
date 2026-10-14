@@ -1,0 +1,21 @@
+# /etc/systemd/system/cloudflared.service
+# NAT-box only. VPS untouched. Single tunnel serves box + ssh-box ingress.
+[Unit]
+Description=cloudflared stable tunnel (nat-box: box + ssh-box treau.me)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Debian/Ubuntu path below. NixOS: /run/current-system/sw/bin/cloudflared.
+ExecStart=/usr/bin/cloudflared tunnel --config /etc/cloudflared/config.yml --no-autoupdate run nat-box
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+# credentials-file in config.yml must be readable by this user (default root).
+# For token mode instead, replace ExecStart with:
+# ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+# and add: EnvironmentFile=/etc/cloudflared/token.env (mode 0600, gitignored)
+
+[Install]
+WantedBy=multi-user.target
