@@ -16,3 +16,5 @@ RELAY_TOKEN = "dev-only-token-change-me"
 # VLESS_DOH = "https://1.1.1.1/dns-query"
 # VLESS_CONNECT_TIMEOUT_MS = "5000"
 # VLESS_DIAL_CONCURRENCY = "2"
+# NAT64_FALLBACK = "1"  # dev only; prod via [vars] or not at all (default off)
+# NAT64_PREFIX = "2602:fc59:b0:64::"

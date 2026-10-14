@@ -89,6 +89,67 @@ function dialConcurrency(env) {
   return Math.min(Math.max(n, 1), 4);
 }
 
+// Opt-in NAT64 fallback for TCP dials (env NAT64_FALLBACK=1). When a direct
+// dial fails — or connects but goes silent (e.g. handshake dropped for
+// Cloudflare-sourced egress) — the target is re-dialed once via an IPv6
+// NAT64 gateway: the gatekeeper sees non-CF IPv6, and the origin sees the
+// gateway's exit IP instead of Cloudflare's. Adapted from the amclubs
+// reference (P64/p64Prefix); TCP only, single retry, off by default.
+// Caveats: third-party gateway dependency (+latency, metadata-visible),
+// gateway exit IPs may be refused just the same. Disabled = zero behavior change.
+function nat64Enabled(env) {
+  return ["1", "true"].includes(String(env?.NAT64_FALLBACK || "").toLowerCase());
+}
+
+function nat64Prefix(env) {
+  const p = String(env?.NAT64_PREFIX || "2602:fc59:b0:64::").trim();
+  return p.includes("::") ? p : "2602:fc59:b0:64::";
+}
+
+function parseIpv4(host) {
+  const parts = String(host || "").split(".");
+  if (parts.length !== 4) return null;
+  const nums = [];
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const n = Number(part);
+    if (n < 0 || n > 255) return null;
+    nums.push(n);
+  }
+  return nums;
+}
+
+// Embed an IPv4 literal into the NAT64 prefix: "1.2.3.4" -> full IPv6 string.
+function embedNat64(ipv4, prefix) {
+  const nums = parseIpv4(ipv4);
+  if (!nums) throw new Error(`invalid IPv4 for NAT64: ${ipv4}`);
+  const hex = nums.map((n) => n.toString(16).padStart(2, "0"));
+  return `${prefix}${hex[0]}${hex[1]}:${hex[2]}${hex[3]}`.toLowerCase();
+}
+
+// Resolve a domain to its first A record via DNS-JSON on the configured DoH.
+async function resolveA(host, doh) {
+  const sep = doh.includes("?") ? "&" : "?";
+  const resp = await fetch(
+    `${doh}${sep}name=${encodeURIComponent(host)}&type=A`,
+    { headers: { accept: "application/dns-json" } },
+  );
+  if (!resp.ok) throw new Error(`A-resolve status ${resp.status}`);
+  const body = await resp.json();
+  const rec = body?.Answer?.find((r) => r.type === 1 && r.data && parseIpv4(r.data));
+  if (!rec) throw new Error(`no A record for ${host}`);
+  return rec.data;
+}
+
+// Map a VLESS target to its NAT64 IPv6 dial address (or throw if ineligible:
+// IPv6 targets are already v6; domains need a resolvable A record).
+async function nat64DialAddress(host, atyp, doh, prefix) {
+  if (atyp === 3) throw new Error("NAT64 inapplicable to IPv6 target");
+  const v4 = atyp === 1 ? host : await resolveA(host, doh);
+  if (atyp === 1 && !parseIpv4(v4)) throw new Error(`invalid IPv4 target: ${host}`);
+  return embedNat64(v4, prefix);
+}
+
 // vless:// links for clients (v2rayNG / Nekoray / sing-box import).
 // host defaults to the request's own hostname (workers.dev), port 443 + tls.
 export function buildVlessLinks(request, env) {
@@ -190,7 +251,7 @@ export async function handleVlessWs(request, env, ctx, opts = {}) {
           headerBuf = new Uint8Array(0);
           authed = true;
 
-          const { addressRemote, portRemote, rawDataIndex, version, isUDP } =
+          const { addressRemote, portRemote, rawDataIndex, version, isUDP, addressType } =
             parsed;
           dest = `${addressRemote}:${portRemote}`;
 
@@ -238,6 +299,15 @@ export async function handleVlessWs(request, env, ctx, opts = {}) {
               timeoutMs: connectTimeoutMs(env),
               concurrency: dialConcurrency(env),
             },
+            nat64Enabled(env)
+              ? {
+                  prefix: nat64Prefix(env),
+                  doh: dohUrl(env),
+                  atyp: addressType,
+                  onNat64: () =>
+                    audit({ ok: true, via: "vless-nat64", host: addressRemote }),
+                }
+              : null,
           );
         },
         async close() {
@@ -676,24 +746,66 @@ async function dialTcpOut(
   respHeader,
   log,
   { timeoutMs, concurrency },
+  nat = null, // { prefix, doh, atyp, onNat64 } or null (disabled)
 ) {
-  const task = connectTcpSocket(host, port, concurrency, timeoutMs, log);
-  remote.connectingPromise = task;
+  const attempt = async (addr, tag) => {
+    const task = connectTcpSocket(addr, port, concurrency, timeoutMs, log);
+    remote.connectingPromise = task;
+    let sock;
+    try {
+      sock = await task;
+      if (!sock) throw new Error("TCP connection failed");
+      remote.setSocket(sock);
+      try {
+        sock.closed.catch((e) => log(`tcp closed: ${e?.message || e}`));
+      } catch {}
+      log(`connected ${tag} ${addr}:${port}`);
+      await remote.writeInitial(initial);
+    } finally {
+      if (remote.connectingPromise === task) remote.connectingPromise = null;
+    }
+    return sock;
+  };
+
+  const attemptNat64 = async (why) => {
+    if (!nat) throw new Error(`no nat64 fallback (${why})`);
+    const v6 = await nat64DialAddress(host, nat.atyp, nat.doh, nat.prefix);
+    log(`nat64 ${why}: ${host} -> [${v6}]:${port}`);
+    try {
+      nat.onNat64?.(v6);
+    } catch {}
+    return attempt(v6.replace(/^\[|\]$/g, ""), "nat64");
+  };
+
   let sock;
   try {
-    sock = await task;
-    if (!sock) throw new Error("TCP connection failed");
-    remote.setSocket(sock);
-    try {
-      sock.closed.catch((e) => log(`tcp closed: ${e?.message || e}`));
-    } catch {}
-    log(`connected ${host}:${port}`);
-    await remote.writeInitial(initial);
-  } finally {
-    if (remote.connectingPromise === task) remote.connectingPromise = null;
+    sock = await attempt(host, "direct");
+  } catch (err) {
+    log(`direct dial failed: ${err?.message || err}`);
+    sock = await attemptNat64("dial-failed");
   }
   const gen = remote.generation;
-  transferDownlink(sock, ws, respHeader, log, remote, gen).catch((err) => {
+  // Silent direct connection (connected, zero bytes back — the dropped-
+  // handshake shape): one NAT64 retry, then give up and close as usual.
+  // Nothing was sent downlink yet, so the retry reuses respHeader.
+  const onEmpty = nat
+    ? async () => {
+        try {
+          const nsock = await attemptNat64("silent-close");
+          const ngen = remote.generation;
+          transferDownlink(nsock, ws, respHeader, log, remote, ngen).catch((err) => {
+            log(`nat64 downlink error: ${err?.message || err}`);
+            remote.close(err);
+            closeDataStream(ws);
+          });
+          return true;
+        } catch (err) {
+          log(`nat64 retry failed: ${err?.message || err}`);
+          return false;
+        }
+      }
+    : null;
+  transferDownlink(sock, ws, respHeader, log, remote, gen, { onEmpty }).catch((err) => {
     log(`downlink error: ${err?.message || err}`);
     remote.close(err);
     closeDataStream(ws);
@@ -782,6 +894,7 @@ async function transferDownlink(
   log,
   wrapper,
   generation,
+  { onEmpty = null } = {}, // optional () => Promise<bool>: silent close recovered?
 ) {
   let gotData = false;
   let reader;
@@ -848,6 +961,13 @@ async function transferDownlink(
     }
   }
   if (!current()) return;
+  if (!gotData && !readErr && onEmpty) {
+    try {
+      if (await onEmpty()) return; // retry owns the lifecycle now
+    } catch (err) {
+      readErr ||= err;
+    }
+  }
   if (!gotData && !readErr) readErr = new Error("remote closed without data");
   if (readErr) log(`downlink end: ${readErr.message || readErr}`);
   wrapper?.close(readErr);

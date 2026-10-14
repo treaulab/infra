@@ -13,8 +13,9 @@
 // VLESS over WebSocket (./vless.js, adapted from the amclubs reference) is the
 // one VPN transport this worker ships: UUID-authenticated WS upgrade on
 // /<VLESS_UUID> (or /vless, or /<VLESS_PATH>), TCP dial via
-// cloudflare:sockets, DNS(UDP/53) via DoH. Trojan/SS/XHTTP/gRPC/SOCKS-out/
-// subscription panels remain omitted.
+// cloudflare:sockets, DNS(UDP/53) via DoH, plus an opt-in single NAT64
+// retry (NAT64_FALLBACK=1) for egress that drops Cloudflare-sourced
+// handshakes. Trojan/SS/XHTTP/gRPC/SOCKS-out/subscription panels omitted.
 
 import {
   buildVlessLinks,
@@ -24,7 +25,7 @@ import {
   vlessPathAllowed,
 } from "./vless.js";
 
-const VERSION = "waypoint-1";
+const VERSION = "waypoint-2";
 const CONFIG_VERSION = 2;
 const CONFIG_KEY = "config";
 const AUDIT_KEY = "audit";
