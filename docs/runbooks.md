@@ -37,36 +37,39 @@ zero VPS egress, no card (CLI flow). Full runbook lives in
 6. Prove VPS silence: `docker logs caddy --tail 20` shows nothing new.
    Rollback = delete the two CNAMEs + stop NAT-box service (VPS unchanged).
 
-## Tailnet shell (hourly 1h runs + debug dispatch, NOT on VPS)
+## Tailnet shell (hub + per-account spokes, NOT on VPS)
 
-GitHub-hosted job joins your tailnet as `gh-ci-<run-id>` (Tailscale SSH in).
-Two modes in `.github/workflows/tailnet-shell.yml`:
-* Hourly (`schedule`, minute 7): dummy heartbeat task holds ~1 hour
-  (~55 min loop: timestamp + `ping box` + `curl box.treau.me` every 5 min),
-  then exits for the next cycle. Repeats 24/7, no actor gate (schedule
-  events have no human actor). Ceiling `timeout-minutes: 75`.
-* Debug (dispatch, burner `andrewwang2161` only): quick filler + ~17 min
-  hold so you can `tailscale ssh runner@gh-ci-<run-id>` in.
+This repo is the **hub**: pure reusable logic, zero credentials, runs nothing
+itself. Each GitHub account owns a **spoke** repo that calls the hub:
+* Hub: `.github/workflows/tailnet-shell-reusable.yml` (`workflow_call`,
+  inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`;
+  secret `TS_AUTHKEY_EPHEMERAL` passed explicitly by the caller).
+* Spoke template: `.github/workflows/tailnet-shell-caller.yml.example` —
+  paste as `.github/workflows/tailnet-shell.yml` in the account repo,
+  replace `<PINNED_SHA>`, set that repo's own secret. No `secrets: inherit`.
+* Spoke runs as `gh-<acct>-<run-id>` (Tailscale SSH in). Hourly mode holds
+  ~1 hour (dummy heartbeat: timestamp + `ping box` + `curl box.treau.me`
+  every 5 min), then exits; debug mode holds ~17 min for `tailscale ssh` in.
+  NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
 
-1. Tailscale admin (once):
-   * Access Controls → `tagOwners: {"tag:ci-ephemeral": ["you"]}`, SSH accept
-     `src: [you]` → `dst: [tag:ci-ephemeral]`, users `["runner","root"]`.
-     No exit-node / subnet routes.
-   * Settings → Keys → reusable **ephemeral** key, tag `tag:ci-ephemeral`,
+1. Tailscale admin (once per account key):
+   * Access Controls → `tagOwners: {"tag:ci-<acct>": ["you"]}`, SSH accept
+     `src: [you]` → `dst: [tag:ci-<acct>]`, users `["runner","root"]`.
+     No exit-node / subnet routes. (Pilot: `tag:ci-burner`.)
+   * Settings → Keys → reusable **ephemeral** key per account, own tag,
      short expiry → copy `tskey-auth-...`.
    * Name the NAT box `box` (`tailscale up --hostname=box`).
-2. GitHub repo `treaulab/infra` (terminal, no GUI):
-   * `gh secret set TS_AUTHKEY_EPHEMERAL --repo treaulab/infra`
-   * `gh variable set BURNER_GH_USER --body andrewwang2161 --repo treaulab/infra`
-     (both already set — verify with `gh secret/variable list`).
-   * Burner `andrewwang2161` needs Write on the repo (dispatch only).
-3. Use: hourly runs fire on their own (Actions → `tailnet-shell` → watch
-   heartbeats in logs). Debug: as `andrewwang2161`, Run workflow →
-   read the `100.x` IP → `tailscale ssh runner@gh-ci-<run-id>`.
-   NO ssh/scp smoke by design.
-4. Rollback: disable the schedule (comment the `cron` line) or cancel runs
-   (nodes vanish, ephemeral key) + revoke the auth key.
-   VPS untouched throughout (`docker logs caddy` silent).
+2. Spoke repo (as that account, terminal, no GUI; pilot: `andrewwang2161/tailnet-shell`, private):
+   * Create repo, paste caller file, pin `@<sha>`.
+   * `gh secret set TS_AUTHKEY_EPHEMERAL` (that account's own key).
+   * No access grants on `treaulab/infra` needed (public read suffices).
+   * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
+     and burner's Write grant were removed — `infra` holds no credentials.
+3. Use: hourly fires on its own in the spoke (watch heartbeats); debug via
+   Run workflow in the spoke → `tailscale ssh runner@gh-<acct>-<run-id>`.
+4. Rollback per account: delete spoke repo + revoke its key. Hub and
+   sibling accounts untouched. VPS untouched throughout
+   (`docker logs caddy` silent).
 
 ## Edge cutover (full-edge, zero Azure egress)
 1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)

@@ -1,0 +1,130 @@
+# Tailnet shell (reusable core, HUB side).
+#
+# Pure logic, NO triggers of its own: called by spoke repos (one per GitHub
+# account) via `uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<sha>`.
+# This repo (treaulab/infra) runs NOTHING itself and holds NO credentials —
+# the secret lives only in the calling spoke repo.
+#
+# Inputs:
+#   mode: "hourly" (dummy heartbeat loop ~55 min, then exit) or
+#         "debug" (quick filler + ~17 min hold for `tailscale ssh` in).
+#   hostname-prefix: node name becomes <prefix>-<run-id> (e.g. gh-burner).
+#   box-name: tailnet hostname of the NAT box (default "box").
+# Secrets:
+#   TS_AUTHKEY_EPHEMERAL (required): reusable ephemeral Tailscale auth key,
+#   tagged for the CALLER's account (e.g. tag:ci-burner). Never commit it.
+#
+# Caller requirements: caller repo passes its own secret explicitly
+# (never `inherit`), pins this file by commit SHA, and sets its own
+# schedule/dispatch triggers. Callers need zero access grants on this repo
+# (public read is enough for `uses:`).
+#
+# Invariants (kept from the original design):
+# - NOT on the VPS. Hosted runner dies with the job; node auto-vanishes.
+# - Tailscale SSH IN (`tailscale up --ssh`); tailnet policy must accept
+#   src you → dst <caller's tag>, users ["runner","root"].
+# - NO ssh/scp smoke into the box: checks are `tailscale ping` (L3) + curl.
+
+name: tailnet-shell-reusable
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: '"hourly" (dummy 1h heartbeat) or "debug" (filler + hold)'
+        required: false
+        default: "hourly"
+        type: string
+      hostname-prefix:
+        description: 'Node name prefix; full name is <prefix>-<run-id>'
+        required: false
+        default: "gh-ci"
+        type: string
+      box-name:
+        description: "Tailnet hostname of the NAT box to ping"
+        required: false
+        default: "box"
+        type: string
+      edge-url:
+        description: "Public HTTPS URL to curl for the edge check"
+        required: false
+        default: "https://box.treau.me/"
+        type: string
+    secrets:
+      TS_AUTHKEY_EPHEMERAL:
+        description: "Reusable ephemeral Tailscale auth key (caller-account tag)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Tailscale (pinned apt, no action pin drift)
+        run: |
+          set -euo pipefail
+          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
+            | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
+            | sudo tee /etc/apt/sources.list.d/tailscale.list
+          sudo apt-get update
+          sudo apt-get install -y tailscale
+          tailscale version
+
+      - name: Join tailnet (ephemeral, Tailscale SSH in)
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+        run: |
+          set -euo pipefail
+          # Key must be tagged for the CALLER's account + ephemeral (set in
+          # Tailscale admin at key creation). Hostname is per-run so each run
+          # shows distinctly and vanishes on job end.
+          sudo tailscale up \
+            --auth-key="$TS_AUTHKEY" \
+            --hostname="${{ inputs.hostname-prefix }}-${{ github.run_id }}" \
+            --accept-dns=false \
+            --ssh
+          tailscale status
+          echo "--- tailnet IPv4 (ssh in with: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}) ---"
+          tailscale ip -4
+
+      # Debug filler: one quick check, then the hold below.
+      - name: Filler — tailnet ping + edge HTTP (no SSH smoke)
+        if: inputs.mode == 'debug'
+        run: |
+          set -euo pipefail
+          tailscale ping --c 3 "${{ inputs.box-name }}" || echo "(ping failed — is the NAT box on the tailnet as '${{ inputs.box-name }}'?)"
+          curl -sI --max-time 10 "${{ inputs.edge-url }}" | head -5 || echo "(curl failed — ok while tunnel/DNS still settling)"
+
+      - name: Hold window open (debug use, then self-destruct)
+        if: inputs.mode == 'debug'
+        run: |
+          echo "Alive for ~17 more minutes."
+          echo "From your tailnet machine: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
+          echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral key)."
+          sleep 1050
+
+      # Dummy hourly task: heartbeat loop ~55 min so the run lasts about an
+      # hour total with setup, then exits for the next cycle.
+      - name: Dummy hourly task (hold ~1h, heartbeat, no exit till done)
+        if: inputs.mode == 'hourly'
+        run: |
+          set -euo pipefail
+          START=$(date +%s)
+          END=$((START + 3300))
+          i=0
+          echo "dummy-task start $(date -u +%FT%TZ) run_id=${{ github.run_id }} (holding ~55 min)"
+          while [ "$(date +%s)" -lt "$END" ]; do
+            i=$((i + 1))
+            STAMP=$(date -u +%FT%TZ)
+            PING=$(tailscale ping --c 1 "${{ inputs.box-name }}" 2>&1 | tail -1 || echo "ping-fail")
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${{ inputs.edge-url }}" || echo "curl-fail")
+            echo "heartbeat $i $STAMP ping=[$PING] http=[$CODE]"
+            sleep 300
+          done
+          echo "dummy-task done after $i heartbeats $(date -u +%FT%TZ) — exiting for next hourly run"

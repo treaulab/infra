@@ -1,0 +1,55 @@
+# Caller template (SPOKE side): paste into each account's repo as
+# `.github/workflows/tailnet-shell.yml`, then replace <PINNED_SHA> with the
+# commit SHA of treaulab/infra you reviewed (get it via:
+#   git -C /path/to/infra rev-parse HEAD
+# or: gh api repos/treaulab/infra/commits/main --jq .sha).
+#
+# Each spoke repo (e.g. andrewwang2161/tailnet-shell) needs:
+#   1. Its OWN secret: gh secret set TS_AUTHKEY_EPHEMERAL
+#      (own key, same tailnet, own tag like tag:ci-burner, reusable-ephemeral)
+#   2. This file with its own triggers + hostname-prefix per account.
+# Spoke repos need ZERO access grants on treaulab/infra (public read is
+# enough for `uses:`). Never use `secrets: inherit` — pass explicitly.
+#
+# Triggers below mirror the original design: hourly bounded work + manual
+# debug dispatch. Dispatch rights = whoever has Write on the SPOKE repo
+# (no gates needed — the repo owner IS the identity).
+
+name: tailnet-shell
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tailnet-shell
+  cancel-in-progress: false
+
+jobs:
+  # Hourly bounded work (change prefix per account: gh-burner, gh-acct3, ...).
+  hourly:
+    if: github.event_name == 'schedule'
+    uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<PINNED_SHA>
+    with:
+      mode: hourly
+      hostname-prefix: gh-burner
+      box-name: box
+      edge-url: https://box.treau.me/
+    secrets:
+      TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+
+  # Manual debug session (Tailscale SSH in, ~17 min hold).
+  debug:
+    if: github.event_name == 'workflow_dispatch'
+    uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<PINNED_SHA>
+    with:
+      mode: debug
+      hostname-prefix: gh-burner
+      box-name: box
+      edge-url: https://box.treau.me/
+    secrets:
+      TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
