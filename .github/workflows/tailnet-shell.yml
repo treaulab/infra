@@ -1,30 +1,31 @@
-# On-demand tailnet shell: ephemeral GitHub-hosted runner joins your tailnet
-# for max 20 minutes so you can `tailscale ssh` into it when needed.
+# Tailnet shell: ephemeral GitHub-hosted runner joins your tailnet.
+#
+# Two modes, one file:
+# - Hourly (schedule, cron minute 7): dummy heartbeat task holds ~1 hour
+#   (~55 min loop + setup), then exits cleanly for the next run. Repeats 24/7.
+#   No actor gate (schedule events have no human actor).
+# - Debug (dispatch, burner ONLY andrewwang2161): join + quick filler +
+#   ~17 min hold so you can `tailscale ssh` in. Gate enforced via repo
+#   variable BURNER_GH_USER.
 #
 # - NOT on the VPS. Nothing persistent anywhere (hosted runner dies with job).
-# - Trigger: Actions → tailnet-shell → Run workflow, ONLY as burner
-#   `andrewwang2161` (enforced by the burner-gate step via repo variable
-#   BURNER_GH_USER). No push/PR triggers — forks can never reach this.
 # - Tailscale SSH IN enabled (`tailscale up --ssh`); tailnet policy must
 #   accept src you → dst tag:ci-ephemeral, users ["runner","root"].
-# - NO ssh/scp smoke into box here (explicitly out of scope): filler is
+# - NO ssh/scp smoke into box here (explicitly out of scope): heartbeat is
 #   `tailscale ping` (L3, not SSH) + `curl https://box.treau.me/`.
 # - Secrets: TS_AUTHKEY_EPHEMERAL only (tagged reusable ephemeral key).
 #   No SSH_PRIVATE_KEY, no Cloudflare tokens in this workflow.
 #
-# Where to put the key (repo treaulab/infra):
-#   Settings → Secrets and variables → Actions → Secrets → New repository
-#   secret → Name: TS_AUTHKEY_EPHEMERAL, Value: tskey-auth-<...>
-#   ... → Variables tab → New variable → Name: BURNER_GH_USER,
-#   Value: andrewwang2161
-# Or via gh CLI (repo already authenticated):
-#   gh secret set TS_AUTHKEY_EPHEMERAL --repo treaulab/infra
+# Setup (repo treaulab/infra, terminal, no GUI):
+#   gh secret set TS_AUTHKEY_EPHEMERAL --repo treaulab/infra   # paste tskey-auth-...
 #   gh variable set BURNER_GH_USER --body andrewwang2161 --repo treaulab/infra
 
 name: tailnet-shell
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "7 * * * *"
 
 permissions:
   contents: read
@@ -36,9 +37,10 @@ concurrency:
 jobs:
   shell:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 75
     steps:
-      - name: Burner gate (andrewwang2161 only)
+      - name: Burner gate (dispatch only, andrewwang2161)
+        if: github.event_name == 'workflow_dispatch'
         env:
           ACTOR: ${{ github.actor }}
           BURNER: ${{ vars.BURNER_GH_USER }}
@@ -79,7 +81,7 @@ jobs:
           fi
           # Key itself must be tagged tag:ci-ephemeral + ephemeral (set in
           # Tailscale admin when the key is created). Hostname is per-run so
-          # each dispatch shows as gh-ci-<run-id> and vanishes on job end.
+          # each run shows as gh-ci-<run-id> and vanishes on job end.
           sudo tailscale up \
             --auth-key="$TS_AUTHKEY" \
             --hostname="gh-ci-${{ github.run_id }}" \
@@ -89,16 +91,39 @@ jobs:
           echo "--- tailnet IPv4 (ssh in with: tailscale ssh runner@gh-ci-${{ github.run_id }}) ---"
           tailscale ip -4
 
-      # Filler / demo: outbound only. No ssh/scp, no SSH_PRIVATE_KEY (per spec).
+      # Dispatch filler: one quick check, then the hold below.
       - name: Filler — tailnet ping + edge HTTP (no SSH smoke)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           tailscale ping --c 3 box || echo "(ping box failed — is the NAT box on the tailnet as 'box'?)"
           curl -sI --max-time 10 https://box.treau.me/ | head -5 || echo "(curl box.treau.me failed — ok while tunnel/DNS still settling)"
 
-      - name: Hold window open (use it via tailscale ssh, then it self-destructs)
+      - name: Hold window open (dispatch debug use, then self-destruct)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           echo "Alive for ~17 more minutes."
           echo "From your tailnet machine: tailscale ssh runner@gh-ci-${{ github.run_id }}"
-          echo "Job hard-kills at 20 min (timeout-minutes); node auto-vanishes (ephemeral key)."
+          echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral key)."
           sleep 1050
+
+      # Dummy hourly task (schedule only): heartbeat loop ~55 min so the run
+      # lasts about an hour total with setup, then exits for the next cycle.
+      # Dummy work: timestamped heartbeats + ping + edge HTTP status.
+      - name: Dummy hourly task (hold ~1h, heartbeat, no exit till done)
+        if: github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          START=$(date +%s)
+          END=$((START + 3300))
+          i=0
+          echo "dummy-task start $(date -u +%FT%TZ) run_id=${{ github.run_id }} (holding ~55 min)"
+          while [ "$(date +%s)" -lt "$END" ]; do
+            i=$((i + 1))
+            STAMP=$(date -u +%FT%TZ)
+            PING=$(tailscale ping --c 1 box 2>&1 | tail -1 || echo "ping-fail")
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://box.treau.me/ || echo "curl-fail")
+            echo "heartbeat $i $STAMP ping=[$PING] http=[$CODE]"
+            sleep 300
+          done
+          echo "dummy-task done after $i heartbeats $(date -u +%FT%TZ) — exiting for next hourly run"
