@@ -33,3 +33,17 @@ jobs:
           tofu init -backend=false
           tofu fmt -check
           tofu validate
+
+  # Governance root: branch protection (no secret material — safe in state).
+  # Same posture: plan/validate in CI, applies human with admin PAT
+  # (see tofu/github/README.md).
+  plan-github:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v1
+      - working-directory: tofu/github
+        run: |
+          tofu init -backend=false
+          tofu fmt -check
+          tofu validate
