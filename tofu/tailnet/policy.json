@@ -1,0 +1,52 @@
+{
+  // SEED TEMPLATE — DO NOT APPLY AS-IS.
+  //
+  // Step 0 (mandatory): export the CURRENT tailnet policy (Tailscale admin →
+  // Access Controls → copy the whole file, or GET
+  // /api/v2/tailnet/<tailnet>/acl) and paste it here REPLACING everything
+  // between the braces, then KEEP the tag:ci-burner blocks below merged in.
+  // The provider refuses to manage policy until you import first:
+  //   tofu import tailscale_acl.main acl
+  // so an unseeded apply fails closed instead of clobbering production.
+  //
+  // Pilot additions (keep these when merging):
+  //   - tagOwners: tag:ci-burner must list YOUR identity (replace <you>).
+  //   - grants: what burner runner nodes may reach (example: the NAT box).
+  //   - ssh: YOU may Tailscale-SSH INTO burner runner nodes as runner/root.
+  //   - tests: validated against the Tailscale API at plan time — keep green.
+  //
+  // TODO(you): replace <you>, <box-machine-or-tag>, then import + plan.
+
+  "tagOwners": {
+    "tag:ci-burner": ["<you>"]
+  },
+
+  "grants": [
+    {
+      // Burner runner nodes may probe the NAT box (ping/curl filler).
+      // Replace dst with your box's machine name, tag, or tailnet IP.
+      "src": ["tag:ci-burner"],
+      "dst": ["<box-machine-or-tag>"],
+      "ip": ["*"]
+    }
+  ],
+
+  "ssh": [
+    {
+      // You may ssh INTO ephemeral runner nodes (Tailscale SSH).
+      "action": "accept",
+      "src": ["<you>"],
+      "dst": ["tag:ci-burner"],
+      "users": ["runner", "root"]
+    }
+  ],
+
+  "tests": [
+    {
+      // Plan-time proof: burner runners can reach the box.
+      "src": ["tag:ci-burner"],
+      "accept": ["<box-machine-or-tag>:*"],
+      "deny": ["tag:ci-burner:*"]
+    }
+  ]
+}

@@ -18,3 +18,18 @@ jobs:
           tofu init -backend=false
           tofu fmt -check
           tofu validate
+
+  # Learning root: tailnet policy + per-account keys + spoke secrets.
+  # Plan/validate only (no credentials in CI) — applies are human, terminal,
+  # short-lived env (see tofu/tailnet/README.md). Never auto-apply: state
+  # holds live key material.
+  plan-tailnet:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v1
+      - working-directory: tofu/tailnet
+        run: |
+          tofu init -backend=false
+          tofu fmt -check
+          tofu validate
