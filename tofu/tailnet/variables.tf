@@ -19,7 +19,7 @@ variable "spoke_secret_name" {
 variable "key_tag" {
   description = "Tailscale tag applied to nodes joining with this key (must exist in tagOwners in policy.json)."
   type        = string
-  default     = "tag:ci-burner"
+  default     = "tag:ci-ephemeral"
 }
 
 variable "key_expiry_seconds" {

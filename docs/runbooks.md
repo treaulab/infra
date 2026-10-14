@@ -55,7 +55,7 @@ itself. Each GitHub account owns a **spoke** repo that calls the hub:
 1. Tailscale admin (once per account key):
    * Access Controls → `tagOwners: {"tag:ci-<acct>": ["you"]}`, SSH accept
      `src: [you]` → `dst: [tag:ci-<acct>]`, users `["runner","root"]`.
-     No exit-node / subnet routes. (Pilot: `tag:ci-burner`.)
+     No exit-node / subnet routes. (Pilot: `tag:ci-ephemeral`.)
    * Settings → Keys → reusable **ephemeral** key per account, own tag,
      short expiry → copy `tskey-auth-...`.
    * Name the NAT box `box` (`tailscale up --hostname=box`).

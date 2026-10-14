@@ -6,7 +6,7 @@
 #
 # Each spoke repo (e.g. andrewwang2161/tailnet-shell) needs:
 #   1. Its OWN secret: gh secret set TS_AUTHKEY_EPHEMERAL
-#      (own key, same tailnet, own tag like tag:ci-burner, reusable-ephemeral)
+#      (own key, same tailnet, own tag like tag:ci-ephemeral, reusable-ephemeral)
 #   2. This file with its own triggers + hostname-prefix per account.
 # Spoke repos need ZERO access grants on treaulab/infra (public read is
 # enough for `uses:`). Never use `secrets: inherit` — pass explicitly.

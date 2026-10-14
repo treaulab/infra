@@ -12,7 +12,7 @@
 #   box-name: tailnet hostname of the NAT box (default "box").
 # Secrets:
 #   TS_AUTHKEY_EPHEMERAL (required): reusable ephemeral Tailscale auth key,
-#   tagged for the CALLER's account (e.g. tag:ci-burner). Never commit it.
+#   tagged for the CALLER's account (e.g. tag:ci-ephemeral). Never commit it.
 #
 # Caller requirements: caller repo passes its own secret explicitly
 # (never `inherit`), pins this file by commit SHA, and sets its own

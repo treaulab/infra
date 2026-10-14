@@ -2,5 +2,5 @@
 # prod.tfvars (gitignored) only to override, e.g.:
 # spoke_owner        = "andrewwang2161"
 # spoke_repo         = "tailnet-shell"
-# key_tag            = "tag:ci-burner"
+# key_tag            = "tag:ci-ephemeral"
 # key_expiry_seconds = 2592000

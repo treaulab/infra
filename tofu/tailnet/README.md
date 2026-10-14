@@ -25,13 +25,15 @@ Nothing here works without two short-lived credentials in env (never in
 files — no tfvars committed, `*.tfvars` gitignored):
 
 ```bash
-export TAILSCALE_API_KEY="$(...)"  # Tailscale admin → Settings → OAuth clients
-                                   # → new client, scopes: Auth Keys (write) +
-                                   # Policy (write) ONLY, shortest expiry offered.
-                                   # Mint an access token from it; THAT is the value.
+export TAILSCALE_OAUTH_CLIENT_ID="k12345..."      # your OAuth client ID
+export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."  # your client secret
 export TAILSCALE_TAILNET="you@example.com"
 export GITHUB_TOKEN="$(gh auth token)"  # slancj admin session, repo scope.
 ```
+Client prerequisites (set once in Tailscale admin): scopes `auth_keys` +
+`policy_file` + `devices:core:read` + `devices:posture_attributes`, tags
+including `tag:ci-ephemeral`, shortest expiry. Fallback instead of the
+pair: a pre-minted access token as `TAILSCALE_API_KEY` (one path, not both).
 
 Plus one trust grant (burner side, one click): spoke repo
 `andrewwang2161/tailnet-shell` → Settings → Collaborators → invite
@@ -46,7 +48,7 @@ cd tofu/tailnet
 tofu init
 
 # STEP 0 — seed policy.json with the CURRENT production policy export
-# (admin → Access Controls → copy whole file), merging the tag:ci-burner
+# (admin → Access Controls → copy whole file), merging the tag:ci-ephemeral
 # blocks, replacing every <placeholder>. NEVER apply the seed template.
 
 # STEP 1 — adopt before managing (provider enforces this: without import,
@@ -56,7 +58,7 @@ tofu import tailscale_acl.main acl
 # STEP 2 — plan MUST show only your additions (tag grants/ssh/tests + 2 creates):
 tofu plan
 
-# STEP 3 — apply (mints key with tag:ci-burner, writes spoke secret):
+# STEP 3 — apply (mints key with tag:ci-ephemeral, writes spoke secret):
 tofu apply
 chmod 600 terraform.tfstate  # state holds LIVE key material (see §4)
 
