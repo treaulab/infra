@@ -71,6 +71,36 @@ itself. Each GitHub account owns a **spoke** repo that calls the hub:
    sibling accounts untouched. VPS untouched throughout
    (`docker logs caddy` silent).
 
+## Secrets (SOPS+age — committed config secrets only)
+
+Scope discipline: SOPS is for **versioned config values** (safe in git as
+ciphertext). Ceremony ephemera (OAuth secrets, PATs) stay terminal-env +
+shred; standing tokens stay keyring/Bitwarden; private keys stay files.
+Never SOPS a private key or a runtime-scoped PAT.
+
+Setup (done once, this box): age identity generated (`age-keygen`),
+**secret in OS keyring** (`service=treaulab-sops`, `key=age-identity`,
+never displayed/stored elsewhere), **pubkey committed** in `.sops.yaml`
+(`age1ztexay0xhcwssf5kp9r5umjrgg7e80et8xy4k4k729ghr80xha5q07jn0r`).
+Per-account recipients get appended there as spokes publish pubkeys.
+
+Use (any `*.enc.yaml`, values encrypted, keys/structure clear):
+```bash
+export SOPS_AGE_KEY="$(secret-tool lookup service treaulab-sops key age-identity)"
+sops -d sops-demo.enc.yaml        # roundtrip test: readable = identity works
+sops -e plain.yaml > x.enc.yaml   # encrypt (shred plain after)
+sops rotate -i x.enc.yaml         # rotate data key, verify decrypt after
+unset SOPS_AGE_KEY
+```
+Live demo: `sops-demo.enc.yaml` (fake values, real workflow —
+roundtripped + rotated at adoption). Delete it once real consumers exist.
+
+Crown-jewel warning: the age secret key decrypts **all history**
+including rotated-out values (no forward secrecy). Back it up
+independently of this box (paper/Bitwarden) or accept total loss on
+keyring failure — either is a conscious choice, document which. Losing it
+means re-encrypting everything to a new identity, not recovery.
+
 ## Edge cutover (full-edge, zero Azure egress)
 1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`

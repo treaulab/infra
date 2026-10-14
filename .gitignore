@@ -44,6 +44,10 @@ apps/cloudflared/config.yml
 apps/cloudflared/token.env
 secrets/
 .sops*
+!.sops.yaml
+# SOPS-encrypted values (*.enc.yaml) are safe to commit: ciphertext only,
+# decryptable solely by age identities in .sops.yaml. Plaintext age keys
+# (*.key) and live env files stay ignored, always.
 
 # azure / gh cli
 .azure/
