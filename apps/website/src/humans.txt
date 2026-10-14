@@ -1,0 +1,10 @@
+/* TEAM */
+Studio: Treaulab
+Site: https://treau.me/
+Contact: hello@treau.me
+Abuse: abuse@treau.me
+
+/* SITE */
+Standards: HTML, CSS, system fonts
+Components: no frameworks, no trackers, no cookies, no JavaScript
+Hosting: static files over HTTPS, version-controlled infrastructure

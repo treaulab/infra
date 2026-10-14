@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
 
+Disallow: /t/
+Disallow: /p/
+
 Sitemap: https://treau.me/sitemap.xml
