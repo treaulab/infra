@@ -24,30 +24,43 @@
 {"@context":"https://schema.org","@type":"AboutPage","name":"About — Treaulab","url":"https://treau.me/about.html","about":{"@type":"Organization","name":"Treaulab","url":"https://treau.me/"}}
 </script>
 <style>
-:root{color-scheme:light dark}
+:root{color-scheme:light dark;--ink:#16161a;--muted:#5c5c66;--line:#e9e9ee;--accent:#0b5fff;--bg:#fff}
 *{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;color:#1a1a1a;background:#fff;line-height:1.6}
-a{color:#0b5fff}
-a:focus-visible{outline:2px solid #0b5fff;outline-offset:2px}
-.skip{position:absolute;left:-9999px;top:0;background:#0b5fff;color:#fff;padding:.5rem 1rem;z-index:10}
+html{-webkit-text-size-adjust:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;margin:0;color:var(--ink);background:var(--bg);line-height:1.65;-webkit-font-smoothing:antialiased}
+::selection{background:#0b5fff;color:#fff}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{text-underline-offset:5px}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:.6rem 1rem;z-index:10;border-radius:0 0 8px 0;font-size:.9rem}
 .skip:focus{left:0}
-header nav,main{max-width:640px;margin:0 auto;padding-left:1.25rem;padding-right:1.25rem}
-header nav{display:flex;gap:1rem;flex-wrap:wrap;padding-top:1.25rem;font-size:.9rem}
-header nav a[aria-current="page"]{color:inherit;text-decoration:none;font-weight:600}
-main{padding-top:2rem;padding-bottom:3rem}
-h1{font-size:2rem;margin:0 0 .5rem;letter-spacing:-.02em}
-.sub{color:#555;margin:0 0 2rem}
-section{margin:2rem 0}
-h2{font-size:1.1rem;margin:0 0 .5rem}
-ul{margin:.5rem 0;padding-left:1.25rem}
-footer{border-top:1px solid #eee;margin-top:3rem;padding-top:1rem;font-size:.875rem;color:#666}
+.bar{max-width:680px;margin:0 auto;padding:1.1rem 1.5rem;display:flex;align-items:baseline;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--line)}
+.brand{font-weight:700;letter-spacing:-.02em;color:inherit;text-decoration:none;font-size:1.02rem}
+.brand:hover{color:var(--accent)}
+header nav{display:flex;gap:1.1rem;flex-wrap:wrap;font-size:.9rem}
+header nav a{color:var(--muted);text-decoration:none}
+header nav a:hover{color:var(--accent)}
+header nav a[aria-current="page"]{color:var(--ink);font-weight:600}
+main{max-width:680px;margin:0 auto;padding:3rem 1.5rem 3.5rem}
+h1{font-size:clamp(2.2rem,5vw,2.9rem);margin:0 0 .6rem;letter-spacing:-.035em;line-height:1.1;font-weight:750}
+.sub{color:var(--muted);margin:0 0 2.5rem;font-size:1.08rem;line-height:1.6}
+section{margin:2.75rem 0}
+h2{font-size:.82rem;margin:0 0 .7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+ul{margin:.6rem 0;padding-left:1.25rem}
+li{margin:.35rem 0}
+li::marker{color:var(--accent)}
+footer{border-top:1px solid var(--line);margin-top:3.5rem;padding-top:1.25rem;font-size:.85rem;color:var(--muted)}
+footer p{margin:0 0 .6rem}
 footer nav{display:flex;gap:1rem;flex-wrap:wrap}
-@media (prefers-color-scheme:dark){body{color:#e8e8e8;background:#111}.sub{color:#aaa}footer{border-color:#2a2a2a;color:#999}a{color:#7aa8ff}a:focus-visible{outline-color:#7aa8ff}}
+footer nav a{color:var(--muted)}
+footer nav a:hover{color:var(--accent)}
+@media (prefers-color-scheme:dark){:root{--ink:#ededf0;--muted:#a7a7b3;--line:#26262c;--bg:#101014;--accent:#8babff}::selection{background:#8babff;color:#101014}}
+@media (max-width:520px){.bar{padding:1rem 1.25rem}main{padding:2.25rem 1.25rem 3rem}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header><nav aria-label="Primary"><a href="/">Home</a><a href="/about.html" aria-current="page">About</a><a href="/services.html">Services</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a></nav></header>
+<header><div class="bar"><a class="brand" href="/">Treaulab</a><nav aria-label="Primary"><a href="/">Home</a><a href="/about.html" aria-current="page">About</a><a href="/services.html">Services</a><a href="/contact.html">Contact</a><a href="/privacy.html">Privacy</a></nav></div></header>
 <main id="main">
 <h1>About Treaulab</h1>
 <p class="sub">An independent studio building quiet, long-lived software.</p>
