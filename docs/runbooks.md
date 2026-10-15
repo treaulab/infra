@@ -72,7 +72,10 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
 1. Tailscale admin (once, preferred OIDC — no per-key ceremony):
    * Trust credentials → OIDC federated identity: issuer
      `https://token.actions.githubusercontent.com`, subject
-     `repo:andrewwang2161/dotfiles:*`, tags `tag:ci-ephemeral`, scope
+     `repo:<owner>@<owner-id>/<repo>@<repo-id>:*` (immutable format — copy
+     the exact `Received ... from issuer` value from a failed run and replace
+     the tail with `*`; e.g. `repo:andrewwang2161@336265156/dotfiles@1419863416:*`),
+     tags `tag:ci-ephemeral`, scope
      `auth_keys` write. Copy Client ID + Audience into spoke repo VARIABLES.
    * Access Controls → `tagOwners: {"tag:ci-ephemeral": ["you"]}`, SSH
      accept `src: [you]` → `dst: [tag:ci-ephemeral]`, users
@@ -81,11 +84,24 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
      **ephemeral** key per tenant, own tag, short expiry → value goes ONLY
      to tofu (never pasted, never chat).
    * Name the NAT box `box` (`tailscale up --hostname=box`).
-2. Spoke repo (as burner; `andrewwang2161/dotfiles`, PUBLIC): create repo,
-   real dotfiles + README + caller file, pin `@<sha>`. Secret delivery:
-   invite `slancj` Write for the
-   grant window → `tofu/tailnet` apply writes all secrets (never rendered)
-   → **revoke the grant immediately** (re-grant ~30s per future rotation).
+2. Spoke repo(s) (PUBLIC dotfiles + README + caller file, pin `@<sha>`):
+   * One burner → one spoke repo (e.g. `andrewwang2161/dotfiles`). Second
+     burner → second spoke repo, same template, its OWN OIDC vars (each
+     tailnet trusts its own repo subject; vars are per-repo).
+   * OIDC (preferred): set repo VARIABLES `TS_OIDC_CLIENT_ID`/`TS_AUDIENCE`,
+     no grant windows, no secrets.
+   * Bumping the hub pin on hub updates — one command per spoke, run as the
+     account that owns it (no cross-account pushes, no standing edge):
+     ```bash
+     ./scripts/bump-spoke.sh andrewwang2161/dotfiles <hub-sha>  # as burner 1
+     ./scripts/bump-spoke.sh <burner2>/dotfiles <hub-sha>        # as burner 2
+     # or without switching: GH_TOKEN="$(gh auth token --user X)" ./scripts/bump-spoke.sh ...
+     ```
+     The script renders the caller template with the new SHA, skips when
+     already pinned, and never touches vars/secrets.
+   * Legacy authkey path only: invite `slancj` Write for the
+     grant window → `tofu/tailnet` apply writes all secrets (never rendered)
+     → **revoke the grant immediately** (re-grant ~30s per future rotation).
     * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
       and any standing grants — `infra` holds no credentials, no spoke
       carries a standing cross-account edge.
