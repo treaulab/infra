@@ -1,26 +1,19 @@
 # TENANT PATTERN (inert example — copy blocks into live *.tf to activate,
 # ONLY after the spoke repo exists AND the grant window is open).
 #
-# Tenants are keys + environments + secrets + tags, NOT accounts: one
-# burner repo, one github provider (owner = var.spoke_owner), one block
-# trio per tenant. Same secret NAME (TS_AUTHKEY_EPHEMERAL) per GitHub
-# Environment (tailnet-t1, tailnet-t2, ...) — each caller job addresses
-# its own key via `environment:` with zero dynamic secret refs.
+# Tenants are keys + repo secrets + tags, NOT accounts: one burner repo,
+# one github provider (owner = var.spoke_owner), one key + one repo-level
+# secret per tenant (distinct secret_name TS_AUTHKEY_T<n> — Environments
+# are unreachable from reusable-call jobs). The caller addresses its key
+# by secret NAME with zero dynamic refs.
 #
 # Activation checklist per tenant:
 #   1. policy.json: tagOwners/grants/ssh/tests for the tenant tag
 #      (additions only — plan must never show policy deletions).
-#   2. Caller template: copy a job block per tenant (name, environment,
+#   2. Caller file (spoke repo): add a job block (name, secret name,
 #      prefix, offset) — no matrix on `uses` jobs, ever.
 #   3. Grant window open (Write invited) — revoke immediately after apply.
-#   4. Paste the trio below into tenants.tf (new file), plan, apply.
-
-resource "github_repository_environment" "t2" {
-  repository  = var.spoke_repo
-  environment = "tailnet-t2"
-  # Optional dispatch gating: prevent_self_review / reviewers via
-  # github_repository_environment_deployment_policy (branch rules).
-}
+#   4. Paste the pair below into tenants.tf (new file), plan, apply.
 
 resource "tailscale_tailnet_key" "t2" {
   reusable            = true
@@ -32,9 +25,8 @@ resource "tailscale_tailnet_key" "t2" {
   recreate_if_invalid = "always"
 }
 
-resource "github_actions_environment_secret" "t2" {
+resource "github_actions_secret" "t2" {
   repository      = var.spoke_repo
-  environment     = github_repository_environment.t2.environment
-  secret_name     = var.spoke_secret_name
+  secret_name     = "TS_AUTHKEY_T2"
   plaintext_value = tailscale_tailnet_key.t2.key
 }

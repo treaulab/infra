@@ -1,16 +1,14 @@
 # Caller (SPOKE side, SINGLE public repo, e.g. andrewwang2161/dotfiles):
-# one repo fans out N tenants — one calling job per tenant (GitHub forbids
-# matrix + reusable-workflow calls in a single job, so tenants are explicit
-# job blocks, not a matrix). No fleet of accounts.
+# one repo fans out N tenants — one calling job per tenant. No fleet of
+# accounts.
 # Paste as `.github/workflows/tailnet-runner.yml`, then:
 #   1. Replace <PINNED_SHA> with the reviewed treaulab/infra commit SHA
 #      (gh api repos/treaulab/infra/commits/main --jq .sha).
-#   2. Per tenant: create a GitHub Environment named tailnet-<tenant>
-#      holding that tenant's TS_AUTHKEY_EPHEMERAL secret (repo → Settings →
-#      Environments). Same secret NAME per environment, distinct VALUES —
-#      each job picks up its own key with zero dynamic secret refs.
-#      Optional: required reviewers per environment to gate dispatches.
-#   3. Copy a job block below per tenant (name, environment, prefix, offset).
+#   2. Per tenant: ensure a repo-level secret named TS_AUTHKEY_<TENANT>
+#      exists (pilot t1/t2 share TS_AUTHKEY_EPHEMERAL until the tenant trio
+#      in tofu/tailnet/tenants.tf.example mints distinct keys). Delivered by
+#      the tofu ceremony — never pasted, never committed.
+#   3. Copy a job block below per tenant (name, secret name, prefix, offset).
 #
 # Hard rules (do not "simplify"):
 #   - Triggers are schedule + workflow_dispatch ONLY. Never add
@@ -19,7 +17,10 @@
 #   - Pin the hub by SHA, never @main. Never `secrets: inherit`.
 #   - quiet: "true" always (public logs are world-readable).
 #   - Offsets stagger jobs so N nodes don't join at the same second.
-#   - One job per tenant: never reintroduce strategy/matrix on a `uses` job.
+#   - Reusable-call jobs accept ONLY name/uses/with/secrets/needs/if/
+#     permissions — never add strategy/matrix, environment, or runs-on to a
+#     `uses` job. Per-tenant keys are distinct repo secret NAMES, not
+#     Environments (unreachable from `uses` jobs).
 #
 # Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
 
@@ -40,9 +41,7 @@ permissions:
 
 jobs:
   t1:
-    # Schedule runs every job; dispatch filters to one (or all).
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == 't1'
-    environment: tailnet-t1
     concurrency:
       group: tailnet-runner-t1
       cancel-in-progress: false
@@ -59,7 +58,6 @@ jobs:
 
   t2:
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == 't2'
-    environment: tailnet-t2
     concurrency:
       group: tailnet-runner-t2
       cancel-in-progress: false

@@ -1,6 +1,10 @@
-# Spoke-side delivery: minted key(s) land in the hand-created PUBLIC spoke
-# repo's per-tenant Environment secrets, which the matrix caller reads at
-# runtime (same secret NAME per environment, distinct values).
+# Spoke-side delivery: minted key(s) land as repo-level secrets in the
+# hand-created PUBLIC spoke repo, one secret NAME per tenant
+# (TS_AUTHKEY_EPHEMERAL for the pilot, TS_AUTHKEY_T<n> for later tenants),
+# which each caller job passes explicitly at runtime. Environments are
+# deliberately NOT used: reusable-call jobs accept only name/uses/with/
+# secrets/needs/if/permissions, so environment-scoped secrets are
+# unreachable from the caller.
 #
 # Trust direction (explicit): the GITHUB_TOKEN identity (slancj) holds Write
 # on the spoke repo ONLY inside grant windows — invited before apply,

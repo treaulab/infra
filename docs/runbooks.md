@@ -51,8 +51,10 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
   passed explicitly by the caller).
 * Spoke template: `.github/workflows/tailnet-runner-caller.yml.example` —
   paste as `.github/workflows/tailnet-runner.yml`, replace `<PINNED_SHA>`,
-  per-tenant Environments (`tailnet-<tenant>`) each holding that tenant's
-  key under the same secret name. No `secrets: inherit`, never `@main`.
+  one calling job per tenant. Per-tenant keys are distinct repo-level
+  secrets (`TS_AUTHKEY_<TENANT>`; pilot shares `TS_AUTHKEY_EPHEMERAL`) —
+  Environments are unreachable from reusable-call jobs, so they are not
+  used. No `secrets: inherit`, never `@main`.
 * Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
   every 5 min), then exits; debug holds ~17 min for `tailscale ssh` in.
@@ -68,8 +70,8 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
      short expiry → value goes ONLY to tofu (never pasted, never chat).
    * Name the NAT box `box` (`tailscale up --hostname=box`).
 2. Spoke repo (as burner; `andrewwang2161/dotfiles`, PUBLIC): create repo,
-   real dotfiles + README + caller file, pin `@<sha>`, per-tenant
-   Environments with secrets. Secret delivery: invite `slancj` Write for the
+   real dotfiles + README + caller file, pin `@<sha>`. Secret delivery:
+   invite `slancj` Write for the
    grant window → `tofu/tailnet` apply writes all secrets (never rendered)
    → **revoke the grant immediately** (re-grant ~30s per future rotation).
     * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
@@ -77,7 +79,7 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
       carries a standing cross-account edge.
 3. Use: hourly schedule fires on its own (watch heartbeats); debug via Run
    workflow → tenant=all or one → `tailscale ssh runner@gh-<t>-<run-id>`.
-4. Rollback per tenant: revoke its key (+ delete its Environment secret).
+4. Rollback per tenant: revoke its key (+ delete its repo secret).
    Sibling tenants untouched. Full retreat: delete spoke repo.
 5. Warm-up (once, new accounts): days of human commits → debug dispatches
    → daily → hourly. New-account-to-instant-24/7 is the most bot-shaped
