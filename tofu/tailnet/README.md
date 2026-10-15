@@ -1,8 +1,17 @@
-# tofu/tailnet — tailnet policy + per-account keys + spoke secrets, as code
+# tofu/tailnet — tailnet policy as code (OIDC preferred, keys legacy)
 
 Learning root (local state). Manages the **coupling surfaces** of the
 hub/spoke design; the hub workflows themselves stay plain YAML in git.
 VPS infra state (`tofu/`) is never mixed with this root's state.
+
+Preferred (no ceremony): OIDC workload identity federation — one manual
+Trust-credentials setup, spoke VARIABLES `TS_OIDC_CLIENT_ID`/`TS_AUDIENCE`,
+hub `tailnet-runner.yml` connects via `tailscale/github-action` with
+`id-token: write`. No keys, no `github_actions_secret`, no grant windows.
+This root then manages ONLY `tailscale_acl` (policy.json).
+
+Legacy (30-day rotation): `tailscale_tailnet_key` + `github_actions_secret`
+below. Keep for fallback until OIDC is proven.
 
 ```
 OAuth client (manual, scoped, expiring)

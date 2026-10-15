@@ -3,29 +3,43 @@
 # Pure logic, NO triggers of its own: called by spoke repos (one per GitHub
 # account) via `uses: treaulab/infra/.github/workflows/tailnet-runner.yml@<sha>`.
 # This repo (treaulab/infra) runs NOTHING itself and holds NO credentials —
-# the secret lives only in the calling spoke repo.
+# auth lives only in the calling spoke repo (OIDC vars preferred, OAuth or
+# authkey secrets as fallback).
+#
+# Auth priority (first match wins, resolved without `secrets` in `if:`):
+#   1. OIDC workload identity federation (zero secrets, zero rotation):
+#      inputs.ts-oidc-client-id / inputs.ts-audience (from caller vars) or
+#      secrets TS_OIDC_CLIENT_ID / TS_AUDIENCE. Needs federated identity with
+#      `auth_keys` write scope + tag:ci-ephemeral in Tailscale admin.
+#   2. OAuth client (one long-lived secret pair):
+#      secrets TS_OAUTH_CLIENT_ID + TS_OAUTH_SECRET (`auth_keys` write).
+#   3. Legacy authkey (30-day rotation via tofu/tailnet):
+#      secret TS_AUTHKEY_EPHEMERAL (reusable, ephemeral, preapproved).
 #
 # Inputs:
 #   mode: "hourly" (dummy heartbeat loop ~55 min, then exit) or
-#         "debug" (quick filler + ~17 min hold for `tailscale ssh` in).
-#   hostname-prefix: node name becomes <prefix>-<run-id> (e.g. gh-burner).
+#         "debug" (quick filler + dynamic hold up to 60 min for `tailscale ssh` in).
+#   hostname-prefix: node name becomes <prefix>-<run-id> (e.g. gh-t1-123).
+#     Must stay a valid DNS label (lowercase, alphanumeric + dashes).
 #   box-name: tailnet hostname of the NAT box (default "box").
+#   edge-url: public HTTPS URL to curl for the edge check.
 #   quiet: "true" for PUBLIC callers — suppresses node IPs/hostnames from
 #     job logs (public run logs are world-readable). Default "false".
-#   startup-delay-seconds: stagger fan-out (tenant jobs sleep first).
-#     Default "0".
-# Secrets:
-#   TS_AUTHKEY_EPHEMERAL (required): reusable ephemeral Tailscale auth key,
-#   tagged for the CALLER's account (e.g. tag:ci-ephemeral). Never commit it.
+#   startup-delay-seconds: stagger fan-out (tenant jobs set 0, 180, ...).
+#   tag: tailnet tag applied to ephemeral nodes (must exist + be permitted
+#     by the OIDC/OAuth credential). Default "tag:ci-ephemeral".
+#   ts-oidc-client-id / ts-audience: federated identity Client ID + Audience,
+#     passed by the caller from its repo vars (public identifiers, not secrets).
+#   tailscale-version: pinned Tailscale version for the action. Bump together.
 #
-# Caller requirements: caller repo passes its own secret explicitly
-# (never `inherit`), pins this file by commit SHA, and sets its own
-# schedule/dispatch triggers. Callers need zero access grants on this repo
-# (public read is enough for `uses:`).
+# Caller requirements: caller repo passes its auth explicitly
+# (never `inherit`), pins this file by commit SHA, sets its own
+# schedule/dispatch triggers, and grants `id-token: write` for OIDC.
+# Callers need zero access grants on this repo (public read is enough).
 #
 # Invariants (kept from the original design):
 # - NOT on the VPS. Hosted runner dies with the job; node auto-vanishes.
-# - Tailscale SSH IN (`tailscale up --ssh`); tailnet policy must accept
+# - Tailscale SSH IN (`--ssh`); tailnet policy must accept
 #   src you → dst <caller's tag>, users ["runner","root"].
 # - NO ssh/scp smoke into the box: checks are `tailscale ping` (L3) + curl.
 # - Hourly legs run a no-network gcc smoke build first (~2s, deterministic
@@ -37,7 +51,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: '"hourly" (dummy 1h heartbeat) or "debug" (filler + hold)'
+        description: '"hourly" (dummy 1h heartbeat) or "debug" (filler + dynamic hold)'
         required: false
         default: "hourly"
         type: string
@@ -66,13 +80,46 @@ on:
         required: false
         default: "0"
         type: string
+      tag:
+        description: "Tailnet tag for ephemeral nodes (must be permitted by the credential)"
+        required: false
+        default: "tag:ci-ephemeral"
+        type: string
+      ts-oidc-client-id:
+        description: "Federated identity Client ID (public identifier, caller passes from its vars)"
+        required: false
+        default: ""
+        type: string
+      ts-audience:
+        description: "Federated identity Audience (public identifier, caller passes from its vars)"
+        required: false
+        default: ""
+        type: string
+      tailscale-version:
+        description: "Pinned Tailscale version for tailscale/github-action"
+        required: false
+        default: "1.94.2"
+        type: string
     secrets:
       TS_AUTHKEY_EPHEMERAL:
-        description: "Reusable ephemeral Tailscale auth key (caller-account tag)"
-        required: true
+        description: "Legacy reusable ephemeral authkey (fallback when OIDC/OAuth absent)"
+        required: false
+      TS_OAUTH_CLIENT_ID:
+        description: "OAuth client ID (fallback path, auth_keys write)"
+        required: false
+      TS_OAUTH_SECRET:
+        description: "OAuth client secret (fallback path, auth_keys write)"
+        required: false
+      TS_OIDC_CLIENT_ID:
+        description: "Federated identity Client ID as secret (alt to ts-oidc-client-id input)"
+        required: false
+      TS_AUDIENCE:
+        description: "Federated identity Audience as secret (alt to ts-audience input)"
+        required: false
 
 permissions:
   contents: read
+  id-token: write # required for OIDC workload identity federation
 
 jobs:
   shell:
@@ -84,30 +131,79 @@ jobs:
       - name: Stagger fan-out (tenant jobs set 180+; 0 = no-op)
         run: sleep ${{ inputs.startup-delay-seconds }}
 
-      - name: Install Tailscale (pinned apt, no action pin drift)
-        run: |
-          set -euo pipefail
-          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
-            | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
-          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list \
-            | sudo tee /etc/apt/sources.list.d/tailscale.list
-          sudo apt-get update
-          sudo apt-get install -y tailscale
-          tailscale version
-
-      - name: Join tailnet (ephemeral, Tailscale SSH in)
+      # Resolve auth mode without `secrets.*` in `if:` (GitHub rejects that).
+      # `with:` below may reference secrets directly — only `if:` is restricted.
+      - name: Resolve auth mode (oidc > oauth > authkey)
+        id: auth
         env:
-          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+          INPUT_OIDC: ${{ inputs.ts-oidc-client-id }}
+          INPUT_AUD: ${{ inputs.ts-audience }}
+          SECRET_OIDC: ${{ secrets.TS_OIDC_CLIENT_ID }}
+          SECRET_AUD: ${{ secrets.TS_AUDIENCE }}
+          SECRET_OAUTH_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          SECRET_OAUTH_SEC: ${{ secrets.TS_OAUTH_SECRET }}
+          SECRET_KEY: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
         run: |
           set -euo pipefail
-          # Key must be tagged for the CALLER's account + ephemeral (set in
-          # Tailscale admin at key creation). Hostname is per-run so each run
-          # shows distinctly and vanishes on job end.
-          sudo tailscale up \
-            --auth-key="$TS_AUTHKEY" \
-            --hostname="${{ inputs.hostname-prefix }}-${{ github.run_id }}" \
-            --accept-dns=false \
-            --ssh
+          OIDC_ID="${INPUT_OIDC:-$SECRET_OIDC}"
+          OIDC_AUD="${INPUT_AUD:-$SECRET_AUD}"
+          if [ -n "${OIDC_ID:-}" ] && [ -n "${OIDC_AUD:-}" ]; then
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "Using OIDC workload identity federation (zero static secrets)."
+          elif [ -n "${SECRET_OAUTH_ID:-}" ] && [ -n "${SECRET_OAUTH_SEC:-}" ]; then
+            echo "mode=oauth" >> "$GITHUB_OUTPUT"
+            echo "Using OAuth client secret path."
+          elif [ -n "${SECRET_KEY:-}" ]; then
+            echo "mode=authkey" >> "$GITHUB_OUTPUT"
+            echo "Using legacy authkey path."
+          else
+            echo "mode=missing" >> "$GITHUB_OUTPUT"
+            echo "::error::No Tailscale auth configured. Provide OIDC (ts-oidc-client-id + ts-audience), OAuth (TS_OAUTH_CLIENT_ID + TS_OAUTH_SECRET), or legacy TS_AUTHKEY_EPHEMERAL."
+          fi
+
+      # Fast connect (~3s static binary, cached). Pinned by SHA, never @main.
+      # tailscale/github-action v4 @d1b6cd2 (v4 series). Bump SHA + version together.
+      - name: Connect Tailscale via OIDC (preferred, zero rotation)
+        if: steps.auth.outputs.mode == 'oidc'
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
+        with:
+          oauth-client-id: ${{ inputs.ts-oidc-client-id || secrets.TS_OIDC_CLIENT_ID }}
+          audience: ${{ inputs.ts-audience || secrets.TS_AUDIENCE }}
+          tags: ${{ inputs.tag }}
+          hostname: ${{ inputs.hostname-prefix }}-${{ github.run_id }}
+          version: ${{ inputs.tailscale-version }}
+          args: --ssh --accept-dns=false
+
+      - name: Connect Tailscale via OAuth (fallback, long-lived pair)
+        if: steps.auth.outputs.mode == 'oauth'
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ inputs.tag }}
+          hostname: ${{ inputs.hostname-prefix }}-${{ github.run_id }}
+          version: ${{ inputs.tailscale-version }}
+          args: --ssh --accept-dns=false
+
+      - name: Connect Tailscale via authkey (legacy, 30-day rotation)
+        if: steps.auth.outputs.mode == 'authkey'
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+          hostname: ${{ inputs.hostname-prefix }}-${{ github.run_id }}
+          version: ${{ inputs.tailscale-version }}
+          args: --ssh --accept-dns=false
+
+      - name: Fail fast when no auth configured
+        if: steps.auth.outputs.mode == 'missing'
+        run: |
+          echo "No Tailscale auth: set caller vars TS_OIDC_CLIENT_ID/TS_AUDIENCE (preferred) or secrets TS_OAUTH_* / TS_AUTHKEY_EPHEMERAL." >&2
+          exit 1
+
+      - name: Show node (quiet-aware)
+        run: |
+          set -euo pipefail
+          tailscale version
           if [ "${{ inputs.quiet }}" = "true" ]; then
             echo "(quiet mode: node IPs withheld — public logs are world-readable)"
             echo "ssh in with: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
@@ -125,13 +221,31 @@ jobs:
           tailscale ping --c 3 "${{ inputs.box-name }}" || echo "(ping failed — is the NAT box on the tailnet as '${{ inputs.box-name }}'?)"
           curl -sI --max-time 10 "${{ inputs.edge-url }}" | head -5 || echo "(curl failed — ok while tunnel/DNS still settling)"
 
-      - name: Hold window open (debug use, then self-destruct)
+      - name: Hold window open (debug use, early-exit via /tmp/kill)
         if: inputs.mode == 'debug'
         run: |
-          echo "Alive for ~17 more minutes."
-          echo "From your tailnet machine: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
-          echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral key)."
-          sleep 1050
+          set -euo pipefail
+          echo "=========================================================="
+          echo "SSH box is LIVE (up to 60 min)."
+          echo "Connect: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
+          echo "End early from inside SSH: touch /tmp/kill"
+          echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral)."
+          echo "=========================================================="
+          MAX_SECONDS=3600
+          START=$(date +%s)
+          while true; do
+            NOW=$(date +%s)
+            ELAPSED=$((NOW - START))
+            if [ -f /tmp/kill ]; then
+              echo "Kill trigger received (/tmp/kill). Exiting cleanly after ${ELAPSED}s."
+              break
+            fi
+            if [ "$ELAPSED" -ge "$MAX_SECONDS" ]; then
+              echo "Time limit (${MAX_SECONDS}s) reached. Exiting."
+              break
+            fi
+            sleep 10
+          done
 
       # Dummy task payload: a real no-network compile+run (system gcc is
       # preinstalled on ubuntu-24.04 runners — no downloads, ~2s). Output is

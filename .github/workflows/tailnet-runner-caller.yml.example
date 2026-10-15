@@ -4,11 +4,18 @@
 # Paste as `.github/workflows/tailnet-runner.yml`, then:
 #   1. Replace <PINNED_SHA> with the reviewed treaulab/infra commit SHA
 #      (gh api repos/treaulab/infra/commits/main --jq .sha).
-#   2. Per tenant: ensure a repo-level secret named TS_AUTHKEY_<TENANT>
-#      exists (pilot t1/t2 share TS_AUTHKEY_EPHEMERAL until the tenant trio
-#      in tofu/tailnet/tenants.tf.example mints distinct keys). Delivered by
-#      the tofu ceremony — never pasted, never committed.
-#   3. Copy a job block below per tenant (name, secret name, prefix, offset).
+#   2. Preferred (zero secrets, zero rotation): Tailscale admin → Trust
+#      credentials → OIDC federated identity (issuer
+#      https://token.actions.githubusercontent.com, subject
+#      repo:<owner>/<repo>:*, tags tag:ci-ephemeral, scope auth_keys write).
+#      Add repo VARIABLES (not secrets — public identifiers):
+#        TS_OIDC_CLIENT_ID = <federated identity Client ID>
+#        TS_AUDIENCE       = <federated identity Audience>
+#      No secrets needed; no tofu ceremony; nothing to rotate.
+#   3. Fallback: repo secrets TS_OAUTH_CLIENT_ID + TS_OAUTH_SECRET
+#      (OAuth client, auth_keys write), or legacy TS_AUTHKEY_EPHEMERAL
+#      (pilot t1/t2 share it until tenants.tf mints distinct keys via tofu).
+#   4. Copy a job block below per tenant (name, prefix, offset).
 #
 # Hard rules (do not "simplify"):
 #   - Triggers are schedule + workflow_dispatch ONLY. Never add
@@ -21,6 +28,7 @@
 #     permissions — never add strategy/matrix, environment, or runs-on to a
 #     `uses` job. Per-tenant keys are distinct repo secret NAMES, not
 #     Environments (unreachable from `uses` jobs).
+#   - OIDC needs `id-token: write` on each calling job (else token exchange fails).
 #
 # Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
 
@@ -45,6 +53,9 @@ jobs:
     concurrency:
       group: tailnet-runner-t1
       cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
     uses: treaulab/infra/.github/workflows/tailnet-runner.yml@<PINNED_SHA>
     with:
       mode: ${{ github.event_name == 'schedule' && 'hourly' || 'debug' }}
@@ -53,14 +64,22 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "0"
+      tag: tag:ci-ephemeral
+      ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
+      ts-audience: ${{ vars.TS_AUDIENCE }}
     secrets:
       TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
   t2:
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == 't2'
     concurrency:
       group: tailnet-runner-t2
       cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
     uses: treaulab/infra/.github/workflows/tailnet-runner.yml@<PINNED_SHA>
     with:
       mode: ${{ github.event_name == 'schedule' && 'hourly' || 'debug' }}
@@ -69,5 +88,10 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "180"
+      tag: tag:ci-ephemeral
+      ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
+      ts-audience: ${{ vars.TS_AUDIENCE }}
     secrets:
       TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}

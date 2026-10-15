@@ -47,27 +47,39 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
 * Hub: `.github/workflows/tailnet-runner.yml` (`workflow_call`,
   inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`,
   `quiet` (public-log scrub — spokes set `"true"`),
-  `startup-delay-seconds` (stagger so jobs don't join at the same second); secret `TS_AUTHKEY_EPHEMERAL`
-  passed explicitly by the caller).
+  `startup-delay-seconds` (stagger so jobs don't join at the same second),
+  `tag` + `ts-oidc-client-id`/`ts-audience` (OIDC, preferred); secrets
+  `TS_OAUTH_*` (fallback) or `TS_AUTHKEY_EPHEMERAL` (legacy) passed
+  explicitly by the caller).
 * Spoke template: `.github/workflows/tailnet-runner-caller.yml.example` —
   paste as `.github/workflows/tailnet-runner.yml`, replace `<PINNED_SHA>`,
-  one calling job per tenant. Per-tenant keys are distinct repo-level
-  secrets (`TS_AUTHKEY_<TENANT>`; pilot shares `TS_AUTHKEY_EPHEMERAL`) —
+  one calling job per tenant. Preferred: repo VARIABLES `TS_OIDC_CLIENT_ID`/
+  `TS_AUDIENCE` (zero secrets, zero rotation); fallback per-tenant secrets
+  (`TS_OAUTH_*` or `TS_AUTHKEY_<TENANT>`) —
   Environments are unreachable from reusable-call jobs, so they are not
-  used. No `secrets: inherit`, never `@main`.
+  used. No `secrets: inherit`, never `@main`. Each calling job needs
+  `permissions: id-token: write` for OIDC.
 * Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
-  every 5 min), then exits; debug holds ~17 min for `tailscale ssh` in.
+  every 5 min), then exits; debug holds up to 60 min for `tailscale ssh` in,
+  `touch /tmp/kill` inside SSH exits early.
   NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
 * Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
   fork-PR workflows require approval, cron offsets per job, runner stays idle.
+* Launcher: `./scripts/gh-shell.sh [t1|t2]` dispatches, waits for
+  `gh-<tenant>-*` on the tailnet, then `tailscale ssh` in.
 
-1. Tailscale admin (once per tenant key):
-   * Access Controls → `tagOwners: {"tag:ci-<tenant>": ["you"]}`, SSH
-     accept `src: [you]` → `dst: [tag:ci-<tenant>]`, users
+1. Tailscale admin (once, preferred OIDC — no per-key ceremony):
+   * Trust credentials → OIDC federated identity: issuer
+     `https://token.actions.githubusercontent.com`, subject
+     `repo:andrewwang2161/dotfiles:*`, tags `tag:ci-ephemeral`, scope
+     `auth_keys` write. Copy Client ID + Audience into spoke repo VARIABLES.
+   * Access Controls → `tagOwners: {"tag:ci-ephemeral": ["you"]}`, SSH
+     accept `src: [you]` → `dst: [tag:ci-ephemeral]`, users
      `["runner","root"]`. No exit-node / subnet routes.
-   * Settings → Keys → reusable **ephemeral** key per tenant, own tag,
-     short expiry → value goes ONLY to tofu (never pasted, never chat).
+   * Legacy path (only if OIDC unavailable): Settings → Keys → reusable
+     **ephemeral** key per tenant, own tag, short expiry → value goes ONLY
+     to tofu (never pasted, never chat).
    * Name the NAT box `box` (`tailscale up --hostname=box`).
 2. Spoke repo (as burner; `andrewwang2161/dotfiles`, PUBLIC): create repo,
    real dotfiles + README + caller file, pin `@<sha>`. Secret delivery:
