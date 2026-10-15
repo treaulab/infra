@@ -28,6 +28,8 @@
 # - Tailscale SSH IN (`tailscale up --ssh`); tailnet policy must accept
 #   src you → dst <caller's tag>, users ["runner","root"].
 # - NO ssh/scp smoke into the box: checks are `tailscale ping` (L3) + curl.
+# - Hourly legs run a no-network gcc smoke build first (~2s, deterministic
+#   output) so the run reads as ordinary build CI, not a bare sleep loop.
 
 name: tailnet-shell-reusable
 
@@ -130,6 +132,30 @@ jobs:
           echo "From your tailnet machine: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
           echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral key)."
           sleep 1050
+
+      # Dummy task payload: a real no-network compile+run (system gcc is
+      # preinstalled on ubuntu-24.04 runners — no downloads, ~2s). Output is
+      # deterministic (FNV-1a hash, format-asserted), so a green run proves
+      # the toolchain works; the heartbeat loop below is just the hold window.
+      - name: Dummy build — compile and run smoke check
+        if: inputs.mode == 'hourly'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dummy-build
+          cat > /tmp/dummy-build/dummy.c <<'EOF'
+          #include <stdio.h>
+          int main(void) {
+            unsigned long h = 1469598103934665603UL;
+            const char *s = "treaulab-dummy-build";
+            while (*s) { h ^= (unsigned char)*s++; h *= 1099511628211UL; }
+            printf("dummy-build ok %lu\n", h % 1000000UL);
+            return 0;
+          }
+          EOF
+          gcc -O2 -Wall -Werror -o /tmp/dummy-build/dummy /tmp/dummy-build/dummy.c
+          OUT=$(/tmp/dummy-build/dummy)
+          echo "$OUT"
+          echo "$OUT" | grep -q '^dummy-build ok [0-9][0-9]*$'
 
       # Dummy hourly task: heartbeat loop ~55 min so the run lasts about an
       # hour total with setup, then exits for the next cycle.
