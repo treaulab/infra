@@ -4,13 +4,14 @@
 # Tenants are keys + environments + secrets + tags, NOT accounts: one
 # burner repo, one github provider (owner = var.spoke_owner), one block
 # trio per tenant. Same secret NAME (TS_AUTHKEY_EPHEMERAL) per GitHub
-# Environment (tailnet-t1, tailnet-t2, ...) — the matrix caller addresses
+# Environment (tailnet-t1, tailnet-t2, ...) — each caller job addresses
 # its own key via `environment:` with zero dynamic secret refs.
 #
 # Activation checklist per tenant:
 #   1. policy.json: tagOwners/grants/ssh/tests for the tenant tag
 #      (additions only — plan must never show policy deletions).
-#   2. Caller template: add the tenant to matrix `include` (name + offset).
+#   2. Caller template: copy a job block per tenant (name, environment,
+#      prefix, offset) — no matrix on `uses` jobs, ever.
 #   3. Grant window open (Write invited) — revoke immediately after apply.
 #   4. Paste the trio below into tenants.tf (new file), plan, apply.
 

@@ -12,7 +12,7 @@
 #   box-name: tailnet hostname of the NAT box (default "box").
 #   quiet: "true" for PUBLIC callers — suppresses node IPs/hostnames from
 #     job logs (public run logs are world-readable). Default "false".
-#   startup-delay-seconds: stagger fan-out (matrix legs sleep first).
+#   startup-delay-seconds: stagger fan-out (tenant jobs sleep first).
 #     Default "0".
 # Secrets:
 #   TS_AUTHKEY_EPHEMERAL (required): reusable ephemeral Tailscale auth key,
@@ -62,7 +62,7 @@ on:
         default: "false"
         type: string
       startup-delay-seconds:
-        description: "Stagger fan-out: sleep this long before tailscale up (matrix legs)"
+        description: "Stagger fan-out: sleep this long before tailscale up (tenant jobs set 0, 180, ...)"
         required: false
         default: "0"
         type: string
@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Stagger fan-out (matrix legs only; 0 = no-op)
+      - name: Stagger fan-out (tenant jobs set 180+; 0 = no-op)
         run: sleep ${{ inputs.startup-delay-seconds }}
 
       - name: Install Tailscale (pinned apt, no action pin drift)

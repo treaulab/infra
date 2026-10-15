@@ -41,23 +41,24 @@ zero VPS egress, no card (CLI flow). Full runbook lives in
 
 This repo is the **hub**: pure reusable logic, zero credentials, runs nothing
 itself. A single burner-owned **public** repo (`dotfiles`: real dotfiles +
-README stating the workflow's purpose + caller file) fans out N tenants by
-matrix — one repo, one account, no fleet:
+README stating the workflow's purpose + caller file) fans out N tenants, one
+calling job per tenant — one repo, one account, no fleet (GitHub forbids
+matrix on reusable-workflow calls, so tenants are explicit job blocks):
 * Hub: `.github/workflows/tailnet-runner.yml` (`workflow_call`,
   inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`,
   `quiet` (public-log scrub — spokes set `"true"`),
-  `startup-delay-seconds` (matrix stagger); secret `TS_AUTHKEY_EPHEMERAL`
+  `startup-delay-seconds` (stagger so jobs don't join at the same second); secret `TS_AUTHKEY_EPHEMERAL`
   passed explicitly by the caller).
 * Spoke template: `.github/workflows/tailnet-runner-caller.yml.example` —
   paste as `.github/workflows/tailnet-runner.yml`, replace `<PINNED_SHA>`,
   per-tenant Environments (`tailnet-<tenant>`) each holding that tenant's
   key under the same secret name. No `secrets: inherit`, never `@main`.
-* Legs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
+* Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
   every 5 min), then exits; debug holds ~17 min for `tailscale ssh` in.
   NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
 * Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
-  fork-PR workflows require approval, cron offsets per leg, runner stays idle.
+  fork-PR workflows require approval, cron offsets per job, runner stays idle.
 
 1. Tailscale admin (once per tenant key):
    * Access Controls → `tagOwners: {"tag:ci-<tenant>": ["you"]}`, SSH
@@ -74,7 +75,7 @@ matrix — one repo, one account, no fleet:
     * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
       and any standing grants — `infra` holds no credentials, no spoke
       carries a standing cross-account edge.
-3. Use: hourly matrix fires on its own (watch heartbeats); debug via Run
+3. Use: hourly schedule fires on its own (watch heartbeats); debug via Run
    workflow → tenant=all or one → `tailscale ssh runner@gh-<t>-<run-id>`.
 4. Rollback per tenant: revoke its key (+ delete its Environment secret).
    Sibling tenants untouched. Full retreat: delete spoke repo.
