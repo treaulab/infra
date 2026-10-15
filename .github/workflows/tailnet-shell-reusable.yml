@@ -10,6 +10,10 @@
 #         "debug" (quick filler + ~17 min hold for `tailscale ssh` in).
 #   hostname-prefix: node name becomes <prefix>-<run-id> (e.g. gh-burner).
 #   box-name: tailnet hostname of the NAT box (default "box").
+#   quiet: "true" for PUBLIC callers — suppresses node IPs/hostnames from
+#     job logs (public run logs are world-readable). Default "false".
+#   startup-delay-seconds: stagger fan-out (matrix legs sleep first).
+#     Default "0".
 # Secrets:
 #   TS_AUTHKEY_EPHEMERAL (required): reusable ephemeral Tailscale auth key,
 #   tagged for the CALLER's account (e.g. tag:ci-ephemeral). Never commit it.
@@ -50,6 +54,16 @@ on:
         required: false
         default: "https://box.treau.me/"
         type: string
+      quiet:
+        description: '"true" suppresses node IPs/hostnames from logs (public callers)'
+        required: false
+        default: "false"
+        type: string
+      startup-delay-seconds:
+        description: "Stagger fan-out: sleep this long before tailscale up (matrix legs)"
+        required: false
+        default: "0"
+        type: string
     secrets:
       TS_AUTHKEY_EPHEMERAL:
         description: "Reusable ephemeral Tailscale auth key (caller-account tag)"
@@ -64,6 +78,9 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
+
+      - name: Stagger fan-out (matrix legs only; 0 = no-op)
+        run: sleep ${{ inputs.startup-delay-seconds }}
 
       - name: Install Tailscale (pinned apt, no action pin drift)
         run: |
@@ -89,9 +106,14 @@ jobs:
             --hostname="${{ inputs.hostname-prefix }}-${{ github.run_id }}" \
             --accept-dns=false \
             --ssh
-          tailscale status
-          echo "--- tailnet IPv4 (ssh in with: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}) ---"
-          tailscale ip -4
+          if [ "${{ inputs.quiet }}" = "true" ]; then
+            echo "(quiet mode: node IPs withheld — public logs are world-readable)"
+            echo "ssh in with: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
+          else
+            tailscale status
+            echo "--- tailnet IPv4 (ssh in with: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}) ---"
+            tailscale ip -4
+          fi
 
       # Debug filler: one quick check, then the hold below.
       - name: Filler — tailnet ping + edge HTTP (no SSH smoke)
@@ -122,7 +144,11 @@ jobs:
           while [ "$(date +%s)" -lt "$END" ]; do
             i=$((i + 1))
             STAMP=$(date -u +%FT%TZ)
-            PING=$(tailscale ping --c 1 "${{ inputs.box-name }}" 2>&1 | tail -1 || echo "ping-fail")
+            if [ "${{ inputs.quiet }}" = "true" ]; then
+              PING=$(tailscale ping --c 1 "${{ inputs.box-name }}" >/dev/null 2>&1 && echo "ok" || echo "fail")
+            else
+              PING=$(tailscale ping --c 1 "${{ inputs.box-name }}" 2>&1 | tail -1 || echo "ping-fail")
+            fi
             CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${{ inputs.edge-url }}" || echo "curl-fail")
             echo "heartbeat $i $STAMP ping=[$PING] http=[$CODE]"
             sleep 300

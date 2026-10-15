@@ -1,25 +1,34 @@
-# Caller template (SPOKE side): paste into each account's repo as
-# `.github/workflows/tailnet-shell.yml`, then replace <PINNED_SHA> with the
-# commit SHA of treaulab/infra you reviewed (get it via:
-#   git -C /path/to/infra rev-parse HEAD
-# or: gh api repos/treaulab/infra/commits/main --jq .sha).
+# Caller (SPOKE side, SINGLE public repo, e.g. andrewwang2161/dotfiles):
+# one repo fans out N tenants by matrix — no fleet of accounts.
+# Paste as `.github/workflows/tailnet-shell.yml`, then:
+#   1. Replace <PINNED_SHA> with the reviewed treaulab/infra commit SHA
+#      (gh api repos/treaulab/infra/commits/main --jq .sha).
+#   2. Per tenant: create a GitHub Environment named tailnet-<tenant>
+#      holding that tenant's TS_AUTHKEY_EPHEMERAL secret (repo → Settings →
+#      Environments). Same secret NAME per environment, distinct VALUES —
+#      the matrix leg picks up its own key with zero dynamic secret refs.
+#      Optional: required reviewers per environment to gate dispatches.
+#   3. Extend the matrix `include` below (one entry per tenant).
 #
-# Each spoke repo (e.g. andrewwang2161/dotfiles, private) needs:
-#   1. Its secret WRITTEN BY tofu/tailnet (never hand-set): hub-admin holds
-#      Write on the spoke for secret delivery only (revocable anytime).
-#      Key: own per-account key, same tailnet, own tag (pilot tag:ci-ephemeral).
-#   2. This file with its own triggers + hostname-prefix per account.
-# Spoke repos need ZERO access grants on treaulab/infra (public read is
-# enough for `uses:`). Never use `secrets: inherit` — pass explicitly.
+# Hard rules (do not "simplify"):
+#   - Triggers are schedule + workflow_dispatch ONLY. Never add
+#     pull_request/push — fork code must never execute in this repo.
+#   - Fork-PR workflows: require approval (repo Settings → Actions).
+#   - Pin the hub by SHA, never @main. Never `secrets: inherit`.
+#   - quiet: "true" always (public logs are world-readable).
+#   - Offsets stagger legs so N nodes don't join at the same second.
 #
-# Triggers below mirror the original design: hourly bounded work + manual
-# debug dispatch. Dispatch rights = whoever has Write on the SPOKE repo
-# (no gates needed — the repo owner IS the identity).
+# Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
 
 name: tailnet-shell
 
 on:
   workflow_dispatch:
+    inputs:
+      tenant:
+        description: "'all' (hourly shape) or one tenant (debug hold)"
+        required: false
+        default: "all"
   schedule:
     - cron: "7 * * * *"
 
@@ -27,30 +36,29 @@ permissions:
   contents: read
 
 concurrency:
-  group: tailnet-shell
+  group: tailnet-shell-${{ matrix.tenant }}
   cancel-in-progress: false
 
 jobs:
-  # Hourly bounded work (change prefix per account: gh-burner, gh-acct3, ...).
-  hourly:
-    if: github.event_name == 'schedule'
+  shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tenant: t1
+            offset: "0"
+          - tenant: t2
+            offset: "180"
+    # Schedule runs every leg; dispatch filters to one (or all).
+    if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == matrix.tenant
+    environment: tailnet-${{ matrix.tenant }}
     uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<PINNED_SHA>
     with:
-      mode: hourly
-      hostname-prefix: gh-burner
+      mode: ${{ github.event_name == 'schedule' && 'hourly' || 'debug' }}
+      hostname-prefix: gh-${{ matrix.tenant }}
       box-name: box
       edge-url: https://box.treau.me/
-    secrets:
-      TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}
-
-  # Manual debug session (Tailscale SSH in, ~17 min hold).
-  debug:
-    if: github.event_name == 'workflow_dispatch'
-    uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<PINNED_SHA>
-    with:
-      mode: debug
-      hostname-prefix: gh-burner
-      box-name: box
-      edge-url: https://box.treau.me/
+      quiet: "true"
+      startup-delay-seconds: ${{ matrix.offset }}
     secrets:
       TS_AUTHKEY_EPHEMERAL: ${{ secrets.TS_AUTHKEY_EPHEMERAL }}

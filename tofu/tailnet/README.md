@@ -35,11 +35,14 @@ Client prerequisites (set once in Tailscale admin): scopes `auth_keys` +
 including `tag:ci-ephemeral`, shortest expiry. Fallback instead of the
 pair: a pre-minted access token as `TAILSCALE_API_KEY` (one path, not both).
 
-Plus one trust grant (burner side, one click): spoke repo
-`andrewwang2161/dotfiles` (private, innocuously named) → Settings →
-Collaborators → invite `slancj` with **Write**. Direction is explicit: spoke trusts hub-admin
-for secret delivery only. Revocable there anytime (breaks future rotations
-only — live runs continue until the key itself is revoked).
+Plus one trust grant (burner side, one click per ceremony): spoke repo
+`andrewwang2161/dotfiles` (PUBLIC, plain dotfiles + README + caller) →
+Settings → Collaborators → invite `slancj` with **Write** for the grant
+window only, then **revoke immediately after apply** (re-grant ~30s per
+future rotation). Direction is explicit: spoke trusts hub-admin for secret
+delivery during ceremonies. No standing cross-account edge, ever. Strict
+alternative (zero grants): per-ceremony burner PAT in env while tofu mints
+via admin OAuth — same outcome, more labor (see §6).
 
 ## 1. Order of operations (pilot: burner)
 
@@ -58,12 +61,13 @@ tofu import tailscale_acl.main acl
 # STEP 2 — plan MUST show only your additions (tag grants/ssh/tests + 2 creates):
 tofu plan
 
-# STEP 3 — apply (mints key with tag:ci-ephemeral, writes spoke secret):
+# STEP 3 — apply (mints key(s), writes spoke secret(s) — values never
+# rendered, never pasted). Revoke the Write grant immediately after.
 tofu apply
 chmod 600 terraform.tfstate  # state holds LIVE key material (see §4)
 
 # STEP 4 — test from the spoke side (as burner):
-# Actions → tailnet-shell → Run workflow → tailscale ssh in → node vanishes.
+# Actions → tailnet-shell → Run workflow (tenant=t1) → tailscale ssh in.
 ```
 
 ## 2. Rotation (routine, no drama)
@@ -83,8 +87,8 @@ tofu taint tailscale_tailnet_key.spoke && tofu apply
 2. Then reconcile: `tofu taint ... && tofu apply` (fresh key + secret), or
    remove the resource + apply if the account is being offboarded (also
    delete its spoke repo + tag blocks from policy.json in a second apply).
-3. Sibling accounts: untouched — separate keys, separate secrets, separate
-   tags. That separation is the entire point of per-account keys.
+3. Sibling tenants: untouched — separate keys, separate secrets, separate
+   tags. That separation is the entire point of per-tenant keys.
 
 ## 4. State hygiene (local-state learning root — read twice)
 
@@ -103,15 +107,20 @@ Uncomment the `azurerm` backend in `versions.tf`, create the storage
 resources (encrypted at rest, private container, locked), `tofu init -migrate-state`,
 verify `plan` is empty, then delete local state with `shred -u`.
 
-## 6. Account #3 pattern (no redesign)
+## 6. Tenant pattern (one repo, N keys — no fleet, no new providers)
 
-1. Hand-create spoke repo as that account; invite hub-admin Write (revocable).
-2. Add to this root: aliased provider (`provider "github" { alias="acct3",
-   owner="acct3login" }`) + copied `tailscale_tailnet_key` /
-   `github_actions_secret` blocks pinned to it (aliases can't `for_each` —
-   explicit blocks are the honest pattern at this scale).
-3. New tag (`tag:ci-acct3`) → tagOwners/grants/ssh/tests in `policy.json` →
-   import already done → `plan` shows additions only → apply.
+Tenants are keys + secrets + tags, NOT accounts: same burner repo, same
+github provider, one `tailscale_tailnet_key` + one
+`github_actions_secret` per tenant (distinct `secret_name`, distinct tag —
+see `tenants.tf.example`). New tag (`tag:ci-t2`) → tagOwners/grants/ssh/
+tests in `policy.json` → `plan` shows additions only → grant window →
+apply → revoke. Pilot `spoke` blocks migrate to `t1` naming when the spoke
+repo exists (explicit state mv, human decision — not done preemptively).
+
+Strict variant (zero grants, zero foreign-authored commits): per-ceremony
+burner PAT (`GH_BURNER_TOKEN`, that repo only, days-long expiry, revoke
+after) as the github provider token for the apply. Same resources, no
+grant window, more labor per rotation.
 
 ## 7. CI posture
 

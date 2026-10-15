@@ -37,38 +37,50 @@ zero VPS egress, no card (CLI flow). Full runbook lives in
 6. Prove VPS silence: `docker logs caddy --tail 20` shows nothing new.
    Rollback = delete the two CNAMEs + stop NAT-box service (VPS unchanged).
 
-## Tailnet shell (hub + per-account spokes, NOT on VPS)
+## Tailnet shell (hub + ONE burner spoke repo, NOT on VPS)
 
 This repo is the **hub**: pure reusable logic, zero credentials, runs nothing
-itself. Each GitHub account owns a **spoke** repo that calls the hub:
+itself. A single burner-owned **public** repo (`dotfiles`: real dotfiles +
+README stating the workflow's purpose + caller file) fans out N tenants by
+matrix — one repo, one account, no fleet:
 * Hub: `.github/workflows/tailnet-shell-reusable.yml` (`workflow_call`,
-  inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`;
-  secret `TS_AUTHKEY_EPHEMERAL` passed explicitly by the caller).
+  inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`,
+  `quiet` (public-log scrub — spokes set `"true"`),
+  `startup-delay-seconds` (matrix stagger); secret `TS_AUTHKEY_EPHEMERAL`
+  passed explicitly by the caller).
 * Spoke template: `.github/workflows/tailnet-shell-caller.yml.example` —
-  paste as `.github/workflows/tailnet-shell.yml` in the account repo,
-  replace `<PINNED_SHA>`, set that repo's own secret. No `secrets: inherit`.
-* Spoke runs as `gh-<acct>-<run-id>` (Tailscale SSH in). Hourly mode holds
-  ~1 hour (dummy heartbeat: timestamp + `ping box` + `curl box.treau.me`
-  every 5 min), then exits; debug mode holds ~17 min for `tailscale ssh` in.
+  paste as `.github/workflows/tailnet-shell.yml`, replace `<PINNED_SHA>`,
+  per-tenant Environments (`tailnet-<tenant>`) each holding that tenant's
+  key under the same secret name. No `secrets: inherit`, never `@main`.
+* Legs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
+  ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
+  every 5 min), then exits; debug holds ~17 min for `tailscale ssh` in.
   NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
+* Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
+  fork-PR workflows require approval, cron offsets per leg, runner stays idle.
 
-1. Tailscale admin (once per account key):
-   * Access Controls → `tagOwners: {"tag:ci-<acct>": ["you"]}`, SSH accept
-     `src: [you]` → `dst: [tag:ci-<acct>]`, users `["runner","root"]`.
-     No exit-node / subnet routes. (Pilot: `tag:ci-ephemeral`.)
-   * Settings → Keys → reusable **ephemeral** key per account, own tag,
-     short expiry → copy `tskey-auth-...`.
+1. Tailscale admin (once per tenant key):
+   * Access Controls → `tagOwners: {"tag:ci-<tenant>": ["you"]}`, SSH
+     accept `src: [you]` → `dst: [tag:ci-<tenant>]`, users
+     `["runner","root"]`. No exit-node / subnet routes.
+   * Settings → Keys → reusable **ephemeral** key per tenant, own tag,
+     short expiry → value goes ONLY to tofu (never pasted, never chat).
    * Name the NAT box `box` (`tailscale up --hostname=box`).
-2. Spoke repo (as that account; pilot: `andrewwang2161/dotfiles`, private,
-   innocuously named): create repo, paste caller file, pin `@<sha>`, invite
-   `slancj` Write (secret delivery trust, revocable). The secret itself is
-   written by `tofu/tailnet` (never hand-set, never pasted).
-   * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
-     and burner's Write grant were removed — `infra` holds no credentials.
-3. Use: hourly fires on its own in the spoke (watch heartbeats); debug via
-   Run workflow in the spoke → `tailscale ssh runner@gh-<acct>-<run-id>`.
-4. Rollback per account: delete spoke repo + revoke its key. Hub and
-   sibling accounts untouched. VPS untouched throughout
+2. Spoke repo (as burner; `andrewwang2161/dotfiles`, PUBLIC): create repo,
+   real dotfiles + README + caller file, pin `@<sha>`, per-tenant
+   Environments with secrets. Secret delivery: invite `slancj` Write for the
+   grant window → `tofu/tailnet` apply writes all secrets (never rendered)
+   → **revoke the grant immediately** (re-grant ~30s per future rotation).
+    * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
+      and any standing grants — `infra` holds no credentials, no spoke
+      carries a standing cross-account edge.
+3. Use: hourly matrix fires on its own (watch heartbeats); debug via Run
+   workflow → tenant=all or one → `tailscale ssh runner@gh-<t>-<run-id>`.
+4. Rollback per tenant: revoke its key (+ delete its Environment secret).
+   Sibling tenants untouched. Full retreat: delete spoke repo.
+5. Warm-up (once, new accounts): days of human commits → debug dispatches
+   → daily → hourly. New-account-to-instant-24/7 is the most bot-shaped
+   sequence available; don't run it. VPS untouched throughout
    (`docker logs caddy` silent).
 
 ## Secrets (SOPS+age — committed config secrets only)
