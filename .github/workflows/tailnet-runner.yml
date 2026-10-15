@@ -98,7 +98,7 @@ on:
       tailscale-version:
         description: "Pinned Tailscale version for tailscale/github-action"
         required: false
-        default: "1.94.2"
+        default: "1.104.1"
         type: string
     secrets:
       TS_AUTHKEY_EPHEMERAL:
