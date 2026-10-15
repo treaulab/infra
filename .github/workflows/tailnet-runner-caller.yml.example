@@ -31,6 +31,7 @@
 #   - OIDC needs `id-token: write` on each calling job (else token exchange fails).
 #
 # Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
+# Debug holds default 60 min; pass hold-minutes up to 330 for long sessions.
 
 name: tailnet-runner
 
@@ -41,6 +42,10 @@ on:
         description: "'all' (hourly shape) or one tenant (debug hold)"
         required: false
         default: "all"
+      hold-minutes:
+        description: "Debug hold length in minutes (1-330, default 60; schedule ignores this)"
+        required: false
+        default: "60"
   schedule:
     - cron: "7 * * * *"
 
@@ -51,7 +56,7 @@ jobs:
   t1:
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == 't1'
     concurrency:
-      group: tailnet-runner-t1
+      group: tailnet-runner-t1${{ github.event_name != 'schedule' && '-debug' || '' }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -64,6 +69,7 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "0"
+      hold-minutes: ${{ inputs.hold-minutes || '60' }}
       tag: tag:ci-ephemeral
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}
@@ -75,7 +81,7 @@ jobs:
   t2:
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == 't2'
     concurrency:
-      group: tailnet-runner-t2
+      group: tailnet-runner-t2${{ github.event_name != 'schedule' && '-debug' || '' }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -88,6 +94,7 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "180"
+      hold-minutes: ${{ inputs.hold-minutes || '60' }}
       tag: tag:ci-ephemeral
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}

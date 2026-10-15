@@ -100,6 +100,11 @@ on:
         required: false
         default: "1.104.1"
         type: string
+      hold-minutes:
+        description: "Debug hold length in minutes (hourly ignores this; clamped to 330)"
+        required: false
+        default: "60"
+        type: string
     secrets:
       TS_AUTHKEY_EPHEMERAL:
         description: "Legacy reusable ephemeral authkey (fallback when OIDC/OAuth absent)"
@@ -124,7 +129,7 @@ permissions:
 jobs:
   shell:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 360 # ceiling binds debug holds only; hourly legs self-exit ~55 min in
     steps:
       - uses: actions/checkout@v5
 
@@ -225,24 +230,28 @@ jobs:
         if: inputs.mode == 'debug'
         run: |
           set -euo pipefail
+          # Hourly never reaches here (mode gate above); only debug reads
+          # hold-minutes. Clamp keeps a margin under GitHub's 6h job cap.
+          HOLD="${{ inputs.hold-minutes }}"
+          [[ "$HOLD" =~ ^[0-9]+$ ]] || HOLD=60
+          [ "$HOLD" -gt 330 ] && HOLD=330
+          [ "$HOLD" -lt 1 ] && HOLD=1
           echo "=========================================================="
-          echo "SSH box is LIVE (up to 60 min)."
+          echo "SSH box is LIVE (up to ${HOLD} min)."
           echo "Connect: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
           echo "End early from inside SSH: echo done > /tmp/tailnet-wake"
-          echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral)."
+          echo "Job hard-kills at 360 min ceiling; node auto-vanishes (ephemeral)."
           echo "=========================================================="
           # FIFO + blocking read: zero CPU while idle, wakes the instant the
           # SSH side writes (no polling loop, no inotify dependency).
-          # Well under GitHub's 6h job cap by design; the heartbeat steps
-          # around this one keep emitting real check output per run.
           FIFO=/tmp/tailnet-wake
           rm -f "$FIFO"
           mkfifo "$FIFO"
           START=$(date +%s)
-          if read -r -t 3600 _ <"$FIFO"; then
+          if read -r -t $(( HOLD * 60 )) _ <"$FIFO"; then
             echo "Wake signal received after $(( $(date +%s) - START ))s — exiting cleanly."
           else
-            echo "Hold window (3600s) elapsed — exiting."
+            echo "Hold window (${HOLD}m) elapsed — exiting."
           fi
           rm -f "$FIFO"
 

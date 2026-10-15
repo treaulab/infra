@@ -61,9 +61,12 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
   `permissions: id-token: write` for OIDC.
 * Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
-  every 5 min), then exits; debug holds up to 60 min for `tailscale ssh` in,
+  every 5 min), then exits; debug holds up to 330 min via `hold-minutes`
+  dispatch input (default 60, clamped client-side; job ceiling 360),
   `echo done > /tmp/tailnet-wake` inside SSH exits early (FIFO wake, zero CPU).
-  NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
+  Debug dispatches run in a `-debug` concurrency group so long sessions never
+  queue-block the hourly heartbeat.
+  NO ssh/scp smoke by design.
 * Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
   fork-PR workflows require approval, cron offsets per job, runner stays idle.
 * Launcher: `./scripts/gh-shell.sh [t1|t2]` dispatches, waits for
