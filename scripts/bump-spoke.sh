@@ -32,17 +32,32 @@ grep -q "$HUB_SHA" "$RENDERED" || { echo "pin substitution failed" >&2; exit 1; 
 grep -q 'vars.TS_OIDC_CLIENT_ID' "$RENDERED" || { echo "template missing OIDC refs" >&2; exit 1; }
 
 FILE_PATH=".github/workflows/tailnet-runner.yml"
-CURRENT_SHA="$(gh api "repos/$REPO/contents/$FILE_PATH" --jq '.sha')"
-CURRENT_B64="$(gh api "repos/$REPO/contents/$FILE_PATH" --jq '.content | split("\n") | join("")')"
-RENDERED_B64="$(python3 -c "import base64; print(base64.b64encode(open('$RENDERED','rb').read()).decode())")"
-if [[ "$CURRENT_B64" == "$RENDERED_B64" ]]; then
-  echo "==> $REPO already pinned to hub $HUB_SHA (no-op)"
-  exit 0
+if CURRENT_JSON="$(gh api "repos/$REPO/contents/$FILE_PATH" 2>/dev/null)"; then
+  CURRENT_SHA="$(echo "$CURRENT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'])")"
+  CURRENT_B64="$(echo "$CURRENT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['content'].replace(chr(10),''))")"
+  RENDERED_B64="$(python3 -c "import base64; print(base64.b64encode(open('$RENDERED','rb').read()).decode())")"
+  if [[ "$CURRENT_B64" == "$RENDERED_B64" ]]; then
+    echo "==> $REPO already pinned to hub $HUB_SHA (no-op)"
+    exit 0
+  fi
+  HAVE_SHA=1
+else
+  echo "==> $FILE_PATH not in $REPO yet — creating."
+  HAVE_SHA=0
 fi
 MSG="chore: pin hub $HUB_SHA"
-python3 -c "
+if [[ "$HAVE_SHA" == "1" ]]; then
+  PAYLOAD="$(python3 -c "
 import base64, json
 content = open('$RENDERED').read()
 print(json.dumps({'message': '$MSG', 'content': base64.b64encode(content.encode()).decode(), 'sha': '$CURRENT_SHA'}))
-" | gh api -X PUT "repos/$REPO/contents/$FILE_PATH" --input - --jq '{commit: .commit.sha, path: .content.path}'
+")"
+else
+  PAYLOAD="$(python3 -c "
+import base64, json
+content = open('$RENDERED').read()
+print(json.dumps({'message': '$MSG', 'content': base64.b64encode(content.encode()).decode()}))
+")"
+fi
+echo "$PAYLOAD" | gh api -X PUT "repos/$REPO/contents/$FILE_PATH" --input - --jq '{commit: .commit.sha, path: .content.path}'
 echo "==> $REPO now pinned to hub $HUB_SHA"
