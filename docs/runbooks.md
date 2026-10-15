@@ -62,7 +62,7 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
 * Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
   every 5 min), then exits; debug holds up to 60 min for `tailscale ssh` in,
-  `touch /tmp/kill` inside SSH exits early.
+  `echo done > /tmp/tailnet-wake` inside SSH exits early (FIFO wake, zero CPU).
   NO ssh/scp smoke by design. Ceiling `timeout-minutes: 75`.
 * Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
   fork-PR workflows require approval, cron offsets per job, runner stays idle.

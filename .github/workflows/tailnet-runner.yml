@@ -221,31 +221,30 @@ jobs:
           tailscale ping --c 3 "${{ inputs.box-name }}" || echo "(ping failed — is the NAT box on the tailnet as '${{ inputs.box-name }}'?)"
           curl -sI --max-time 10 "${{ inputs.edge-url }}" | head -5 || echo "(curl failed — ok while tunnel/DNS still settling)"
 
-      - name: Hold window open (debug use, early-exit via /tmp/kill)
+      - name: Hold window open (debug use, event-driven wake)
         if: inputs.mode == 'debug'
         run: |
           set -euo pipefail
           echo "=========================================================="
           echo "SSH box is LIVE (up to 60 min)."
           echo "Connect: tailscale ssh runner@${{ inputs.hostname-prefix }}-${{ github.run_id }}"
-          echo "End early from inside SSH: touch /tmp/kill"
+          echo "End early from inside SSH: echo done > /tmp/tailnet-wake"
           echo "Job hard-kills at 75 min ceiling; node auto-vanishes (ephemeral)."
           echo "=========================================================="
-          MAX_SECONDS=3600
+          # FIFO + blocking read: zero CPU while idle, wakes the instant the
+          # SSH side writes (no polling loop, no inotify dependency).
+          # Well under GitHub's 6h job cap by design; the heartbeat steps
+          # around this one keep emitting real check output per run.
+          FIFO=/tmp/tailnet-wake
+          rm -f "$FIFO"
+          mkfifo "$FIFO"
           START=$(date +%s)
-          while true; do
-            NOW=$(date +%s)
-            ELAPSED=$((NOW - START))
-            if [ -f /tmp/kill ]; then
-              echo "Kill trigger received (/tmp/kill). Exiting cleanly after ${ELAPSED}s."
-              break
-            fi
-            if [ "$ELAPSED" -ge "$MAX_SECONDS" ]; then
-              echo "Time limit (${MAX_SECONDS}s) reached. Exiting."
-              break
-            fi
-            sleep 10
-          done
+          if read -r -t 3600 _ <"$FIFO"; then
+            echo "Wake signal received after $(( $(date +%s) - START ))s — exiting cleanly."
+          else
+            echo "Hold window (3600s) elapsed — exiting."
+          fi
+          rm -f "$FIFO"
 
       # Dummy task payload: a real no-network compile+run (system gcc is
       # preinstalled on ubuntu-24.04 runners — no downloads, ~2s). Output is

@@ -41,5 +41,5 @@ if [[ -z "$NODE" ]]; then
   exit 1
 fi
 
-echo "==> Connecting: tailscale ssh runner@$NODE (end debug early with: touch /tmp/kill)"
+echo "==> Connecting: tailscale ssh runner@$NODE (end debug early with: echo done > /tmp/tailnet-wake)"
 exec tailscale ssh "runner@$NODE"
