@@ -31,7 +31,7 @@
 #   - OIDC needs `id-token: write` on each calling job (else token exchange fails).
 #
 # Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
-# Debug holds default 60 min; pass hold-minutes up to 330 for long sessions.
+# Debug holds default 90 min; pass hold-minutes up to 330 for long sessions.
 
 name: tailnet-runner
 
@@ -43,9 +43,9 @@ on:
         required: false
         default: "all"
       hold-minutes:
-        description: "Debug hold length in minutes (1-330, default 60; schedule ignores this)"
+        description: "Debug hold length in minutes (1-330, default 90; schedule ignores this)"
         required: false
-        default: "60"
+        default: "90"
   schedule:
     - cron: "7 * * * *"
 
@@ -69,7 +69,7 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "0"
-      hold-minutes: ${{ inputs.hold-minutes || '60' }}
+      hold-minutes: ${{ inputs.hold-minutes || '90' }}
       tag: tag:ci-ephemeral
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}
@@ -94,7 +94,7 @@ jobs:
       edge-url: https://box.treau.me/
       quiet: "true"
       startup-delay-seconds: "180"
-      hold-minutes: ${{ inputs.hold-minutes || '60' }}
+      hold-minutes: ${{ inputs.hold-minutes || '90' }}
       tag: tag:ci-ephemeral
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}

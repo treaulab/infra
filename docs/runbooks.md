@@ -62,7 +62,7 @@ matrix on reusable-workflow calls, so tenants are explicit job blocks):
 * Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
   ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
   every 5 min), then exits; debug holds up to 330 min via `hold-minutes`
-  dispatch input (default 60, clamped client-side; job ceiling 360),
+  dispatch input (default 90, clamped client-side; job ceiling 360),
   `echo done > /tmp/tailnet-wake` inside SSH exits early (FIFO wake, zero CPU).
   Debug dispatches run in a `-debug` concurrency group so long sessions never
   queue-block the hourly heartbeat.

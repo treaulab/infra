@@ -103,7 +103,7 @@ on:
       hold-minutes:
         description: "Debug hold length in minutes (hourly ignores this; clamped to 330)"
         required: false
-        default: "60"
+        default: "90"
         type: string
     secrets:
       TS_AUTHKEY_EPHEMERAL:
