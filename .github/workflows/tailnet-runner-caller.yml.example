@@ -1,6 +1,6 @@
 # Caller (SPOKE side, SINGLE public repo, e.g. andrewwang2161/dotfiles):
 # one repo fans out N tenants by matrix — no fleet of accounts.
-# Paste as `.github/workflows/tailnet-shell.yml`, then:
+# Paste as `.github/workflows/tailnet-runner.yml`, then:
 #   1. Replace <PINNED_SHA> with the reviewed treaulab/infra commit SHA
 #      (gh api repos/treaulab/infra/commits/main --jq .sha).
 #   2. Per tenant: create a GitHub Environment named tailnet-<tenant>
@@ -20,7 +20,7 @@
 #
 # Dispatch: Run workflow → tenant=all (hourly shape) or one tenant (debug).
 
-name: tailnet-shell
+name: tailnet-runner
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tailnet-shell-${{ matrix.tenant }}
+  group: tailnet-runner-${{ matrix.tenant }}
   cancel-in-progress: false
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
     # Schedule runs every leg; dispatch filters to one (or all).
     if: github.event_name == 'schedule' || inputs.tenant == 'all' || inputs.tenant == matrix.tenant
     environment: tailnet-${{ matrix.tenant }}
-    uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<PINNED_SHA>
+    uses: treaulab/infra/.github/workflows/tailnet-runner.yml@<PINNED_SHA>
     with:
       mode: ${{ github.event_name == 'schedule' && 'hourly' || 'debug' }}
       hostname-prefix: gh-${{ matrix.tenant }}

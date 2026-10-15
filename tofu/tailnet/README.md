@@ -67,7 +67,7 @@ tofu apply
 chmod 600 terraform.tfstate  # state holds LIVE key material (see §4)
 
 # STEP 4 — test from the spoke side (as burner):
-# Actions → tailnet-shell → Run workflow (tenant=t1) → tailscale ssh in.
+# Actions → tailnet-runner → Run workflow (tenant=t1) → tailscale ssh in.
 ```
 
 ## 2. Rotation (routine, no drama)

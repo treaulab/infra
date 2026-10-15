@@ -1,7 +1,7 @@
-# Tailnet shell (reusable core, HUB side).
+# Tailnet runner (reusable core, HUB side).
 #
 # Pure logic, NO triggers of its own: called by spoke repos (one per GitHub
-# account) via `uses: treaulab/infra/.github/workflows/tailnet-shell-reusable.yml@<sha>`.
+# account) via `uses: treaulab/infra/.github/workflows/tailnet-runner.yml@<sha>`.
 # This repo (treaulab/infra) runs NOTHING itself and holds NO credentials —
 # the secret lives only in the calling spoke repo.
 #
@@ -31,7 +31,7 @@
 # - Hourly legs run a no-network gcc smoke build first (~2s, deterministic
 #   output) so the run reads as ordinary build CI, not a bare sleep loop.
 
-name: tailnet-shell-reusable
+name: tailnet-runner
 
 on:
   workflow_call:

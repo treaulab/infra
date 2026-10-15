@@ -31,7 +31,7 @@ variable "key_expiry_seconds" {
 variable "key_description" {
   description = "Human note stored on the key in Tailscale admin (alphanumeric)."
   type        = string
-  default     = "tailnet-shell hourly runner burner"
+  default     = "tailnet-runner hourly runner burner"
 }
 
 variable "policy_file" {

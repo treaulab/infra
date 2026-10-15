@@ -27,7 +27,7 @@ resource "tailscale_tailnet_key" "t2" {
   preauthorized       = true
   expiry              = var.key_expiry_seconds
   tags                = ["tag:ci-t2"]
-  description         = "tailnet-shell hourly runner t2"
+  description         = "tailnet-runner hourly runner t2"
   recreate_if_invalid = "always"
 }
 

@@ -43,13 +43,13 @@ This repo is the **hub**: pure reusable logic, zero credentials, runs nothing
 itself. A single burner-owned **public** repo (`dotfiles`: real dotfiles +
 README stating the workflow's purpose + caller file) fans out N tenants by
 matrix — one repo, one account, no fleet:
-* Hub: `.github/workflows/tailnet-shell-reusable.yml` (`workflow_call`,
+* Hub: `.github/workflows/tailnet-runner.yml` (`workflow_call`,
   inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`,
   `quiet` (public-log scrub — spokes set `"true"`),
   `startup-delay-seconds` (matrix stagger); secret `TS_AUTHKEY_EPHEMERAL`
   passed explicitly by the caller).
-* Spoke template: `.github/workflows/tailnet-shell-caller.yml.example` —
-  paste as `.github/workflows/tailnet-shell.yml`, replace `<PINNED_SHA>`,
+* Spoke template: `.github/workflows/tailnet-runner-caller.yml.example` —
+  paste as `.github/workflows/tailnet-runner.yml`, replace `<PINNED_SHA>`,
   per-tenant Environments (`tailnet-<tenant>`) each holding that tenant's
   key under the same secret name. No `secrets: inherit`, never `@main`.
 * Legs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
