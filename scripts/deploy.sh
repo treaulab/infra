@@ -48,7 +48,7 @@ CADDY_VERSION="${CADDY_VERSION:-$(inv caddy_version)}"
 SITE_IP="$HOST"
 : "${DOMAIN:?domain missing in $INV (or export DOMAIN=...)}"
 : "${ACME_EMAIL:?acme_email missing in $INV (or export ACME_EMAIL=...)}"
-CADDY_VERSION="${CADDY_VERSION:-2.11.4}"
+CADDY_VERSION="${CADDY_VERSION:-2.11}"
 cat > apps/caddy/.env <<EOF
 DOMAIN=$DOMAIN
 ACME_EMAIL=$ACME_EMAIL

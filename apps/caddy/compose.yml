@@ -1,7 +1,7 @@
 services:
   # Front door: TLS + static website.
   caddy:
-    image: caddy:${CADDY_VERSION:-2.11.4}
+    image: caddy:${CADDY_VERSION:-2.11}
     container_name: caddy
     restart: unless-stopped
     ports:

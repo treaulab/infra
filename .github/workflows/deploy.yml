@@ -24,7 +24,7 @@ jobs:
             vars:
               domain: ${DOMAIN}
               acme_email: ${ACME_EMAIL}
-              caddy_version: "2.11.4"
+              caddy_version: "2.11"
               deploy_root: /opt/treaulab
             hosts:
               vps:

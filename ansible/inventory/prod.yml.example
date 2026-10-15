@@ -2,7 +2,7 @@ all:
   vars:
     domain: example.com
     acme_email: admin@example.com
-    caddy_version: "2.11.4"
+    caddy_version: "2.11"
     deploy_root: /opt/treaulab
   hosts:
     vps:
