@@ -37,7 +37,9 @@ WARMUP_ACTIVE=0
 if CURRENT_JSON="$(gh api "repos/$REPO/contents/$FILE_PATH" 2>/dev/null)"; then
   CURRENT_SHA="$(echo "$CURRENT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'])")"
   CURRENT_B64="$(echo "$CURRENT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['content'].replace(chr(10),''))")"
-  if echo "$CURRENT_JSON" | grep -q "$WARMUP_MARKER"; then
+  # NOTE: the marker lives in the workflow file, which is base64 inside the
+  # JSON — decode before grepping (raw-JSON grep never matches).
+  if echo "$CURRENT_JSON" | python3 -c "import json,sys,base64; print(base64.b64decode(json.load(sys.stdin)['content']).decode())" | grep -q "$WARMUP_MARKER"; then
     echo "==> $REPO is dispatch-only (warm-up) — preserving that."
     WARMUP_ACTIVE=1
     python3 - "$RENDERED" <<'PYEOF'
