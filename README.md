@@ -16,6 +16,7 @@ Azure VPS (fallback / pre-cutover origin)
 
 ```
 tofu/                  L1: Azure RG/VNet/NSG/IP/VM (imports existing VPS)
+tofu/cloudflare/       DNS: zone lookup now, records as code next (import-first)
 ansible/               L2: hardening, docker, caddy, website
 apps/caddy/            compose + Caddyfile
 apps/website/          static src (single source; synced to edge public/ at deploy)
