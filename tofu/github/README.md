@@ -4,6 +4,8 @@ Learning root, local state, **no secret material** (branch policy only —
 safe to learn on, safe in state). Applies are human with a short-lived
 admin PAT; CI is plan/validate-only (see `.github/workflows/tofu.yml`).
 
+**Status: applied 2026-10-14 — live on `treaulab/infra#main`, `tofu plan` clean.**
+
 ```
 GITHUB_TOKEN (admin, short-lived, env only)
   └─► tofu/github ─► branch protection on treaulab/infra#main
@@ -27,17 +29,23 @@ GITHUB_TOKEN (admin, short-lived, env only)
 export GITHUB_TOKEN="$(gh auth token)"   # slancj admin session
 cd tofu/github
 tofu init
-tofu plan    # expect: 1 create (github_branch_protection.main), nothing else
+tofu plan    # expect: "No changes" (rule applied 2026-10-14)
 tofu apply
 ```
 
-Verify: `gh api repos/treaulab/infra/branches/main/protection --jq .required_pull_request_reviews.dismiss_stale_reviews`
-→ `true`. (Before apply the same call 404s — that 404 is the finding.)
+Fresh clone / lost state: import before apply —
+`tofu import github_branch_protection.main infra:main` (an apply against
+missing state would try to recreate a rule that already exists).
+
+Verify (admin token — non-admins get 404 here whether or not the rule
+exists): `gh api repos/treaulab/infra/branches/main/protection --jq .required_pull_request_reviews.dismiss_stale_reviews`
+→ `true`.
 
 Tightening path (stepwise, each its own apply):
-1. `required_status_checks { contexts = [...] }` — only after `deploy`
-   goes green and required workflows actually run on PRs (requiring a
-   red/tag-only check bricks merges; verified red today).
+1. `required_status_checks { contexts = [...] }` — only once a check runs
+   on every PR: `ci.yml` is path-filtered and not yet on main, so land it
+   there and drop the filter first — requiring a check that never reports
+   bricks merges.
 2. `enforce_admins = true` — full PR-only, including you.
 3. `required_linear_history` / signed commits — hygiene, opt-in.
 
