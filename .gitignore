@@ -92,10 +92,10 @@ out/
 .parcel-cache/
 *.tsbuildinfo
 
-# cloudflare workers (edge)
-workers/edge/public/
-workers/edge/.dev.vars
-workers/edge/.wrangler/
+# cloudflare workers (tunnel worker)
+workers/tunnel/public/
+workers/tunnel/.dev.vars
+workers/tunnel/.wrangler/
 
 # backups / archives
 backups/

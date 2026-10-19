@@ -4,9 +4,9 @@
 // Azure TREAU is never in the path: no origin fetch anywhere in this file.
 //
 // Frame: [type:u8][stream:u32be][payload...]  (all frames binary)
-//   OPEN   client->edge (stream=0): open a stream; edge assigns id, forwards
-//   ACCEPT agent->edge: TCP dial to :22 succeeded, stream is live
-//   DATA   both ways: raw bytes (SSH ciphertext; edge never logs bodies)
+//   OPEN   client->worker (stream=0): open a stream; worker assigns id, forwards
+//   ACCEPT agent->worker: TCP dial to :22 succeeded, stream is live
+//   DATA   both ways: raw bytes (SSH ciphertext; worker never logs bodies)
 //   FIN    both ways: clean close, forward + tear down stream
 //   RST    both ways: abort stream immediately
 //
@@ -28,7 +28,7 @@ import {
 	pipeFrame as frame,
 } from "../lib/shared.js";
 
-// Edge -> client close codes: 1000 = clean FIN, 1011 = error/RST.
+// Worker -> client close codes: 1000 = clean FIN, 1011 = error/RST.
 
 export class PipeRoom {
 	constructor(ctx, env) {
@@ -267,7 +267,7 @@ export class PipeRoom {
 	}
 
 	onClientMessage(ws, message) {
-		// Client->edge is raw payload (no header) with a half-close signal for
+		// Client->worker is raw payload (no header) with a half-close signal for
 		// stdin EOF (ssh parity for `ssh host cmd < file`): keep delivering
 		// the response after EOF. New clients send TEXT `__half_close__`
 		// (a text frame can never collide with binary DATA). The legacy exact

@@ -10,7 +10,7 @@
 // Protocol v3 (binary, no backward compat): one agent WebSocket carries N
 // streams. One WS message = exactly one frame:
 //   [type:u8][stream:u32be][flags:u16be][len:u32be][payload 0..64KiB]
-// HEADERS opens a stream (edge->agent {method,path,headers}; agent->edge
+// HEADERS opens a stream (worker->agent {method,path,headers}; agent->worker
 // {status,headers}); DATA carries raw body bytes (no Base64 tax); FIN ends
 // cleanly; RST aborts (payload = optional UTF-8 message); HELLO/HB are
 // connection-level (stream 0). Visitor WebSockets are just duplex streams:
@@ -298,7 +298,7 @@ export class TunnelRoom {
 	// ---- visitor / browser side ------------------------------------------
 	async handleClient(request, url) {
 		// Local status probe (never forwarded upstream): lets `tunnel info`
-		// distinguish edge-404 from upstream-404.
+		// distinguish worker-404 from upstream-404.
 		if ((request.headers.get(PROBE_HEADER) ?? "").toLowerCase() === "status") {
 			return new Response(
 				JSON.stringify({

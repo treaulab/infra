@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// treaulab tunnel CLI: expose a local port (HTTP) or ssh (TCP) via the edge.
+// treaulab tunnel CLI: expose a local port (HTTP) or ssh (TCP) via the worker.
 // Zero dependencies, Node 22+. Names + ids live in ~/.config/treaulab/tunnels.json.
 // Host rule everywhere: --host flag > TUNNEL_HOST env > https://go.treau.me.
 //
@@ -25,10 +25,10 @@ import {
 } from "../lib/shared.js";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-const EDGE_DIR = path.resolve(HERE, "..");
+const WORKER_DIR = path.resolve(HERE, "..");
 const AGENTS = {
-	http: path.join(EDGE_DIR, "agent", "agent.js"),
-	tcp: path.join(EDGE_DIR, "agent", "tcp-agent.js"),
+	http: path.join(WORKER_DIR, "agent", "agent.js"),
+	tcp: path.join(WORKER_DIR, "agent", "tcp-agent.js"),
 };
 
 const CONF_DIR = path.join(
@@ -181,11 +181,11 @@ function runAgent(kind, id, target, host) {
 	if (!fs.existsSync(script)) fail(`agent script missing: ${script}`);
 	const env = { ...process.env };
 	if (kind === "http") {
-		env.EDGE_URL = `${wsBase(host)}/t/${id}/__agent`;
+		env.TUNNEL_URL = `${wsBase(host)}/t/${id}/__agent`;
 		env.UPSTREAM = target;
 	} else {
 		const p = parseTcpTarget(target);
-		env.EDGE_URL = `${wsBase(host)}/p/${id}/__agent`;
+		env.TUNNEL_URL = `${wsBase(host)}/p/${id}/__agent`;
 		env.SSH_HOST = p.host;
 		env.SSH_PORT = String(p.port);
 	}
@@ -337,7 +337,7 @@ function cmdRm(argv) {
 }
 
 function cmdLogs() {
-	const child = spawn("npx", ["wrangler", "tail"], { cwd: EDGE_DIR, stdio: "inherit" });
+	const child = spawn("npx", ["wrangler", "tail"], { cwd: WORKER_DIR, stdio: "inherit" });
 	child.on("exit", (code) => process.exit(code ?? 1));
 }
 
@@ -352,9 +352,9 @@ function cmdDoctor(argv) {
 	check(`node >= 22 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 22);
 	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
 	const host = hostOf(o);
-	info(`edge host: ${host} (override: --host H or TUNNEL_HOST)`);
+	info(`worker host: ${host} (override: --host H or TUNNEL_HOST)`);
 	if (haveBin("curl")) {
-		check("edge reachable (/health → 200)", curlCode(`${host}/health`) === "200", "is the worker deployed?");
+		check("worker reachable (/health → 200)", curlCode(`${host}/health`) === "200", "is the worker deployed?");
 		check("short IDs rejected (→ 404)", curlCode(`${host}/t/short/`) === "404", "unexpected routing");
 		check("http gate answers (unused ID → 502)", curlCode(`${host}/t/${newRoomId()}/`) === "502", "unexpected status");
 		// Pipe gate needs a real WS-upgrade handshake (http1.1 — curl strips
@@ -369,7 +369,7 @@ function cmdDoctor(argv) {
 		).stdout.trim();
 		check("pipe gate answers (unused ID → 502)", pipeCode === "502", `got ${pipeCode || "no response"}`);
 	} else {
-		info("SKIP  edge reachability (curl missing)");
+		info("SKIP  worker reachability (curl missing)");
 	}
 	info(`remembered tunnels: ${Object.keys(loadState().tunnels).length} (tunnel list)`);
 	process.exit(ok ? 0 : 1);
@@ -396,7 +396,7 @@ function cmdHelp(cmd) {
   info <name>                         details + live check
   ssh <name> [--install] [--print]    ssh through a tcp tunnel
   list | rm <name>                    manage saved tunnels
-  doctor | logs                       self-check / tail edge logs
+  doctor | logs                       self-check / tail worker logs
 
 host: --host H > TUNNEL_HOST env > ${DEFAULT_HOST}
 state: ${STATE_FILE}`);

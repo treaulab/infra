@@ -1,4 +1,4 @@
-// Shared constants + helpers for edge Worker, agents, and CLI.
+// Shared constants + helpers for the tunnel Worker, agents, and CLI.
 // Zero dependencies, ESM, runs in Workers + Node 22+ (no Node: imports).
 // Python (agent.py) mirrors these values by hand — keep in sync, see comment there.
 //
@@ -25,7 +25,7 @@ export const HOP_HEADERS = new Set([
 	"host",
 	"content-length",
 	// `Expect: 100-continue` must not be forwarded through the tunnel:
-	// undici fetch rejects it (NotSupportedError) and the edge/agent hop
+	// undici fetch rejects it (NotSupportedError) and the worker/agent hop
 	// cannot honor 100-continue semantics. The agent negotiates its own
 	// expectation with the upstream.
 	"expect",
@@ -51,7 +51,7 @@ export function newRoomId() {
 
 // ---- urls ---------------------------------------------------------------
 
-export function normalizeEdgeUrl(raw) {
+export function normalizeTunnelUrl(raw) {
 	const converted = String(raw)
 		.replace(/^https:\/\//, "wss://")
 		.replace(/^http:\/\//, "ws://");
@@ -61,10 +61,10 @@ export function normalizeEdgeUrl(raw) {
 export function normalizeClientUrl(raw) {
 	// Laptop-side helper (ws-ssh-proxy, ssh clients): accept https:// too,
 	// the wire is always WebSocket.
-	return normalizeEdgeUrl(raw);
+	return normalizeTunnelUrl(raw);
 }
 
-export function isValidEdgeUrl(url) {
+export function isValidTunnelUrl(url) {
 	return /^wss?:\/\//.test(url);
 }
 
@@ -121,10 +121,10 @@ export function cleanHeadersFromHeaders(headers) {
 // stream IDs are random 31-bit (same as pipe streams). Wire compat is gated
 // by the HELLO {version} handshake, not a per-frame version byte.
 //
-// Types: HB keepalive (empty) · HEADERS opens a stream (edge->agent
-// {method,path,headers}, agent->edge {status,headers}, JSON UTF-8) ·
+// Types: HB keepalive (empty) · HEADERS opens a stream (worker->agent
+// {method,path,headers}, agent->worker {status,headers}, JSON UTF-8) ·
 // DATA raw body bytes · FIN clean end · RST abort (payload optional
-// UTF-8 message) · HELLO agent->edge {name,version} on connect.
+// UTF-8 message) · HELLO agent->worker {name,version} on connect.
 // FLAG_FIN on a DATA frame ends the stream with no separate FIN.
 
 export const TUNNEL_VERSION = 3;
@@ -229,7 +229,7 @@ export const F_ACCEPT = 2;
 export const F_DATA = 3;
 export const F_FIN = 4;
 export const F_RST = 5;
-// Client->edge half-close without the 5-byte DATA collision: clients send a
+// Client->worker half-close without the 5-byte DATA collision: clients send a
 // TEXT frame with exactly this payload (binary DATA can never collide with
 // a text frame). Old binary magic [FIN,0,0,0,0] still accepted for compat.
 export const HALF_CLOSE_TEXT = "__half_close__";
@@ -271,6 +271,6 @@ export function newStreamId(taken) {
 }
 
 // Probe header: `X-Tunnel-Probe: status` answers locally (never forwarded
-// to upstream), so `tunnel info` can distinguish edge-404 from upstream-404.
+// to upstream), so `tunnel info` can distinguish worker-404 from upstream-404.
 export const PROBE_HEADER = "x-tunnel-probe";
 export const STATUS_HEADER = "x-tunnel-status";

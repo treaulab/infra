@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // treaulab pipe agent: runs on the locked-down box next to sshd, dials OUT one
-// WebSocket to the edge and dials HOST:PORT per accepted stream.
+// WebSocket to the worker and dials HOST:PORT per accepted stream.
 // Zero dependencies, Node 22+. Only needs OUTBOUND 443 (wss) + DNS.
 // Long-URL-only: box ID is the secret.
 //
 //   node tcp-agent.js [HOST:PORT] [--host H] [--id ID]
 //   HOST:PORT defaults to 127.0.0.1:22. Omit --id to mint a fresh box id
 //   and print it (pass that id to `tunnel add <name>`, or reuse via --id).
-//   Env fallback (systemd, `tunnel up`): EDGE_URL + SSH_HOST/SSH_PORT.
+//   Env fallback (systemd, `tunnel up`): TUNNEL_URL + SSH_HOST/SSH_PORT
+//   (legacy EDGE_URL still read as a deprecated alias).
 //
 // Frame: [type:u8][stream:u32be][payload]  OPEN=1 ACCEPT=2 DATA=3 FIN=4 RST=5
 
@@ -24,9 +25,9 @@ import {
 	HEARTBEAT_MS,
 	ID_RE,
 	backoffAfterSession,
-	isValidEdgeUrl,
+	isValidTunnelUrl,
 	newRoomId,
-	normalizeEdgeUrl,
+	normalizeTunnelUrl,
 	parseTcpTarget,
 	resolveHost,
 	wsBaseFromHttp,
@@ -58,9 +59,11 @@ for (let i = 0; i < _argv.length; i++) {
 		process.exit(2);
 	}
 }
-// Bare run with no EDGE_URL mints a box id; a set EDGE_URL means
+// Bare run with no TUNNEL_URL mints a box id; a set TUNNEL_URL means
 // persistent mode. Any explicit arg forces the new style.
-if (_positional !== null || _get("--host") !== null || _get("--id") !== null || !process.env.EDGE_URL) {
+// (Legacy EDGE_URL is still read as a deprecated alias — same semantics.)
+const _envUrl = process.env.TUNNEL_URL ?? process.env.EDGE_URL;
+if (_positional !== null || _get("--host") !== null || _get("--id") !== null || !_envUrl) {
 	const host = resolveHost(_get("--host")).replace(/\/$/, "");
 	const id = _get("--id") ?? newRoomId();
 	if (!ID_RE.test(id)) {
@@ -73,7 +76,7 @@ if (_positional !== null || _get("--host") !== null || _get("--id") !== null || 
 		console.error(`bad target ${JSON.stringify(target)} — want HOST:PORT (e.g. 127.0.0.1:22)`);
 		process.exit(2);
 	}
-	process.env.EDGE_URL = `${wsBaseFromHttp(host)}/p/${id}/__agent`;
+	process.env.TUNNEL_URL = `${wsBaseFromHttp(host)}/p/${id}/__agent`;
 	process.env.SSH_HOST = parsed.host;
 	process.env.SSH_PORT = String(parsed.port);
 	if (_get("--id") === null) {
@@ -82,18 +85,21 @@ if (_positional !== null || _get("--host") !== null || _get("--id") !== null || 
 	}
 }
 
-const EDGE_URL_RAW = process.env.EDGE_URL;
-if (!EDGE_URL_RAW) {
-	console.error("give a target (e.g. node tcp-agent.js 127.0.0.1:22) or set EDGE_URL, e.g. wss://go.treau.me/p/<long-box-id>/__agent");
+const TUNNEL_URL_RAW = process.env.TUNNEL_URL ?? process.env.EDGE_URL;
+if (!TUNNEL_URL_RAW) {
+	console.error("give a target (e.g. node tcp-agent.js 127.0.0.1:22) or set TUNNEL_URL, e.g. wss://go.treau.me/p/<long-box-id>/__agent");
 	process.exit(1);
 }
-// Accept https:// too (common paste mistake) — the wire is always WebSocket.
-const EDGE_URL = normalizeEdgeUrl(EDGE_URL_RAW);
-if (EDGE_URL !== EDGE_URL_RAW) {
-	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
+if (!process.env.TUNNEL_URL && process.env.EDGE_URL) {
+	console.error("note: EDGE_URL is deprecated — use TUNNEL_URL (reading the legacy value)");
 }
-if (!isValidEdgeUrl(EDGE_URL)) {
-	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/p/<long-box-id>/__agent`);
+// Accept https:// too (common paste mistake) — the wire is always WebSocket.
+const TUNNEL_URL = normalizeTunnelUrl(TUNNEL_URL_RAW);
+if (TUNNEL_URL !== TUNNEL_URL_RAW) {
+	console.error(`note: using ${TUNNEL_URL} (converted from ${TUNNEL_URL_RAW})`);
+}
+if (!isValidTunnelUrl(TUNNEL_URL)) {
+	console.error(`bad TUNNEL_URL ${JSON.stringify(TUNNEL_URL_RAW)} — want wss://<host>/p/<long-box-id>/__agent`);
 	process.exit(1);
 }
 if (typeof WebSocket === "undefined") {
@@ -130,7 +136,7 @@ function connectOnce() {
 		const sockets = new Map(); // stream -> net.Socket
 		let dead = false;
 		let hb;
-		const ws = new WebSocket(EDGE_URL);
+		const ws = new WebSocket(TUNNEL_URL);
 		ws.binaryType = "arraybuffer";
 
 		const send = (buf) => {

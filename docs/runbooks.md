@@ -147,13 +147,13 @@ independently of this box (paper/Bitwarden) or accept total loss on
 keyring failure — either is a conscious choice, document which. Losing it
 means re-encrypting everything to a new identity, not recovery.
 
-## Optional — Edge cutover (move the apex onto the Worker)
+## Optional — apex cutover onto the Worker
 
 Current state: `treau.me`/`www` are served by the Azure VPS behind the
 Cloudflare proxy (`deploy.yml` auto-deploys it on main pushes); the Worker
 serves `go.treau.me` only. Procedure if you ever move the apex:
 
-1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
+1. `cd workers/tunnel && npm install && npx wrangler login` (no secrets needed)
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`
    → note the `*.workers.dev` preview URL.
 3. Verify on preview: `/` → `200`, `/robots.txt`, `/sitemap.xml`,

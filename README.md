@@ -12,7 +12,7 @@ treau.me / www — Cloudflare proxy → Azure VPS (MAIN; deploy.yml auto-deploys
 ├── Caddy :80/:443 (auto-TLS front door)
 └── Website (static, via Caddy file_server; source of truth apps/website/src)
 
-go.treau.me — Cloudflare Worker (treaulab-edge; edge.yml auto-deploys)
+go.treau.me — Cloudflare Worker (treaulab-tunnel; tunnel.yml auto-deploys)
 └── /t/* HTTP tunnels + /p/* SSH pipes (Durable Objects; no origin fetch)
 ```
 
@@ -25,10 +25,10 @@ ansible/               L2: hardening, docker, caddy, website
 apps/caddy/            compose + Caddyfile
 apps/website/          static src (single source: to VPS via deploy.sh, to worker via sync:public)
 apps/cloudflared/        NAT box (behind NAT, VPS-untouched): cloudflared HTTP+SSH on treau.me subs
-workers/edge/          Cloudflare Worker: tunnel/pipe Durable Objects on go.treau.me
+workers/tunnel/          Tunnel Worker: HTTP tunnel + TCP pipe Durable Objects on go.treau.me
 scripts/               bootstrap.sh, deploy.sh
-.github/workflows/    tofu.yml, ci.yml, edge.yml, deploy.yml, agent-bin.yml
-docs/runbooks.md       first boot, backups, upgrades, optional edge cutover, NAT box
+.github/workflows/    tofu.yml, ci.yml, tunnel.yml, deploy.yml, agent-bin.yml
+docs/runbooks.md       first boot, backups, upgrades, optional apex cutover, NAT box
 ```
 
 ## Quickstart
@@ -58,15 +58,15 @@ once the VPS is stable (see `docs/runbooks.md`).
 
 See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SITE_DOMAIN, ACME_EMAIL` for the VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for the worker).
 
-## Edge worker (tunnels on go.treau.me)
+## Tunnel Worker (HTTP tunnels + SSH pipes on go.treau.me)
 
 The main site stays on the VPS; the Worker serves the tunnels + pipes.
 
 ```bash
-cd workers/edge && npm install
+cd workers/tunnel && npm install
 npm run dev                      # local: http://127.0.0.1:8787 (no secrets)
 npm run deploy                   # needs wrangler login only (long-URL, no tokens)
 ```
 
-Details: `workers/edge/README.md`. The full-edge apex cutover is an optional,
-unexecuted migration — `docs/runbooks.md`.
+Details: `workers/tunnel/README.md`. The apex cutover onto the Worker is an
+optional, unexecuted migration — `docs/runbooks.md`.

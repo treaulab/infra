@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """treaulab tunnel agent: runs on the locked-down origin, dials OUT one
-WebSocket to the edge and serves the local upstream over it.
+WebSocket to the worker and serves the local upstream over it.
 Pure Python standard library (no pip, no Node): needs only
 outbound 443 + DNS, like the Node agent.
 Long-URL-only: the room ID in the URL is the secret (no token).
@@ -11,7 +11,7 @@ UPSTREAM defaults to http://127.0.0.1:8080. Omit --id to mint a fresh
 room, print the public URL, and run (ephemeral — Ctrl-C stops it).
 Pass --id to reuse a room (e.g. the id from `tunnel info <name>`).
 
-    curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \\
+    curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/tunnel/agent/agent.py \\
       -o /tmp/agent.py
     UPSTREAM="http://127.0.0.1:8080" python3 /tmp/agent.py
 
@@ -22,7 +22,8 @@ HTTP uploads stream via chunked Transfer-Encoding (never reassembled);
 responses stream back in 64 KiB DATA frames. Visitor WS streams
 (method "WS") are bridged to a local upstream WS with the same WSClient.
 
-Env fallback (systemd, `tunnel up`): EDGE_URL + UPSTREAM work as before.
+Env fallback (systemd, `tunnel up`): TUNNEL_URL + UPSTREAM (legacy EDGE_URL
+still read as a deprecated alias).
 Other env: UPSTREAM_TIMEOUT_MS (default 15000, time to first byte),
 NAME (default hostname), TUNNEL_HOST (default https://go.treau.me,
 used when --host is absent), MAX_CONCURRENT (default 16),
@@ -75,7 +76,7 @@ def _parse_cli(argv):
     p.add_argument(
         "--host",
         default=None,
-        help="edge host (default: $TUNNEL_HOST or " + DEFAULT_HOST + ")",
+        help="worker host (default: $TUNNEL_HOST or " + DEFAULT_HOST + ")",
     )
     p.add_argument(
         "--id",
@@ -92,22 +93,24 @@ def _parse_cli(argv):
 
 _CLI = _parse_cli(sys.argv[1:])
 
-# Bare run with no EDGE_URL mints a room (one-command share); a set
-# EDGE_URL means persistent mode. Any explicit arg forces the new style.
+# Bare run with no TUNNEL_URL mints a room (one-command share); a set
+# TUNNEL_URL means persistent mode. Any explicit arg forces the new style.
+# (Legacy EDGE_URL is still read as a deprecated alias - same semantics.)
+_env_url = os.environ.get("TUNNEL_URL") or os.environ.get("EDGE_URL")
 if (
     _CLI.upstream is not None
     or _CLI.host is not None
     or _CLI.id is not None
-    or not os.environ.get("EDGE_URL")
+    or not _env_url
 ):
     _host = (_CLI.host or os.environ.get("TUNNEL_HOST") or DEFAULT_HOST).rstrip("/")
-    _id = _CLI.id or secrets.token_hex(16)  # 32 chars, matches edge ID_RE
+    _id = _CLI.id or secrets.token_hex(16)  # 32 chars, matches worker ID_RE
     if ID_RE is not None and not ID_RE.match(_id):
         sys.stderr.write("bad id %r - want 20-64 chars [A-Za-z0-9_-]\n" % _id)
         sys.exit(2)
     _upstream = (_CLI.upstream or os.environ.get("UPSTREAM") or "http://127.0.0.1:8080").rstrip("/")
     _url = "%s/t/%s/" % (_host, _id)
-    os.environ["EDGE_URL"] = (
+    os.environ["TUNNEL_URL"] = (
         _host.replace("https://", "wss://").replace("http://", "ws://")
         + "/t/"
         + _id
@@ -127,20 +130,22 @@ if (
                 flush=True,
             )
 
-EDGE_URL_RAW = os.environ.get("EDGE_URL")
-if not EDGE_URL_RAW:
+TUNNEL_URL_RAW = os.environ.get("TUNNEL_URL") or os.environ.get("EDGE_URL")
+if not TUNNEL_URL_RAW:
     sys.stderr.write(
         "give an upstream (e.g. python3 agent.py http://127.0.0.1:8080)"
-        " or set EDGE_URL, e.g. wss://go.treau.me/t/<long-id>/__agent\n"
+        " or set TUNNEL_URL, e.g. wss://go.treau.me/t/<long-id>/__agent\n"
     )
     sys.exit(1)
+if not os.environ.get("TUNNEL_URL") and os.environ.get("EDGE_URL"):
+    sys.stderr.write("note: EDGE_URL is deprecated - use TUNNEL_URL (reading the legacy value)\n")
 # Accept https:// too (common paste mistake) - the wire is always WebSocket.
-EDGE_URL = EDGE_URL_RAW.replace("https://", "wss://").replace("http://", "ws://")
-if EDGE_URL != EDGE_URL_RAW:
-    sys.stderr.write("note: using %s (converted from %s)\n" % (EDGE_URL, EDGE_URL_RAW))
-if not (EDGE_URL.startswith("wss://") or EDGE_URL.startswith("ws://")):
+TUNNEL_URL = TUNNEL_URL_RAW.replace("https://", "wss://").replace("http://", "ws://")
+if TUNNEL_URL != TUNNEL_URL_RAW:
+    sys.stderr.write("note: using %s (converted from %s)\n" % (TUNNEL_URL, TUNNEL_URL_RAW))
+if not (TUNNEL_URL.startswith("wss://") or TUNNEL_URL.startswith("ws://")):
     sys.stderr.write(
-        "bad EDGE_URL %r - want wss://<host>/t/<long-room-id>/__agent\n" % EDGE_URL_RAW
+        "bad TUNNEL_URL %r - want wss://<host>/t/<long-room-id>/__agent\n" % TUNNEL_URL_RAW
     )
     sys.exit(1)
 
@@ -150,12 +155,12 @@ UPSTREAM = (
 # (set from argv above when the new style is used; env otherwise)
 UPSTREAM_TIMEOUT_MS = int(os.environ.get("UPSTREAM_TIMEOUT_MS", "15000"))
 NAME = os.environ.get("NAME") or socket.gethostname()
-# Safety ceiling per stream (matches JS agent + edge default 500 MiB).
+# Safety ceiling per stream (matches JS agent + worker default 500 MiB).
 MAX_BODY = int(os.environ.get("MAX_TUNNEL_BYTES", str(500 * 1024 * 1024)))
 MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "16"))
 CHUNK_BYTES = 64 * 1024
 
-# Mirrors workers/edge/lib/shared.js HOP_HEADERS — keep in sync.
+# Mirrors workers/tunnel/lib/shared.js HOP_HEADERS — keep in sync.
 HOP = {
     "connection",
     "keep-alive",
@@ -224,7 +229,7 @@ def h_parse(payload):
 
 
 # ---- minimal WebSocket endpoint (stdlib only) --------------------------------
-# Speaks enough RFC 6455 for both roles: masked client frames out (edge
+# Speaks enough RFC 6455 for both roles: masked client frames out (worker
 # control socket AND local upstream WS dials), any server frames in.
 
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -453,7 +458,7 @@ def _serve_http(ws, req_id, head):
     has_body = method not in ("GET", "HEAD")
     with _STREAMS_LOCK:
         st = _STREAMS.get(req_id)
-    if st is None:  # edge RST won the race before we started
+    if st is None:  # worker RST won the race before we started
         return
     conn = None
     try:
@@ -466,10 +471,10 @@ def _serve_http(ws, req_id, head):
             conn.putheader("Transfer-Encoding", "chunked")
         conn.endheaders()
         if has_body:
-            # Consume the body queue until the edge says FIN/RST.
+            # Consume the body queue until the worker says FIN/RST.
             total = 0
             for item in _iter_body(req_id):
-                if item is None:  # RST: edge is gone, stop quietly
+                if item is None:  # RST: worker is gone, stop quietly
                     try:
                         conn.close()
                     except Exception:
@@ -539,7 +544,7 @@ def _serve_http(ws, req_id, head):
 
 
 def _iter_body(req_id):
-    """Yield ('data', bytes) / ('fin',) from the edge; None on RST/death."""
+    """Yield ('data', bytes) / ('fin',) from the worker; None on RST/death."""
     with _STREAMS_LOCK:
         st = _STREAMS.get(req_id)
     q = st["q"] if st else None
@@ -577,7 +582,7 @@ def _serve_ws(ws, req_id, head):
             _rst(ws, req_id, "upstream ws failed")
             _SEM.release()
         return
-    if _ws_take(req_id) is None:  # edge RST while dialing
+    if _ws_take(req_id) is None:  # worker RST while dialing
         try:
             up.close()
         except OSError:
@@ -642,7 +647,7 @@ def _ws_take(req_id):
 def connect_once():
     started_at = time.monotonic()
     try:
-        ws = WSClient(EDGE_URL)
+        ws = WSClient(TUNNEL_URL)
         ws.connect()
     except Exception as e:  # noqa: BLE001 - redial loop reports it
         return "connect failed: %s" % e, 0
@@ -757,7 +762,7 @@ def connect_once():
             while not stop.is_set():
                 op, payload = ws.recv_frame()
                 if op == _OP_TEXT:
-                    continue  # binary-only wire; edge never sends text
+                    continue  # binary-only wire; worker never sends text
                 f = t_decode(payload)
                 if f is None:
                     continue

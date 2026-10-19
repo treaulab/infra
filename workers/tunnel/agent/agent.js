@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // treaulab tunnel agent: runs on the locked-down origin, dials OUT one
-// WebSocket to the edge and serves the local upstream over it.
+// WebSocket to the worker and serves the local upstream over it.
 // Zero dependencies, Node 22+ (global WebSocket + fetch). Also compiles to a
 // standalone binary with `bun build --compile` (no runtime needed on the box).
 // Long-URL-only: the room ID in the URL is the secret (no token).
@@ -12,7 +12,8 @@
 //
 //   UPSTREAM="http://127.0.0.1:8080" node agent.js --host https://go.treau.me
 //
-// Env fallback (systemd, `tunnel up`): EDGE_URL + UPSTREAM work as before.
+// Env fallback (systemd, `tunnel up`): TUNNEL_URL + UPSTREAM (legacy EDGE_URL
+// still read as a deprecated alias).
 // Other env: UPSTREAM_TIMEOUT_MS (default 15000, time to first byte; bodies
 // stream with no total cap), NAME (default hostname),
 // TUNNEL_HOST (default https://go.treau.me, used when --host is absent),
@@ -38,9 +39,9 @@ import {
 	backoffAfterSession,
 	decodeTunnelFrame,
 	encodeTunnelFrame,
-	isValidEdgeUrl,
+	isValidTunnelUrl,
 	newRoomId,
-	normalizeEdgeUrl,
+	normalizeTunnelUrl,
 	parseTunnelHeaders,
 	resolveHost,
 	tunnelHeadersPayload,
@@ -81,10 +82,12 @@ for (let i = 0; i < _argv.length; i++) {
 		process.exit(2);
 	}
 }
-// Bare run with no EDGE_URL mints a room (one-command share); a set
-// EDGE_URL means persistent mode. Any explicit arg forces the new style.
+// Bare run with no TUNNEL_URL mints a room (one-command share); a set
+// TUNNEL_URL means persistent mode. Any explicit arg forces the new style.
+// (Legacy EDGE_URL is still read as a deprecated alias — same semantics.)
+const _envUrl = process.env.TUNNEL_URL ?? process.env.EDGE_URL;
 const _newStyle =
-	_positional !== null || _get("--host") !== null || _get("--id") !== null || !process.env.EDGE_URL;
+	_positional !== null || _get("--host") !== null || _get("--id") !== null || !_envUrl;
 if (_newStyle) {
 	const host = resolveHost(_get("--host")).replace(/\/$/, "");
 	const id = _get("--id") ?? newRoomId();
@@ -93,7 +96,7 @@ if (_newStyle) {
 		process.exit(2);
 	}
 	const upstream = (_positional || process.env.UPSTREAM || "http://127.0.0.1:8080").replace(/\/$/, "");
-	process.env.EDGE_URL = `${wsBaseFromHttp(host)}/t/${id}/__agent`;
+	process.env.TUNNEL_URL = `${wsBaseFromHttp(host)}/t/${id}/__agent`;
 	process.env.UPSTREAM = upstream;
 	if (_get("--id") === null) {
 		const url = `${host}/t/${id}/`;
@@ -105,18 +108,21 @@ if (_newStyle) {
 	}
 }
 
-const EDGE_URL_RAW = process.env.EDGE_URL;
-if (!EDGE_URL_RAW) {
-	console.error("give an upstream (e.g. node agent.js http://127.0.0.1:8080) or set EDGE_URL, e.g. wss://go.treau.me/t/<long-id>/__agent");
+const TUNNEL_URL_RAW = process.env.TUNNEL_URL ?? process.env.EDGE_URL;
+if (!TUNNEL_URL_RAW) {
+	console.error("give an upstream (e.g. node agent.js http://127.0.0.1:8080) or set TUNNEL_URL, e.g. wss://go.treau.me/t/<long-id>/__agent");
 	process.exit(1);
 }
-// Accept https:// too (common paste mistake) — the wire is always WebSocket.
-const EDGE_URL = normalizeEdgeUrl(EDGE_URL_RAW);
-if (EDGE_URL !== EDGE_URL_RAW) {
-	console.error(`note: using ${EDGE_URL} (converted from ${EDGE_URL_RAW})`);
+if (!process.env.TUNNEL_URL && process.env.EDGE_URL) {
+	console.error("note: EDGE_URL is deprecated — use TUNNEL_URL (reading the legacy value)");
 }
-if (!isValidEdgeUrl(EDGE_URL)) {
-	console.error(`bad EDGE_URL ${JSON.stringify(EDGE_URL_RAW)} — want wss://<host>/t/<long-room-id>/__agent`);
+// Accept https:// too (common paste mistake) — the wire is always WebSocket.
+const TUNNEL_URL = normalizeTunnelUrl(TUNNEL_URL_RAW);
+if (TUNNEL_URL !== TUNNEL_URL_RAW) {
+	console.error(`note: using ${TUNNEL_URL} (converted from ${TUNNEL_URL_RAW})`);
+}
+if (!isValidTunnelUrl(TUNNEL_URL)) {
+	console.error(`bad TUNNEL_URL ${JSON.stringify(TUNNEL_URL_RAW)} — want wss://<host>/t/<long-room-id>/__agent`);
 	process.exit(1);
 }
 if (typeof WebSocket === "undefined") {
@@ -216,7 +222,7 @@ async function streamResponseToEdge(ws, id, res, timer, ctrl) {
 		sendFrame(ws, T_FIN, id);
 	} catch (e) {
 		clearTimeout(timer);
-		// Mid-stream failure: the edge has already sent headers, so RST (the
+		// Mid-stream failure: the worker has already sent headers, so RST (the
 		// browser sees a truncated stream).
 		try {
 			ctrl.abort();
@@ -245,7 +251,7 @@ async function serveHttp(ws, id, head) {
 		streams.delete(id);
 		inFlight--;
 	};
-	// Placeholder so an edge RST during TTFB is observed (no silent work).
+	// Placeholder so a worker RST during TTFB is observed (no silent work).
 	streams.set(id, { kind: "http-pending", id, release });
 	try {
 		const headers = buildHeaders(head.headers);
@@ -289,7 +295,7 @@ async function serveHttp(ws, id, head) {
 		try {
 			fetched = await fetchUpstream({ method: head.method, path: head.path, headers, body });
 		} catch (e) {
-			// Edge RST may have won the race (released): then stay silent.
+			// Worker RST may have won the race (released): then stay silent.
 			if (!released) {
 				release();
 				rst(ws, id, e?.name === "AbortError" ? "upstream timeout" : String(e?.message ?? e));
@@ -297,7 +303,7 @@ async function serveHttp(ws, id, head) {
 			return;
 		}
 		if (released) {
-			// Edge RST landed mid-fetch: drop the response.
+			// Worker RST landed mid-fetch: drop the response.
 			try {
 				fetched.ctrl.abort();
 			} catch {}
@@ -305,7 +311,7 @@ async function serveHttp(ws, id, head) {
 			return;
 		}
 		// Upload done; the response phase owns the stream now so a later
-		// edge RST can abort it mid-body.
+		// worker RST can abort it mid-body.
 		streams.set(id, { kind: "http-response", id, release, ctrl: fetched.ctrl });
 		await streamResponseToEdge(ws, id, fetched.res, fetched.timer, fetched.ctrl);
 		release();
@@ -401,7 +407,7 @@ async function messageBytes(data) {
 function connectOnce() {
 	return new Promise((resolve) => {
 		const startedAt = Date.now();
-		const ws = new WebSocket(EDGE_URL);
+		const ws = new WebSocket(TUNNEL_URL);
 		if (typeof ws.binaryType !== "undefined") {
 			try {
 				ws.binaryType = "arraybuffer";
@@ -448,7 +454,7 @@ function connectOnce() {
 			const f = decodeTunnelFrame(raw);
 			if (!f) return;
 			if (f.type === T_HB) return;
-			if (f.type === T_HELLO) return; // edge never sends HELLO
+			if (f.type === T_HELLO) return; // worker never sends HELLO
 			if (f.stream === 0) return;
 			const id = f.stream;
 			if (f.type === T_HEADERS) {
@@ -479,7 +485,7 @@ function connectOnce() {
 					}
 				}
 				// DATA for an http-response stream is a protocol violation;
-				// ignore it (edge never sends it).
+				// ignore it (worker never sends it).
 				if (f.flags & T_FLAG_FIN) {
 					myStreams.delete(id);
 					if (s.kind === "http-upload" && s.onFin) s.onFin();

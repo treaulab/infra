@@ -25,7 +25,7 @@ jobs:
             asset: tunnel-agent-linux-arm64
     defaults:
       run:
-        working-directory: workers/edge
+        working-directory: workers/tunnel
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.asset }}
-          path: workers/edge/${{ matrix.asset }}
+          path: workers/tunnel/${{ matrix.asset }}
           if-no-files-found: error
 
   smoke:
@@ -51,7 +51,7 @@ jobs:
     needs: build
     defaults:
       run:
-        working-directory: workers/edge
+        working-directory: workers/tunnel
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6

@@ -1,10 +1,10 @@
 name: ci
 # Project CI: worker bundle, tunnel agent, and site checks.
-# Runs on PRs that touch the project; edge.yml calls it as the gate before
+# Runs on PRs that touch the project; tunnel.yml calls it as the gate before
 # any main-branch deploy. No Cloudflare auth, no repo secrets — fork-safe.
 on:
   pull_request:
-    paths: [workers/edge/**, apps/website/src/**]
+    paths: [workers/tunnel/**, apps/website/src/**]
   workflow_call:
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: workers/edge
+        working-directory: workers/tunnel
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: workers/edge
+        working-directory: workers/tunnel
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6

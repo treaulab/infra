@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// treaulab ssh ProxyCommand helper: shuttles stdio <-> edge pipe as raw bytes.
+// treaulab ssh ProxyCommand helper: shuttles stdio <-> worker pipe as raw bytes.
 // Zero dependencies, Node 22+. Usage in ~/.ssh/config:
 //
 //   Host lockedvps
@@ -13,14 +13,14 @@
 
 import { HALF_CLOSE_TEXT, normalizeClientUrl } from "../lib/shared.js";
 
-const EDGE_URL_RAW = process.argv[2];
-if (!EDGE_URL_RAW || !/^(wss?|https?):\/\//.test(EDGE_URL_RAW)) {
+const TUNNEL_URL_RAW = process.argv[2];
+if (!TUNNEL_URL_RAW || !/^(wss?|https?):\/\//.test(TUNNEL_URL_RAW)) {
 	console.error("usage: ws-ssh-proxy.js wss://<host>/p/<long-box-id>  (https:// also accepted)");
 	process.exit(2);
 }
 // Accept https:// too (common paste mistake) — the wire is always WebSocket.
-const EDGE_URL = normalizeClientUrl(EDGE_URL_RAW);
-if (EDGE_URL.startsWith("ws://")) {
+const TUNNEL_URL = normalizeClientUrl(TUNNEL_URL_RAW);
+if (TUNNEL_URL.startsWith("ws://")) {
 	console.error("ws-ssh-proxy: warning: cleartext ws:// (local dev only)");
 }
 if (typeof WebSocket === "undefined") {
@@ -33,7 +33,7 @@ const fail = (msg, code = 1) => {
 	process.exit(code);
 };
 
-const ws = new WebSocket(EDGE_URL);
+const ws = new WebSocket(TUNNEL_URL);
 ws.binaryType = "arraybuffer";
 
 let stdinEnded = false;
@@ -53,7 +53,7 @@ ws.onopen = () => {
 		try {
 			ws.send(chunk);
 		} catch {
-			fail("send failed (edge unreachable?)");
+			fail("send failed (worker unreachable?)");
 		}
 		// Simple backpressure: pause stdin while the socket drains.
 		if (ws.bufferedAmount > 1024 * 1024 && !drainTimer) {
@@ -71,11 +71,11 @@ ws.onopen = () => {
 		// Half-close: signal EOF downstream but keep delivering the response
 		// (ssh parity for `ssh host cmd < file`). TEXT frame: binary DATA can
 		// never collide with it (old 5-byte binary magic still accepted by
-		// the edge for old proxies). Exit still driven by server close.
+		// the worker for old proxies). Exit still driven by server close.
 		try {
 			ws.send(HALF_CLOSE_TEXT);
 		} catch {
-			fail("send failed (edge unreachable?)");
+			fail("send failed (worker unreachable?)");
 		}
 	});
 	process.stdin.on("error", () => fail("stdin error"));

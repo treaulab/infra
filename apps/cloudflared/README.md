@@ -14,7 +14,7 @@ NAT box (:8080 + :22)              Cloudflare edge               visitor / lapto
 ```
 
 > Apex `treau.me` + `www` stay on the VPS/Caddy stack and the
-> `treaulab-edge` Worker. Use subdomains here so DNS never collides.
+> `treaulab-tunnel` Worker. Use subdomains here so DNS never collides.
 > Suggested: `box.treau.me` (HTTP) + `ssh-box.treau.me` (SSH) — flat,
 > short, no collision with apex/`www`/`go`.
 
@@ -172,7 +172,7 @@ SSH session out.
 # on the VPS (read-only checks, no change):
 docker logs caddy --tail 20    # no new hits for box.treau.me / ssh-box.treau.me
 # Azure portal → Monitor → egress flat for the window
-# DNS: treau.me + www.treau.me unchanged (still VPS/edge); only the two
+# DNS: treau.me + www.treau.me unchanged (still VPS); only the two
 # subdomain CNAMEs point at <UUID>.cfargotunnel.com
 ```
 
@@ -194,8 +194,8 @@ rollback because it was never changed.
 ## 8. When NOT to use this
 
 * You want zero Cloudflare Tunnel dependency / no domain move: use the
-  in-repo `workers/edge` tunnel instead (`workers/edge/TUNNEL.md` for HTTP,
-  `workers/edge/PIPE.md` for SSH — outbound 443 only, long-URL auth).
+  in-repo tunnel Worker instead (`workers/tunnel/TUNNEL.md` for HTTP,
+  `workers/tunnel/PIPE.md` for SSH — outbound 443 only, long-URL auth).
 * You want ephemeral sharing with no account at all:
   `cloudflared tunnel --url http://localhost:8080` (trycloudflare.com URL,
   dies with the process).

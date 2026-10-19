@@ -24,7 +24,7 @@ same heartbeat). `python3 --version` is the only requirement (3.8+).
 
 ```bash
 # zero-clone one-liner (no git, no Node, no pip):
-curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/edge/agent/agent.py \
+curl -fsSL https://raw.githubusercontent.com/treaulab/infra/main/workers/tunnel/agent/agent.py \
   -o /tmp/agent.py
 python3 /tmp/agent.py http://127.0.0.1:8080
 # prints the public URL and serves it — browse https://go.treau.me/t/<id>/
@@ -38,7 +38,7 @@ python3 /tmp/agent.py http://127.0.0.1:8080
 
 One file, zero dependencies, Node 22+. Runs **on the locked-down VPS** next to
 whatever you want to expose (e.g. `python3 -m http.server 8080`), dials **out**
-a single `wss:` control socket to the edge, and serves the local upstream over
+a single `wss:` control socket to the Worker, and serves the local upstream over
 it. Needs only **outbound 443 + DNS** — no inbound ports. Your Azure TREAU box
 is never involved (stays at zero egress).
 
@@ -56,7 +56,9 @@ No args at all mints a fresh id and prints the URL (ephemeral — Ctrl-C
 stops it). `--id <id>` reuses a room (e.g. the id from `tunnel info`).
 
 Env knobs: `UPSTREAM` (default `http://127.0.0.1:8080`), `TUNNEL_HOST`
-(default `https://go.treau.me`), `UPSTREAM_TIMEOUT_MS`
+(default `https://go.treau.me`), `TUNNEL_URL` (full `wss://…/__agent` control
+URL for systemd-style persistent mode; legacy `EDGE_URL` still read),
+`UPSTREAM_TIMEOUT_MS`
 (default `15000`, time to first byte — bodies stream with no total cap),
 `NAME` (default hostname), `MAX_CONCURRENT` (default `16`),
 `MAX_TUNNEL_BYTES` (default 500 MiB safety ceiling per stream).

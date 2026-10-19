@@ -7,7 +7,7 @@ export { TunnelRoom, PipeRoom };
 const APEX_HOST = "treau.me";
 const TUNNEL_HOST = "go.treau.me";
 
-// Mirror of apps/caddy/Caddyfile security posture, enforced at the edge.
+// Mirror of apps/caddy/Caddyfile security posture, enforced at the worker.
 // Apex treau.me is static-only (reputation protection): no /t/* or /p/*
 // proxying there. Tunnels/pipes live on go.treau.me.
 function withSecurityHeaders(res, url) {
@@ -61,7 +61,7 @@ function isWebSocketUpgrade(request) {
 // /t/<roomId>/[...rest] -> named room, rest defaults to "/".
 // /t/<roomId>/__agent is the agent-only control endpoint (websocket).
 // IDs must be 20-64 chars [A-Za-z0-9_-] so short guessable names fail fast.
-// (ID_RE lives in lib/shared.js so edge/agents/CLI validate identically.)
+// (ID_RE lives in lib/shared.js so worker/agents/CLI validate identically.)
 
 function parseTunnelPath(pathname) {
 	const m = pathname.match(/^\/t\/([^/]+)((?:\/.*)?)$/);

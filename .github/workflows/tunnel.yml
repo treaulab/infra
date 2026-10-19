@@ -1,10 +1,10 @@
-name: edge
+name: tunnel
 # Deploy only tested code: the `ci` job (ci.yml) must pass before `deploy`
 # runs. ci.yml also runs standalone on project PRs.
 on:
   push:
     branches: [main]
-    paths: [workers/edge/**, apps/website/src/**]
+    paths: [workers/tunnel/**, apps/website/src/**]
   workflow_dispatch:
 
 permissions:
@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-24.04
     # Serialize deploys; queue instead of cancelling a mid-flight release.
     concurrency:
-      group: edge-deploy
+      group: tunnel-deploy
       cancel-in-progress: false
     defaults:
       run:
-        working-directory: workers/edge
+        working-directory: workers/tunnel
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -42,7 +42,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID repo secrets not set — edge auto-deploy skipped. Add them in Settings → Secrets → Actions, or deploy manually: npx wrangler login && npm run deploy."
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID repo secrets not set — tunnel auto-deploy skipped. Add them in Settings → Secrets → Actions, or deploy manually: npx wrangler login && npm run deploy."
             exit 0
           fi
           npx wrangler deploy

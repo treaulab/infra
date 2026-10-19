@@ -1,5 +1,5 @@
 "$schema" = "./node_modules/wrangler/config-schema.json"
-name = "treaulab-edge"
+name = "treaulab-tunnel"
 main = "src/worker.js"
 compatibility_date = "2026-10-11"
 
