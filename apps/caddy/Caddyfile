@@ -11,6 +11,11 @@
 		file_server
 	}
 
+	# One short TTL for EVERYTHING: the site has no build step / hashed
+	# asset names, and robots.txt / sitemap.xml / security.txt are
+	# semantically mutable. Long-lived immutable caching would pin stale
+	# files for a year with no purge path. Never add immutable here
+	# without fingerprinted asset names.
 	header {
 		Cache-Control "public, max-age=3600"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -23,13 +28,6 @@
 		Cross-Origin-Resource-Policy "same-origin"
 		-Server
 	}
-
-	# Long-lived immutable caching for versioned/static assets only.
-	# HTML keeps the short max-age above so edits roll out quickly.
-	@immutable {
-		path *.svg *.ico *.txt *.xml
-	}
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
 }
 
 www.{$DOMAIN:treau.me} {

@@ -10,7 +10,7 @@ const TUNNEL_HOST = "go.treau.me";
 // Mirror of apps/caddy/Caddyfile security posture, enforced at the worker.
 // Apex treau.me is static-only (reputation protection): no /t/* or /p/*
 // proxying there. Tunnels/pipes live on go.treau.me.
-function withSecurityHeaders(res, url) {
+function withSecurityHeaders(res) {
 	const out = new Response(res.body, res);
 	out.headers.set(
 		"Strict-Transport-Security",
@@ -34,13 +34,12 @@ function withSecurityHeaders(res, url) {
 	out.headers.set("Cross-Origin-Resource-Policy", "same-origin");
 	out.headers.delete("Server");
 	out.headers.delete("X-Powered-By");
-	const pathname = url ? new URL(url).pathname : "";
-	if (/\.(svg|ico|txt|xml)$/.test(pathname)) {
-		out.headers.set("Cache-Control", "public, max-age=31536000, immutable");
-	} else if (
-		!out.headers.has("Cache-Control") &&
-		res.headers.get("Content-Type")?.includes("text/html")
-	) {
+	// Site cache policy mirrors apps/caddy/Caddyfile: robots.txt, sitemap.xml
+	// and security.txt are semantically mutable and there are no hashed asset
+	// names, so nothing here may promise year-long immutable caching. One
+	// short TTL for everything; an existing Cache-Control (e.g. no-store on
+	// status pages) is preserved.
+	if (!out.headers.has("Cache-Control")) {
 		out.headers.set("Cache-Control", "public, max-age=3600");
 	}
 	return out;
@@ -175,7 +174,6 @@ export default {
 							},
 						},
 					),
-					request.url,
 				),
 			);
 		}
@@ -197,7 +195,6 @@ export default {
 							"Cache-Control": "no-store",
 						},
 					}),
-					request.url,
 				),
 			);
 		}
@@ -221,11 +218,10 @@ export default {
 					status: 404,
 					headers: { "Content-Type": "text/html; charset=utf-8" },
 				}),
-				request.url,
 			);
 			out.headers.set("X-Robots-Tag", "noindex");
 			return out;
 		}
-		return withSecurityHeaders(asset, request.url);
+		return withSecurityHeaders(asset);
 	},
 };
