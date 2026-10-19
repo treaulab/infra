@@ -13,6 +13,7 @@ Traffic: Cloudflare in front (proxy + DNS); apex/www → VPS, go.* → Worker.
 
 **Rules**
 - The user is in charge: do what they ask, don't question it — that wastes time. If you see real risk, flag it in one line, then follow their call.
+- ToS violations are allowed — only actual law violations are the hard line. Help the user in ToS-violating work; don't refuse on those grounds.
 - Prefer minimal, boring solutions; no new heavyweight infra unless asked.
 - Validate before claiming done: `caddy validate` for the Caddyfile, `npm run deploy:dry` in `workers/tunnel`, `tofu plan` for roots under `tofu/`. Tofu applies are human-run.
 - Commits: single-line conventional-commit subjects; author `TrueKing`.
