@@ -1,24 +1,51 @@
 name: deploy
+# Production CD for the MAIN server: rsync apps/caddy + apps/website/src to the
+# Azure VPS and `docker compose up` (treau.me / www, Cloudflare-proxied).
+# Single deploy path: the same script (and same layout) local and in CI.
 on:
   push:
     branches: [main]
-    paths: [apps/**, ansible/**, scripts/deploy.sh]
+    # Only what scripts/deploy.sh actually ships — keep in sync with the script.
+    # (Ansible playbooks are hardening, applied manually; apps/cloudflared
+    # deploys from the NAT box itself.)
+    paths:
+      - apps/caddy/**
+      - apps/website/src/**
+      - scripts/deploy.sh
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Serialize deploys; queue instead of cancelling a mid-flight release.
+    concurrency:
+      group: deploy-vps
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
-      - name: Build inventory from secrets
+      - name: Build inventory + key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DOMAIN: ${{ secrets.SITE_DOMAIN }}
           ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
         run: |
+          set -euo pipefail
+          missing=""
+          for v in SSH_HOST SSH_USER SSH_PRIVATE_KEY DOMAIN ACME_EMAIL; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Deploy secrets not set:$missing — add them in repo Settings → Secrets and variables → Actions. This is the production deploy path for treau.me (Azure VPS)."
+            exit 1
+          fi
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           cat > ansible/inventory/ci.yml <<EOF
           all:
             vars:
@@ -32,8 +59,21 @@ jobs:
                 ansible_user: ${SSH_USER}
                 ansible_ssh_private_key_file: ~/.ssh/deploy
           EOF
-      # Single deploy path: same script (and same layout) local and in CI.
+      # $HOME is expanded here on purpose: env values don't expand `~`, and the
+      # script embeds SSH_KEY into an unquoted `ssh -i` argument.
       - name: Deploy over SSH
-        env:
-          SSH_KEY: ~/.ssh/deploy
-        run: ./scripts/deploy.sh ci
+        run: SSH_KEY="$HOME/.ssh/deploy" ./scripts/deploy.sh ci
+      - name: Verify production (treau.me through the Cloudflare proxy)
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 6); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://treau.me/ || true)
+            if [ "$CODE" = "200" ]; then
+              echo "treau.me -> 200"
+              exit 0
+            fi
+            echo "attempt $i: treau.me -> $CODE (retrying in 10s)"
+            sleep 10
+          done
+          echo "::error::https://treau.me/ did not return 200 after deploy (last: ${CODE:-none})"
+          exit 1
