@@ -1,13 +1,26 @@
 name: edge
+# Deploy only tested code: the `ci` job (ci.yml) must pass before `deploy`
+# runs. ci.yml also runs standalone on project PRs.
 on:
   push:
     branches: [main]
     paths: [workers/edge/**, apps/website/src/**]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: ci
     runs-on: ubuntu-24.04
+    # Serialize deploys; queue instead of cancelling a mid-flight release.
+    concurrency:
+      group: edge-deploy
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: workers/edge
@@ -16,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run sync:public
       # Manual deploys (wrangler login) are the norm; CI deploys only when the
       # repo secrets exist. Without this gate every push goes red, which trains

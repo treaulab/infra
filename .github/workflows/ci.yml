@@ -1,0 +1,85 @@
+name: ci
+# Project CI: worker bundle, tunnel agent, and site checks.
+# Runs on PRs that touch the project; edge.yml calls it as the gate before
+# any main-branch deploy. No Cloudflare auth, no repo secrets — fork-safe.
+on:
+  pull_request:
+    paths: [workers/edge/**, apps/website/src/**]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # Fast gate: syntax + config + worker bundle validity (dry-run, no upload).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: workers/edge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - name: Syntax check (JS + Python twin)
+        run: |
+          set -euo pipefail
+          for f in src/*.js lib/*.js agent/*.js bin/*.js bin/tunnel; do
+            node --check "$f"
+          done
+          python3 -m py_compile agent/agent.py
+      # Same script users run locally (sync:public + wrangler --dry-run):
+      # validates the bundle, wrangler.toml, DO migrations, asset dir.
+      - name: Wrangler dry-run (bundle + config + DO migrations)
+        run: npm run deploy:dry
+
+  smoke:
+    # End-to-end round trip: wrangler dev + agent source in share mode.
+    # Mirrors agent-bin.yml's release smoke (which tests the bun-compiled
+    # binary); this one runs the Node source that binary is built from.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: workers/edge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - name: Sync static assets (wrangler dev needs ./public/)
+        run: npm run sync:public
+      - name: Smoke test (share + round-trip)
+        run: |
+          set -euo pipefail
+          (npx wrangler dev --port 18787 > /tmp/wdev.log 2>&1 &)
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null --max-time 3 http://127.0.0.1:18787/health && break
+            sleep 2
+          done
+          mkdir -p /tmp/up && echo ok > /tmp/up/index.html
+          (python3 -m http.server 18102 --bind 127.0.0.1 --directory /tmp/up &)
+          sleep 2
+          (timeout 60 node agent/agent.js http://127.0.0.1:18102 \
+            --host http://127.0.0.1:18787 --json > /tmp/share.log 2>&1 &)
+          sleep 6
+          ID=$(head -n 1 /tmp/share.log | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+          test "$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://127.0.0.1:18787/t/$ID/")" = "200"
+      - name: Dump dev/agent logs on failure
+        if: failure()
+        run: |
+          echo "--- /tmp/wdev.log ---"
+          cat /tmp/wdev.log 2>/dev/null || echo "(missing)"
+          echo "--- /tmp/share.log ---"
+          cat /tmp/share.log 2>/dev/null || echo "(missing)"
