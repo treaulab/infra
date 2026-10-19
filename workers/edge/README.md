@@ -1,8 +1,13 @@
-# treaulab-edge (Cloudflare Workers, full-edge)
+# treaulab-edge (Cloudflare Worker — tunnels on go.treau.me)
 
-HTTP tunnels + SSH pipes + static site, **100% on Cloudflare's edge**.
-Zero Azure egress by design: no `fetch()` to any origin anywhere in this code.
-The VPS/Caddy stack stays warm only as an instant DNS rollback target.
+HTTP tunnels + SSH pipes for agents behind NAT / locked-down origins, served
+on `go.treau.me`. The tunnel/pipe code never `fetch()`es an origin — the VPS
+is not in the tunnel data path.
+
+The main site (`treau.me`) is served by the Azure VPS (Caddy). This Worker
+carries a synced copy of the site only for dev/preview hosts (`workers.dev`).
+Moving the apex onto the Worker is an optional, unexecuted migration (see the
+cutover section below).
 
 ## What lives here
 
@@ -91,24 +96,32 @@ Long-URL-only: no `wrangler secret put` needed. If you previously set
 `RELAY_TOKEN` / `PIPE_TOKEN`, delete them once:
 `npx wrangler secret delete RELAY_TOKEN` + `PIPE_TOKEN`.
 
-CI (`edge.yml`, path-filtered to `workers/edge/**` + `apps/website/src/**`)
-needs repo secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`.
+CI: `ci.yml` runs on project PRs (path-filtered to `workers/edge/**` +
+`apps/website/src/**`) — syntax checks, `npm run deploy:dry`, and a live
+`share` round-trip against `wrangler dev`; no secrets needed. On main pushes
+`edge.yml` runs that same CI first, then deploys (skipped with a notice when
+`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` repo secrets are unset —
+then deploy manually with `npm run deploy`).
 SSH-pipe usage: `PIPE.md` (`tunnel ssh lockedvps`).
 
 Dry-run validation without uploading: `npm run deploy:dry`.
 
-## DNS cutover (the zero-egress switch)
+## Optional — full-edge cutover (NOT the current state)
+
+Current state: `treau.me`/`www` are served by the Azure VPS behind the
+Cloudflare proxy; the Worker serves `go.treau.me` only. If you ever move the
+apex onto the Worker:
 
 1. Dashboard → Workers → `treaulab-edge` → Custom Domains → add `treau.me`
    (+ `www.treau.me`; the Worker itself 301s www→apex).
 2. Verify on the custom domain before touching anything else:
    `curl -sI https://treau.me/` → `200`, `/robots.txt`, `/sitemap.xml`,
    `/.well-known/security.txt`, `/nope-123` → `404` + `noindex`.
-3. Azure is now out of the path (verify: `docker logs caddy` shows no new
-   access; Azure Monitor egress flat). Leave the VPS running 48h.
-4. True zero: only after the soak, optionally stop Caddy / close NSG
-   `80/443` / deallocate the VM. Rollback until then = repoint DNS to the
-   proxied VPS record (no code change).
+3. The VPS is then out of the site path (verify: `docker logs caddy` shows no
+   new access). Keep it warm 48h as the rollback.
+4. Only after the soak, optionally stop Caddy / close NSG `80/443` /
+   deallocate the VM. Rollback anytime = repoint DNS to the VPS record
+   (no code change).
 
 ## Notes / limits
 

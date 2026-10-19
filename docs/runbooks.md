@@ -147,7 +147,12 @@ independently of this box (paper/Bitwarden) or accept total loss on
 keyring failure — either is a conscious choice, document which. Losing it
 means re-encrypting everything to a new identity, not recovery.
 
-## Edge cutover (full-edge, zero Azure egress)
+## Optional — Edge cutover (move the apex onto the Worker)
+
+Current state: `treau.me`/`www` are served by the Azure VPS behind the
+Cloudflare proxy (`deploy.yml` auto-deploys it on main pushes); the Worker
+serves `go.treau.me` only. Procedure if you ever move the apex:
+
 1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
 2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`
    → note the `*.workers.dev` preview URL.
@@ -156,6 +161,7 @@ means re-encrypting everything to a new identity, not recovery.
    `tunnel doctor` against the preview host (all PASS).
 4. Dashboard → Worker → Custom Domains → add `treau.me` (+ `www.treau.me`).
    Re-run the same checks on the custom domain.
-5. Azure is now out of the path (no code fetches any origin). Soak 48h with
-   the VPS warm, then optionally stop Caddy / close NSG `80/443`.
-   Rollback anytime = repoint DNS to the proxied VPS record (no code change).
+5. The VPS is then out of the site path; keep it warm 48h as the rollback.
+   Only after the soak, optionally stop Caddy / close NSG `80/443` /
+   deallocate the VM. Rollback anytime = repoint DNS to the proxied VPS
+   record (no code change).
