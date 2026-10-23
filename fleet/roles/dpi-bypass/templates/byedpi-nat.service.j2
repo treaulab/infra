@@ -1,0 +1,16 @@
+[Unit]
+Description=byedpi transparent proxy redirect rules
+Documentation=https://github.com/hufrea/byedpi
+After=network-online.target byedpi-transparent.service ufw.service
+Wants=network-online.target byedpi-transparent.service
+PartOf=ufw.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart={{ dpi_bypass_nat_script }} apply
+ExecStop={{ dpi_bypass_nat_script }} remove
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

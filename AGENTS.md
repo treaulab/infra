@@ -16,7 +16,7 @@ them.
   treau.me subdomains; not the homelab.
 
 **Map** — `platform/` (OpenTofu: azure, cloudflare, github, tailscale; proxmox placeholder),
-`fleet/` (Ansible OS hardening + Tailscale + Docker), `stacks/` (public Azure
+`fleet/` (Ansible OS hardening + Tailscale + Docker + opt-in DPI bypass), `stacks/` (public Azure
 Caddy/site, private homelab, NAT box), `edge/` (Cloudflare Worker), `tools/`
 (operator helpers), `docs/runbooks.md` (ops manual), `Justfile` (operator
 interface), `.github/workflows/` (CI/CD).

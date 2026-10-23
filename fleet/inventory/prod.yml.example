@@ -29,3 +29,12 @@ all:
           ansible_host: homelab.example-tailnet.ts.net
           ansible_user: youruser
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    restricted:
+      # Opt-in only: full-device mode redirects the host's TCP 80/443.
+      # Add hosts here and run `just unblock <host>`; do not add the VPS.
+      hosts: {}
+      # hosts:
+      #   restricted-laptop:
+      #     ansible_host: 100.x.y.z
+      #     ansible_user: youruser
+      #     ansible_ssh_private_key_file: ~/.ssh/id_ed25519

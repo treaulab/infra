@@ -1,0 +1,73 @@
+---
+- name: Validate supported platform
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+    fail_msg: "dpi-bypass currently supports Debian/Ubuntu hosts only."
+
+- name: Validate install method
+  ansible.builtin.assert:
+    that:
+      - dpi_bypass_install_method in ['release', 'source']
+    fail_msg: "dpi_bypass_install_method must be 'release' or 'source'."
+
+- name: Install base packages (iptables, CA certificates)
+  ansible.builtin.apt:
+    name: [ca-certificates, iptables]
+    state: present
+    update_cache: true
+
+- name: Install privoxy (HTTP proxy in front of SOCKS5)
+  ansible.builtin.apt:
+    name: privoxy
+    state: present
+  when: dpi_bypass_privoxy | bool
+
+- name: Install source build dependencies
+  ansible.builtin.apt:
+    name: [build-essential, git, make]
+    state: present
+  when: dpi_bypass_install_method == 'source'
+
+- name: Create byedpi system group
+  ansible.builtin.group:
+    name: "{{ dpi_bypass_group }}"
+    system: true
+    state: present
+
+- name: Create byedpi system user
+  ansible.builtin.user:
+    name: "{{ dpi_bypass_user }}"
+    group: "{{ dpi_bypass_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Install the pinned release binary
+  ansible.builtin.include_tasks: install_release.yml
+  when: dpi_bypass_install_method == 'release'
+
+- name: Build the pinned upstream tag
+  ansible.builtin.include_tasks: install_source.yml
+  when: dpi_bypass_install_method == 'source'
+
+- name: Verify the byedpi binary starts
+  ansible.builtin.command:
+    cmd: "{{ dpi_bypass_bin }} --version"
+  register: dpi_bypass_version_check
+  changed_when: false
+  failed_when: dpi_bypass_version_check.rc != 0
+
+- name: Assert the installed byedpi version matches the pinned version
+  ansible.builtin.assert:
+    that:
+      - "dpi_bypass_version_check.stdout | trim == (dpi_bypass_version | regex_replace('^0[.]', ''))"
+    fail_msg: >-
+      Expected byedpi {{ dpi_bypass_version }} but {{ dpi_bypass_bin }} reported
+      {{ dpi_bypass_version_check.stdout | trim }}.
+  when: not ansible_check_mode
+
+- name: Show installed byedpi version
+  ansible.builtin.debug:
+    msg: "byedpi {{ dpi_bypass_version_check.stdout | default('unknown') | trim }} installed at {{ dpi_bypass_bin }}"

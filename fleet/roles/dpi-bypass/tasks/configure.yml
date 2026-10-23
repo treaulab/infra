@@ -1,0 +1,125 @@
+---
+- name: Template the SOCKS5 service
+  ansible.builtin.template:
+    src: byedpi-socks.service.j2
+    dest: /etc/systemd/system/byedpi-socks.service
+    mode: "0644"
+  notify: Restart byedpi socks
+
+- name: Template the transparent proxy service
+  ansible.builtin.template:
+    src: byedpi-transparent.service.j2
+    dest: /etc/systemd/system/byedpi-transparent.service
+    mode: "0644"
+  when: dpi_bypass_enable_transparent | bool
+  notify: Restart byedpi transparent
+
+- name: Enable and start the SOCKS5 service
+  ansible.builtin.systemd:
+    name: byedpi-socks
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Enable and start the transparent proxy service
+  ansible.builtin.systemd:
+    name: byedpi-transparent
+    enabled: true
+    state: started
+  when: dpi_bypass_enable_transparent | bool
+
+# Turning transparent mode off must also remove the redirect rules, otherwise
+# the host keeps sending 80/443 to a proxy that is no longer running.
+- name: Stop the transparent proxy when full-device mode is disabled
+  ansible.builtin.systemd:
+    name: byedpi-transparent
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: not (dpi_bypass_enable_transparent | bool)
+
+- name: Stop the NAT rules service when full-device mode is disabled
+  ansible.builtin.systemd:
+    name: byedpi-nat
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: not (dpi_bypass_enable_transparent | bool)
+
+- name: Check whether the NAT helper script exists
+  ansible.builtin.stat:
+    path: "{{ dpi_bypass_nat_script }}"
+  register: dpi_bypass_nat_script_stat
+  when: not (dpi_bypass_enable_transparent | bool)
+
+- name: Remove leftover NAT rules when full-device mode is disabled
+  ansible.builtin.command:
+    cmd: "{{ dpi_bypass_nat_script }} remove"
+  when:
+    - not (dpi_bypass_enable_transparent | bool)
+    - dpi_bypass_nat_script_stat.stat.exists | default(false)
+  changed_when: false
+  failed_when: false
+
+- name: Remove transparent proxy units when full-device mode is disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/byedpi-transparent.service
+    - /etc/systemd/system/byedpi-nat.service
+    - "{{ dpi_bypass_nat_script }}"
+  when: not (dpi_bypass_enable_transparent | bool)
+
+- name: Reload systemd after removing transparent proxy units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not (dpi_bypass_enable_transparent | bool)
+
+- name: Template the NAT helper script
+  ansible.builtin.template:
+    src: byedpi-nat.sh.j2
+    dest: "{{ dpi_bypass_nat_script }}"
+    mode: "0755"
+  when: dpi_bypass_enable_transparent | bool
+  notify: Restart byedpi nat
+
+- name: Template the NAT rules service
+  ansible.builtin.template:
+    src: byedpi-nat.service.j2
+    dest: /etc/systemd/system/byedpi-nat.service
+    mode: "0644"
+  when: dpi_bypass_enable_transparent | bool
+  notify: Restart byedpi nat
+
+- name: Enable and start the NAT rules service
+  ansible.builtin.systemd:
+    name: byedpi-nat
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: dpi_bypass_enable_transparent | bool
+
+- name: Configure the privoxy loopback listener
+  ansible.builtin.lineinfile:
+    path: /etc/privoxy/config
+    regexp: '^listen-address\s+127\.0\.0\.1:'
+    line: "listen-address 127.0.0.1:{{ dpi_bypass_privoxy_port }}"
+  when: dpi_bypass_privoxy | bool
+  notify: Restart privoxy
+
+- name: Forward privoxy HTTP requests to the byedpi SOCKS5 proxy
+  ansible.builtin.lineinfile:
+    path: /etc/privoxy/config
+    regexp: '^forward-socks5\s+/\s+'
+    line: "forward-socks5 / 127.0.0.1:{{ dpi_bypass_socks_port }} ."
+    insertafter: EOF
+  when: dpi_bypass_privoxy | bool
+  notify: Restart privoxy
+
+- name: Enable and start privoxy
+  ansible.builtin.systemd:
+    name: privoxy
+    enabled: true
+    state: started
+  when: dpi_bypass_privoxy | bool

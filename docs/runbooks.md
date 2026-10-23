@@ -68,6 +68,35 @@ Keep backups off-machine. Back up homelab app data on its own schedule.
 - Cloudflare Tunnel is a later, optional ingress for selected services. It
   runs on the homelab or the NAT box and never routes through Azure Caddy.
 
+## Restricted-network DPI bypass (byedpi)
+
+For client hosts whose network interferes with TLS/HTTP. This is not for the
+VPS or any public origin.
+
+1. Add the host to the `restricted` group in `fleet/inventory/prod.yml`
+   (gitignored). The group is empty by default and `unblock.yml` only targets it.
+2. `just unblock <host>` installs official upstream byedpi, verifies the pinned
+   release SHA256, and starts SOCKS5 `127.0.0.1:1080`, transparent `1081`, and
+   privoxy `8118`. Full-device mode redirects the host's own TCP `80`/`443` and
+   rejects QUIC UDP/443 by default.
+3. Verify:
+   ```bash
+   ssh <host> 'sudo systemctl status byedpi-socks byedpi-transparent byedpi-nat privoxy'
+   ssh <host> 'curl -x socks5h://127.0.0.1:1080 -I https://example.com'
+   ssh <host> 'sudo iptables -t nat -S BYEDPI_NAT'
+   ```
+4. If the target cannot reach GitHub, pre-download the exact upstream asset and
+   pass `DPI_BYPASS_ARTIFACT=/path/to/byedpi-17.3-<arch>.tar.gz just unblock <host>`.
+5. Undo: `just unblock-off <host>` stops services and removes the redirect
+   chains, units, binary, and role user.
+
+Caveats: IPv4 only; Docker bridge traffic and UDP are not proxied; QUIC is
+rejected, not proxied. Keep Tailscale in the exclusion list, and add local
+tunnel/agent egress CIDRs to `dpi_bypass_extra_exclude_cidrs` to avoid loops.
+`byedpi-nat.service` is `PartOf=ufw.service`; after a bare `ufw reload`, run
+`systemctl restart byedpi-nat`. Full variables:
+`fleet/roles/dpi-bypass/README.md`.
+
 ## NAT box (cloudflared, stable treau.me access)
 
 Separate NAT'd host exposing HTTP + SSH on stable subdomains. It is not the

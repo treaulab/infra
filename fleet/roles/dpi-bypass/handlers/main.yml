@@ -1,0 +1,23 @@
+---
+- name: Restart byedpi socks
+  ansible.builtin.systemd:
+    name: byedpi-socks
+    state: restarted
+
+- name: Restart byedpi transparent
+  ansible.builtin.systemd:
+    name: byedpi-transparent
+    state: restarted
+  when: dpi_bypass_enable_transparent | bool
+
+- name: Restart byedpi nat
+  ansible.builtin.systemd:
+    name: byedpi-nat
+    state: restarted
+  when: dpi_bypass_enable_transparent | bool
+
+- name: Restart privoxy
+  ansible.builtin.systemd:
+    name: privoxy
+    state: restarted
+  when: dpi_bypass_privoxy | bool

@@ -17,6 +17,10 @@ setup:
     echo "            cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
     echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 
+# Lint all fleet Ansible roles/playbooks (requires ansible-lint).
+fleet-check:
+    cd fleet && ansible-lint roles playbooks
+
 # Plan one OpenTofu root: azure, cloudflare, github, or tailscale.
 plan root="azure":
     #!/usr/bin/env bash
@@ -91,6 +95,14 @@ bootstrap node="all":
 # Docker engine only.
 docker node="all":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/docker.yml --limit "{{node}}"
+
+# Deploy byedpi DPI bypass to one restricted host (or the whole group).
+unblock node="restricted":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/unblock.yml --limit "{{node}}"
+
+# Remove byedpi and its redirect rules from restricted hosts.
+unblock-off node="restricted":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/unblock.yml --limit "{{node}}" -e dpi_bypass_state=absent
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":

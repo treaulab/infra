@@ -26,7 +26,7 @@ platform/          OpenTofu roots
 ├── tailscale/     tailnet ACL + CI keys/secrets
 └── proxmox/       deferred: homelab compute as code
 
-fleet/             Ansible: OS hardening, Tailscale, Docker
+fleet/             Ansible: OS hardening, Tailscale, Docker, opt-in DPI bypass
 stacks/
 ├── public/        Azure VPS: caddy/ + website/src
 ├── homelab/       private apps/core stacks (Tailscale only)
@@ -67,6 +67,7 @@ Keep port 22 until Tailscale access is proven.
 | `stacks/homelab/<app>/**` | `just deploy-home <app>` | Homelab over Tailscale |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
 | `fleet/**` | `just converge <node>` | OS configuration |
+| `fleet/roles/dpi-bypass/**` | `just unblock <host>` | Restricted network host |
 
 Website-only changes are rsync'd without restarting Caddy; Caddyfile/compose
 changes recreate the container.
@@ -77,6 +78,23 @@ The homelab VM joins the tailnet and is reached at its MagicDNS name or
 `100.x` address. There is no public DNS or homelab ingress yet. Use
 `tailscale serve` for HTTPS on the tailnet if an app needs it. Cloudflare
 Tunnel is a later, separate path; it must not route through Azure Caddy.
+
+## Restricted network hosts
+
+`fleet/playbooks/unblock.yml` installs byedpi only on hosts in the explicit
+`restricted` inventory group. It provides loopback SOCKS5 (`1080`), transparent
+proxy (`1081`), and privoxy (`8118`), and by default redirects the host's own
+TCP `80`/`443` and rejects QUIC. Never add the VPS: it is a public origin, not a
+client in a restricted network.
+
+```bash
+just unblock restricted-laptop
+just unblock-off restricted-laptop
+```
+
+The role pins official upstream `hufrea/byedpi`, verifies the release SHA256,
+and does not use the Codeberg mirror. See `fleet/roles/dpi-bypass/README.md`
+for variables and the IPv4/QUIC limitations.
 
 ## Secrets and state
 

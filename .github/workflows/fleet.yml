@@ -1,0 +1,40 @@
+name: fleet
+on:
+  pull_request:
+    paths: [fleet/**, Justfile]
+  push:
+    branches: [main]
+    paths: [fleet/**, Justfile]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Ansible tooling
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible-core ansible-lint
+          ansible-galaxy collection install -r fleet/requirements.yml
+      - name: Prepare example inventory
+        working-directory: fleet
+        run: cp inventory/prod.yml.example inventory/prod.yml
+      - name: Lint roles and playbooks
+        working-directory: fleet
+        run: ansible-lint roles playbooks
+      - name: Syntax-check all playbooks
+        working-directory: fleet
+        run: |
+          set -euo pipefail
+          for playbook in playbooks/*.yml; do
+            echo "== $playbook"
+            ansible-playbook -i inventory/prod.yml "$playbook" --syntax-check
+          done
