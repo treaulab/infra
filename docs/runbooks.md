@@ -115,17 +115,29 @@ Policy/keys root: `platform/tailscale`. Applies are human/terminal with
 short-lived credentials; CI is fmt/validate only. The local state contains a
 live key — see "OpenTofu state" below.
 
-## Secrets (`.env` for runtime, hidden prompts for provider creds)
+## Secrets (`.env`/`.envrc` local, hidden prompts for one-offs)
 
-SOPS/age was removed for now. Plaintext `.env` files are a deliberate
-temporary tradeoff for runtime stack config:
+SOPS/age was removed for now. Plaintext local files are a deliberate
+temporary tradeoff:
 
-- `.env` is gitignored globally; commit `.env.example` only.
+- `.env` is gitignored globally; commit `.env.example` only. It is for
+  runtime stack config.
+- `.envrc` is gitignored, mode `0600`, and loaded by `direnv` for local
+  provider credentials:
+  ```bash
+  cp .envrc.example .envrc
+  chmod 600 .envrc
+  # fill in the values locally
+  direnv allow .
+  ```
+  It is plaintext on disk. Move high-value tokens to GNOME Keyring
+  (`secret-tool`) or 1Password when convenient. Never commit it.
 - Caddy `.env` is non-secret (domain/email/version/IP).
 - Homelab/app `.env` files may contain secrets: keep them mode `0600`, never
-  log them, and never commit them. `just secrets-check` guards tracked `.env`.
-- Terraform/provider credentials are per-terminal, hidden input — never in
-  `.env`, tfvars, or shell history:
+  log them, and never commit them. `just secrets-check` guards tracked
+  `.env` and `.envrc`.
+- One-off credentials can still be entered with a hidden prompt instead of
+  `.envrc`; never put provider tokens in `.env` or tfvars:
   ```bash
   printf 'Cloudflare API token: '
   read -s CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
@@ -133,6 +145,10 @@ temporary tradeoff for runtime stack config:
   ```
   Repeat the same pattern for `GITHUB_TOKEN`, `TAILSCALE_API_KEY`, or
   `TAILSCALE_OAUTH_CLIENT_SECRET`.
+- Keep GitHub dynamic rather than storing a static token:
+  ```bash
+  GITHUB_TOKEN="$(gh auth token --user slancj)" just plan tailscale
+  ```
 - `deploy.yml` renders `stacks/public/caddy/.env` from GitHub Secrets.
 - Do not paste secrets into chat or issue trackers. A future SOPS/age or
   Docker-secrets migration can replace this without changing stack layouts.

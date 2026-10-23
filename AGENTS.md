@@ -29,4 +29,4 @@ interface), `.github/workflows/` (CI/CD).
 - Validate before claiming done: `just check` (tofu fmt/validate, Caddy validate, compose config, worker dry-run), and `tofu plan` for roots under `platform/`.
 - Tofu applies are human-run. Never apply after a directory move until the plan is empty.
 - Commits: single-line conventional-commit subjects; author `TrueKing`.
-- Never commit secrets. `.env` is for runtime stack config and is gitignored; provider API tokens go into the current shell via hidden `read -s` prompts, never into `.env` or tfvars. Commit only `.env.example`. `edge/tunnel-worker/public/` is gone — the Worker is tunnel-only.
+- Never commit secrets. `.env` is for runtime stack config and is gitignored; provider API tokens go into the current shell via hidden `read -s` prompts or a gitignored `.envrc` loaded by `direnv`, never into `.env` or tfvars. Commit only `.env.example`/`.envrc.example`. `edge/tunnel-worker/public/` is gone — the Worker is tunnel-only.

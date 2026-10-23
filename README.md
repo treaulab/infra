@@ -82,8 +82,9 @@ Tunnel is a later, separate path; it must not route through Azure Caddy.
 
 - Per-stack `.env` files are plaintext and gitignored. Commit `.env.example`
   only. This is a deliberate temporary tradeoff; SOPS/age was removed.
-- Provider credentials are entered into the current shell with a hidden
-  `read -s` prompt, never stored in `.env` or tfvars; see `docs/runbooks.md`.
+- Provider credentials are loaded locally from a gitignored `.envrc` by
+  `direnv`, or entered with a hidden `read -s` prompt for one-offs. Never put
+  them in `.env` or tfvars; see `docs/runbooks.md`.
 - OpenTofu state is local for now. Back it up off-machine, keep state mode
   `0600`, and never apply after moving directories until `tofu plan` is empty.
   `platform/tailscale/terraform.tfstate` contains a live key — treat it as a

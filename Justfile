@@ -8,13 +8,14 @@ _default:
 setup:
     #!/usr/bin/env bash
     set -euo pipefail
-    for c in git just tofu ssh rsync docker; do
+    for c in git just tofu ssh rsync docker direnv; do
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
     ansible-galaxy collection install -r fleet/requirements.yml
     echo "OK. Next: cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars"
     echo "            cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
+    echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 
 # Plan one OpenTofu root: azure, cloudflare, github, or tailscale.
 plan root="azure":
@@ -111,14 +112,17 @@ bump-spoke repo sha:
 gh-shell tenant="t1":
     tools/gh-shell.sh "{{tenant}}"
 
-# Guard against accidentally tracking a plaintext .env.
+# Guard against accidentally tracking plaintext local credentials.
 secrets-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    if git ls-files | grep -E '(^|/)\.env$'; then
-      echo "ERROR: a plaintext .env is tracked; remove it from git." >&2
+    if git ls-files | grep -E '(^|/)\.env(rc)?$'; then
+      echo "ERROR: a plaintext .env/.envrc is tracked; remove it from git." >&2
       exit 1
     fi
     git check-ignore -q fleet/inventory/prod.yml
     git check-ignore -q stacks/public/caddy/.env
-    echo "OK: secrets paths are ignored and no .env is tracked."
+    if [ -e .envrc ]; then
+      git check-ignore -q .envrc
+    fi
+    echo "OK: secrets paths are ignored and no .env/.envrc is tracked."
