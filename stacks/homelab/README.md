@@ -17,5 +17,5 @@ apps/vaultwarden/
 └── .env            # gitignored
 ```
 
-Deploy one app with `just deploy-home vaultwarden`. Keep app data in named
-volumes or host paths that are covered by backups.
+Deploy one app with `just deploy-home vaultwarden` (Ansible sync + compose).
+Keep app data in named volumes or host paths that are covered by backups.

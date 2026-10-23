@@ -1,0 +1,109 @@
+---
+# Deploy one private homelab stack from stacks/homelab/{apps,core}/<app>.
+# The stack source is synced with rsync; app data must live in named volumes
+# or host paths outside the synced directory.
+- name: Deploy a homelab stack
+  hosts: homelab
+  become: true
+  gather_facts: false
+  vars:
+    homelab_deploy_root: "{{ homelab_root | default('/opt/homelab') }}"
+    deploy_user: "{{ ansible_user | default('root') }}"
+    deploy_private_key: "{{ ansible_ssh_private_key_file | default('') | expanduser }}"
+  tasks:
+    - name: Require a stack name
+      ansible.builtin.assert:
+        that:
+          - stack_name | default('') | length > 0
+        fail_msg: "Pass -e stack_name=<app>."
+
+    - name: Locate the stack on the controller
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../stacks/homelab/{{ item }}/{{ stack_name }}"
+      loop: [apps, core]
+      delegate_to: localhost
+      become: false
+      register: homelab_stack_dirs
+
+    - name: Select the stack source
+      ansible.builtin.set_fact:
+        homelab_stack_kind: "{{ 'apps' if (homelab_stack_dirs.results[0].stat.isdir | default(false)) else 'core' }}"
+        homelab_stack_src: >-
+          {{ homelab_stack_dirs.results[0].stat.path
+             if (homelab_stack_dirs.results[0].stat.isdir | default(false))
+             else homelab_stack_dirs.results[1].stat.path }}
+      when: >-
+        (homelab_stack_dirs.results[0].stat.isdir | default(false)) or
+        (homelab_stack_dirs.results[1].stat.isdir | default(false))
+
+    - name: Fail when the stack does not exist
+      ansible.builtin.assert:
+        that:
+          - homelab_stack_kind is defined
+          - homelab_stack_src is defined
+        fail_msg: "No stack at stacks/homelab/{apps,core}/{{ stack_name }}"
+
+    - name: Set the stack destination
+      ansible.builtin.set_fact:
+        homelab_stack_dest: "{{ homelab_deploy_root }}/{{ homelab_stack_kind }}/{{ stack_name }}"
+
+    - name: Ensure the homelab stack directory exists
+      ansible.builtin.file:
+        path: "{{ homelab_stack_dest }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        mode: "0755"
+
+    - name: Check for a local stack environment file
+      ansible.builtin.stat:
+        path: "{{ homelab_stack_src }}/.env"
+      delegate_to: localhost
+      become: false
+      register: homelab_env
+
+    - name: Synchronize the homelab stack
+      ansible.posix.synchronize:
+        src: "{{ homelab_stack_src }}/"
+        dest: "{{ homelab_stack_dest }}/"
+        mode: push
+        archive: true
+        compress: true
+        delete: true
+        rsync_opts:
+          - "--exclude=/.env"
+        use_ssh_args: true
+        verify_host: true
+        private_key: "{{ deploy_private_key | default(omit, true) }}"
+        dest_port: "{{ ansible_port | default(omit) }}"
+      become: false
+
+    - name: Install the stack environment file
+      ansible.builtin.copy:
+        src: "{{ homelab_stack_src }}/.env"
+        dest: "{{ homelab_stack_dest }}/.env"
+        owner: "{{ deploy_user }}"
+        mode: "0600"
+      when: homelab_env.stat.exists
+      no_log: true
+
+    - name: Converge the homelab compose project
+      community.docker.docker_compose_v2:
+        project_src: "{{ homelab_stack_dest }}"
+        state: present
+        pull: always
+        remove_orphans: true
+        wait: true
+        wait_timeout: 120
+
+    - name: Probe the homelab app
+      ansible.builtin.uri:
+        url: "{{ homelab_healthcheck_url | default('') }}"
+        status_code: 200
+        timeout: 10
+      register: homelab_health
+      until: homelab_health.status | default(0) == 200
+      retries: 12
+      delay: 5
+      when: homelab_healthcheck_url | default('') | length > 0
+      delegate_to: localhost
+      become: false

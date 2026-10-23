@@ -1,13 +1,16 @@
 name: deploy
-# Production CD for the MAIN server: rsync stacks/public (Caddy + static site)
-# to the Azure VPS and `docker compose up`. The Worker and homelab are not in
-# this path.
+# Production CD for the MAIN server: converge Caddy + static site on the Azure
+# VPS with Ansible. The Worker and homelab are not in this path.
 on:
   push:
     branches: [main]
     paths:
       - stacks/public/**
+      - fleet/playbooks/deploy-public.yml
+      - fleet/playbooks/templates/**
+      - fleet/requirements.yml
       - tools/deploy-public.sh
+      - .github/workflows/deploy.yml
   workflow_dispatch:
 
 permissions:
@@ -23,6 +26,14 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Ansible tooling
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible-core
+          ansible-galaxy collection install -r fleet/requirements.yml
       - name: Build inventory + key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -41,7 +52,10 @@ jobs:
             exit 1
           fi
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           cat > fleet/inventory/ci.yml <<EOF
           all:
             vars:
@@ -56,22 +70,8 @@ jobs:
                   vps:
                     ansible_host: ${SSH_HOST}
                     ansible_user: ${SSH_USER}
-                    ansible_ssh_private_key_file: ~/.ssh/deploy
+                    ansible_ssh_private_key_file: ${HOME}/.ssh/deploy
           EOF
-      # $HOME is expanded here on purpose: env values don't expand `~`.
       - name: Deploy over SSH
-        run: SSH_KEY="$HOME/.ssh/deploy" tools/deploy-public.sh ci
-      - name: Verify production (treau.me through the Cloudflare proxy)
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 6); do
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://treau.me/ || true)
-            if [ "$CODE" = "200" ]; then
-              echo "treau.me -> 200"
-              exit 0
-            fi
-            echo "attempt $i: treau.me -> $CODE (retrying in 10s)"
-            sleep 10
-          done
-          echo "::error::https://treau.me/ did not return 200 after deploy (last: ${CODE:-none})"
-          exit 1
+        working-directory: fleet
+        run: ansible-playbook -i inventory/ci.yml playbooks/deploy-public.yml --limit vps

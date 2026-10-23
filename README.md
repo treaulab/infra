@@ -26,7 +26,7 @@ platform/          OpenTofu roots
 ├── tailscale/     tailnet ACL + CI keys/secrets
 └── proxmox/       deferred: homelab compute as code
 
-fleet/             Ansible: OS hardening, Tailscale, Docker, opt-in DPI bypass
+fleet/             Ansible: OS hardening, Tailscale, Docker, stack deploys, opt-in DPI bypass
 stacks/
 ├── public/        Azure VPS: caddy/ + website/src
 ├── homelab/       private apps/core stacks (Tailscale only)
@@ -45,8 +45,9 @@ Justfile           single operator interface
 ```bash
 cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
 cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
-cp stacks/public/caddy/.env.example stacks/public/caddy/.env
-# fill the three files; .env files are gitignored
+# Caddy's .env is rendered on the VPS from inventory; a local copy is only
+# needed if you want `just check` to use non-example values.
+# fill the inventory + tfvars; .env files are gitignored
 
 just setup                 # checks tools + installs Ansible collections
 just plan azure            # read-only
@@ -64,13 +65,16 @@ Keep port 22 until Tailscale access is proven.
 |---|---|---|
 | `stacks/public/**` | `just deploy-public` | Azure VPS |
 | `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
-| `stacks/homelab/<app>/**` | `just deploy-home <app>` | Homelab over Tailscale |
+| `stacks/homelab/{apps,core}/<app>/**` | `just deploy-home <app>` | Homelab over Tailscale |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
-| `fleet/**` | `just converge <node>` | OS configuration |
+| `fleet/roles/**` | `just converge <node>` | OS configuration |
+| `fleet/playbooks/deploy-*.yml` | `just deploy-public` / `just deploy-home <app>` | Host + compose convergence |
 | `fleet/roles/dpi-bypass/**` | `just unblock <host>` | Restricted network host |
 
-Website-only changes are rsync'd without restarting Caddy; Caddyfile/compose
-changes recreate the container.
+Website-only changes are synced without restarting Caddy; Caddyfile, compose,
+or `.env` changes recreate the container. `tools/deploy-public.sh` and
+`tools/deploy-home.sh` remain compatibility wrappers for one transition cycle;
+prefer the `just` recipes.
 
 ## Homelab access
 

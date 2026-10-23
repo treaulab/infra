@@ -106,7 +106,12 @@ unblock-off node="restricted":
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":
-    tools/deploy-public.sh "{{env}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p logs
+    cd fleet
+    ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
+      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy-public.yml --limit vps
 
 # Backwards-compatible alias for deploy-public.
 deploy-edge env="prod":
@@ -114,7 +119,13 @@ deploy-edge env="prod":
 
 # Deploy one private homelab stack over Tailscale.
 deploy-home app env="prod":
-    tools/deploy-home.sh "{{app}}" "{{env}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p logs
+    cd fleet
+    ANSIBLE_LOG_PATH="../logs/deploy-home-{{app}}-$(date +%Y%m%d-%H%M%S).log" \
+      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy-home.yml \
+      --limit homelab-vm -e "stack_name={{app}}"
 
 # Pin a tailnet-runner spoke to a hub SHA.
 bump-spoke repo sha:

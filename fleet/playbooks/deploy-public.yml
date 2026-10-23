@@ -1,0 +1,133 @@
+---
+# Deploy the public Azure VPS stack: Caddy + the static website.
+# Ansible owns host/compose convergence here. CI owns image builds; this
+# playbook only pulls the configured Caddy image and syncs source files.
+- name: Deploy the public Caddy stack
+  hosts: edge
+  become: true
+  gather_facts: false
+  vars:
+    public_deploy_root: "{{ deploy_root | default('/opt/treaulab') }}"
+    public_stack_root: "{{ public_deploy_root }}/stacks/public"
+    public_caddy_root: "{{ public_stack_root }}/caddy"
+    public_website_root: "{{ public_stack_root }}/website/src"
+    public_site_ip: "{{ site_ip | default(ansible_host, true) | default('20.98.16.138', true) }}"
+    deploy_user: "{{ ansible_user | default('root') }}"
+    deploy_private_key: "{{ ansible_ssh_private_key_file | default('') | expanduser }}"
+  tasks:
+    - name: Require domain and ACME email
+      ansible.builtin.assert:
+        that:
+          - domain | default('') | length > 0
+          - acme_email | default('') | length > 0
+        fail_msg: "Set domain and acme_email in the inventory."
+
+    - name: Validate the Caddyfile on the controller
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --network
+          - none
+          - --entrypoint
+          - caddy
+          - -e
+          - "DOMAIN={{ domain }}"
+          - -e
+          - "ACME_EMAIL={{ acme_email }}"
+          - -e
+          - "SITE_IP={{ public_site_ip }}"
+          - -v
+          - "{{ playbook_dir }}/../../stacks/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
+          - "docker.io/library/caddy:{{ caddy_version | default('2.11') }}"
+          - validate
+          - --config
+          - /etc/caddy/Caddyfile
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      when: inventory_hostname == ansible_play_hosts_all[0]
+
+    - name: Ensure public stack directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        mode: "0755"
+      loop:
+        - "{{ public_caddy_root }}"
+        - "{{ public_website_root }}"
+
+    - name: Install the Caddy compose file
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../stacks/public/caddy/compose.yml"
+        dest: "{{ public_caddy_root }}/compose.yml"
+        owner: "{{ deploy_user }}"
+        mode: "0644"
+
+    - name: Install the Caddyfile
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../stacks/public/caddy/Caddyfile"
+        dest: "{{ public_caddy_root }}/Caddyfile"
+        owner: "{{ deploy_user }}"
+        mode: "0644"
+      notify: Recreate Caddy
+
+    - name: Render the Caddy environment file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/public-caddy.env.j2"
+        dest: "{{ public_caddy_root }}/.env"
+        owner: "{{ deploy_user }}"
+        mode: "0600"
+
+    - name: Synchronize the static website
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../stacks/public/website/src/"
+        dest: "{{ public_website_root }}/"
+        mode: push
+        archive: true
+        compress: true
+        delete: true
+        use_ssh_args: true
+        verify_host: true
+        private_key: "{{ deploy_private_key | default(omit, true) }}"
+        dest_port: "{{ ansible_port | default(omit) }}"
+      become: false
+
+    - name: Converge the Caddy compose project
+      community.docker.docker_compose_v2:
+        project_src: "{{ public_caddy_root }}"
+        state: present
+        pull: always
+        remove_orphans: true
+        wait: true
+        wait_timeout: 120
+
+    # Handlers normally run at the end of the play. Caddy must be recreated
+    # before the external health check below.
+    - name: Apply pending Caddy restarts
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for the public site
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/"
+        status_code: 200
+        timeout: 10
+      register: public_site
+      until: public_site.status | default(0) == 200
+      retries: 12
+      delay: 5
+      delegate_to: localhost
+      become: false
+
+  handlers:
+    - name: Recreate Caddy
+      community.docker.docker_compose_v2:
+        project_src: "{{ public_caddy_root }}"
+        state: present
+        pull: missing
+        remove_orphans: true
+        recreate: always
+        wait: true
+        wait_timeout: 120

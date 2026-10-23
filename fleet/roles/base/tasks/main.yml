@@ -1,7 +1,7 @@
 ---
 - name: Base packages (ufw, fail2ban, unattended-upgrades)
   ansible.builtin.apt:
-    name: [ufw, fail2ban, unattended-upgrades, curl, ca-certificates]
+    name: [ufw, fail2ban, unattended-upgrades, curl, ca-certificates, rsync]
     state: present
     update_cache: true
 

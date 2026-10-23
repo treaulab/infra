@@ -8,7 +8,7 @@
    ```bash
    cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
    cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
-   cp stacks/public/caddy/.env.example stacks/public/caddy/.env
+   # Caddy .env is rendered on the VPS by the deploy playbook.
    ```
 3. If the VPS exists, skip `tofu apply`; adopt it later via `tofu import`
    once stable. Back up state first and review `tofu plan` so nothing is
@@ -25,13 +25,19 @@
 
 ## Deploy / upgrade Caddy
 
-- Website-only change: `just deploy-public`; Caddy is not restarted.
-- Caddyfile/compose change: same command; the script detects the config hash
-  and recreates the container.
-- Version bump: update `caddy_version` in `fleet/inventory/prod.yml` (or export
-  `CADDY_VERSION=...` for a one-off), then `just deploy-public`. The deploy
-  script renders `stacks/public/caddy/.env` from the inventory/env.
+- Website-only change: `just deploy-public`; Ansible syncs the site without
+  restarting Caddy.
+- Caddyfile change: same command; an Ansible handler recreates the container.
+- Compose/`.env` change: same command; the compose convergence applies it
+  (typically by recreating the container when its config hash changes).
+- Version bump: update `caddy_version` in `fleet/inventory/prod.yml`, then
+  `just deploy-public`. For a one-off, run the playbook with
+  `-e caddy_version=...` (or use the compatibility wrapper, which still maps
+  `CADDY_VERSION`). The playbook templates `stacks/public/caddy/.env` on the
+  host from inventory variables.
 - Check logs: `ssh <vps> 'docker logs caddy --tail 50'`.
+- The `deploy-public` playbook also waits for `https://<domain>/` to return
+  `200`; CI uses the same external check.
 
 Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
 `reverse_proxy` blocks; homelab traffic does not transit the VPS.
@@ -40,7 +46,7 @@ Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
 
 Caddy data lives in Docker named volumes (`caddy-data`, `caddy-config`).
 Homelab app data should live in named volumes or host paths outside the
-rsync'd stack directory (deploy uses `rsync --delete`).
+synced stack directory (deploy uses `rsync --delete`).
 
 Example Caddy snapshot:
 
@@ -50,6 +56,24 @@ docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:/backup ubuntu \
 ```
 
 Keep backups off-machine. Back up homelab app data on its own schedule.
+
+## Deploy a homelab stack
+
+```bash
+just deploy-home <app> [env]     # default env=prod
+```
+
+The playbook resolves `stacks/homelab/apps/<app>` before
+`stacks/homelab/core/<app>`, syncs the stack with `rsync --delete`, and runs
+`docker compose up -d --remove-orphans --pull always` through Ansible. Keep
+mutable app data in named volumes or host paths outside the synced directory.
+A local `.env` is copied separately with mode `0600`; it is excluded from
+rsync so an absent local file does not delete the remote one.
+
+`tools/deploy-home.sh <app> [env]` remains a compatibility wrapper for one
+cycle. For a one-off health check, pass
+`-e homelab_healthcheck_url=http://<host>:<port>/` directly to
+`ansible-playbook`; the default deploy relies on Compose's `--wait`.
 
 ## Homelab access (Tailscale only)
 
@@ -178,7 +202,8 @@ temporary tradeoff:
   ```bash
   GITHUB_TOKEN="$(gh auth token --user slancj)" just plan tailscale
   ```
-- `deploy.yml` renders `stacks/public/caddy/.env` from GitHub Secrets.
+- `deploy.yml` creates a CI inventory from GitHub Secrets; the
+  `deploy-public` playbook templates the Caddy `.env` on the host.
 - Do not paste secrets into chat or issue trackers. A future SOPS/age or
   Docker-secrets migration can replace this without changing stack layouts.
 
