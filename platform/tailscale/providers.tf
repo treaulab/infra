@@ -6,14 +6,18 @@
 #   # devices:posture_attributes, tags including tag:ci-ephemeral, shortest
 #   # expiry. The provider mints short-lived access tokens itself.
 #   export TAILSCALE_OAUTH_CLIENT_ID="k12345..."
-#   export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."
+#   printf 'Tailscale OAuth client secret: '
+#   read -s TAILSCALE_OAUTH_CLIENT_SECRET
+#   export TAILSCALE_OAUTH_CLIENT_SECRET
 #   export TAILSCALE_TAILNET="you@example.com"  # your tailnet name
 #   # FALLBACK: a pre-minted OAuth access token instead of the pair above
 #   # (conflicts with the pair — use one path, not both):
-#   # export TAILSCALE_API_KEY="tskey-api-..."
-#   export GITHUB_TOKEN="$(gh auth token)"      # admin PAT (repo scope) of an
-#                                       # account with Write on the spoke repo
-#                                       # (slancj as spoke collaborator).
+#   # printf 'Tailscale API key: '
+#   # read -s TAILSCALE_API_KEY && export TAILSCALE_API_KEY
+#   printf 'GitHub admin token: '
+#   read -s GITHUB_TOKEN && export GITHUB_TOKEN
+#   # optional if the admin account is already authenticated:
+#   # read -r GITHUB_TOKEN < <(gh auth token --user <admin-account>) && export GITHUB_TOKEN
 #
 # All credentials are short-lived by policy: re-mint, never store.
 

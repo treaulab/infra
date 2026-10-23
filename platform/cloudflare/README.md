@@ -4,10 +4,14 @@ Read-only zone lookup for `treau.me`. **No records are managed yet.** Next
 step is adopting DNS records one at a time, import-first, so `tofu plan`
 shows no change before it ever shows a change.
 
-Auth via ENVIRONMENT only (never in files, never the CI token from tunnel.yml):
+Auth via ENVIRONMENT only (never in files, never the CI token from tunnel.yml).
+Read the token silently so it is not in shell history or `.env`:
 
 ```bash
-export CLOUDFLARE_API_TOKEN="..."   # scoped to treau.me: Zone→DNS:Edit + Zone→Zone:Read
+printf 'Cloudflare API token: '
+read -s CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
+echo
+# scoped to treau.me: Zone→DNS:Edit + Zone→Zone:Read
 cd platform/cloudflare
 tofu init
 tofu plan                           # reads the zone only; 0 changes (needs token)

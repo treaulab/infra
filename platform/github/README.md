@@ -26,7 +26,11 @@ GITHUB_TOKEN (admin, short-lived, env only)
 ## Use
 
 ```bash
-export GITHUB_TOKEN="$(gh auth token)"   # slancj admin session
+printf 'GitHub admin token: '
+read -s GITHUB_TOKEN && export GITHUB_TOKEN
+echo
+# optional: if the admin account is already authenticated, pipe from gh:
+# read -r GITHUB_TOKEN < <(gh auth token --user <admin-account>) && export GITHUB_TOKEN
 cd platform/github
 tofu init
 tofu plan    # expect: "No changes" (rule applied 2026-10-14)
