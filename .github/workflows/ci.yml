@@ -1,10 +1,11 @@
 name: ci
-# Project CI: worker bundle, tunnel agent, and site checks.
-# Runs on PRs that touch the project; tunnel.yml calls it as the gate before
+# Project CI: tunnel worker bundle + agent. The static website is deployed
+# separately by deploy.yml; this workflow never sees it.
+# Runs on PRs that touch the worker; tunnel.yml calls it as the gate before
 # any main-branch deploy. No Cloudflare auth, no repo secrets — fork-safe.
 on:
   pull_request:
-    paths: [workers/tunnel/**, apps/website/src/**]
+    paths: [edge/tunnel-worker/**]
   workflow_call:
   workflow_dispatch:
 
@@ -18,7 +19,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: workers/tunnel
+        working-directory: edge/tunnel-worker
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -35,8 +36,8 @@ jobs:
             node --check "$f"
           done
           python3 -m py_compile agent/agent.py
-      # Same script users run locally (sync:public + wrangler --dry-run):
-      # validates the bundle, wrangler.toml, DO migrations, asset dir.
+      # Same script users run locally: validates the bundle, wrangler.toml,
+      # DO migrations, and confirms no static asset directory is required.
       - name: Wrangler dry-run (bundle + config + DO migrations)
         run: npm run deploy:dry
 
@@ -48,7 +49,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: workers/tunnel
+        working-directory: edge/tunnel-worker
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -58,8 +59,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: npm ci --no-audit --no-fund
-      - name: Sync static assets (wrangler dev needs ./public/)
-        run: npm run sync:public
       - name: Smoke test (share + round-trip)
         run: |
           set -euo pipefail

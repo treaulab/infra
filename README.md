@@ -1,72 +1,98 @@
 # treaulab/infra
 
-Organized IaC for 1x Azure VPS (Ubuntu 24.04) — the **main server**: static
-website behind Caddy on `treau.me` (Cloudflare-proxied, auto-deployed on main)
-— plus a Cloudflare Worker that serves HTTP/SSH tunnels on `go.treau.me`
-(agents dial out; the VPS is never in the tunnel data path).
+Infrastructure-as-code for everything `treau.me` runs: the static site on the
+Azure VPS, the `go.treau.me` tunnel Worker, and the private homelab.
 
 ## Architecture
 
+```text
+treau.me / www  ── Cloudflare ──> Azure VPS Caddy ──> static website only
+go.treau.me     ── Cloudflare ──> Worker ──────────> /t/* HTTP + /p/* SSH pipes
+homelab          ── Tailscale only ──> laptop / tailnet devices
+later: selected homelab service ── Cloudflare Tunnel ──> cloudflared
 ```
-treau.me / www — Cloudflare proxy → Azure VPS (MAIN; deploy.yml auto-deploys)
-├── Caddy :80/:443 (auto-TLS front door)
-└── Website (static, via Caddy file_server; source of truth apps/website/src)
 
-go.treau.me — Cloudflare Worker (treaulab-tunnel; tunnel.yml auto-deploys)
-└── /t/* HTTP tunnels + /p/* SSH pipes (Durable Objects; no origin fetch)
-```
+The VPS is the main website origin, not a homelab proxy. The Worker is
+tunnel-only and never bundles the site. Homelab services stay private on the
+tailnet; Cloudflare Tunnel is an optional later ingress for selected services.
 
 ## Layout
 
-```
-tofu/                  L1: Azure RG/VNet/NSG/IP/VM (imports existing VPS)
-tofu/cloudflare/       DNS: zone lookup now, records as code next (import-first)
-ansible/               L2: hardening, docker, caddy, website
-apps/caddy/            compose + Caddyfile
-apps/website/          static src (single source: to VPS via deploy.sh, to worker via sync:public)
-apps/cloudflared/        NAT box (behind NAT, VPS-untouched): cloudflared HTTP+SSH on treau.me subs
-workers/tunnel/          Tunnel Worker: HTTP tunnel + TCP pipe Durable Objects on go.treau.me
-scripts/               bootstrap.sh, deploy.sh
-.github/workflows/    tofu.yml, ci.yml, tunnel.yml, deploy.yml, agent-bin.yml
-docs/runbooks.md       first boot, backups, upgrades, optional apex cutover, NAT box
+```text
+platform/          OpenTofu roots
+├── azure/         Azure VPS (RG/VNet/NSG/PIP/NIC/VM)
+├── cloudflare/    zone lookup (DNS records adopted incrementally)
+├── github/        branch protection
+├── tailscale/     tailnet ACL + CI keys/secrets
+└── proxmox/       deferred: homelab compute as code
+
+fleet/             Ansible: OS hardening, Tailscale, Docker
+stacks/
+├── public/        Azure VPS: caddy/ + website/src
+├── homelab/       private apps/core stacks (Tailscale only)
+└── nat-box/       existing NAT'd cloudflared host
+
+edge/
+└── tunnel-worker/ Cloudflare Worker on go.treau.me (tunnel-only)
+
+tools/             operator helpers invoked by the Justfile
+docs/runbooks.md   ops manual
+Justfile           single operator interface
 ```
 
 ## Quickstart
 
-VPS already up? **Skip step 4** (OpenTofu) — it's optional when the VM exists.
-Just open these ports on your Azure NSG (portal → VM → Networking):
-`22/tcp` (your IP only), `80/tcp`, `443/tcp`, then start at step 5.
-Keep `tofu/` as documentation; import the existing resources into state later
-once the VPS is stable (see `docs/runbooks.md`).
-
-1. `cp tofu/envs/prod.tfvars.example tofu/envs/prod.tfvars` — fill RG, location
-2. `cp ansible/inventory/prod.yml.example ansible/inventory/prod.yml` — fill `ansible_host`, `ansible_user`
-3. Provision — OPTIONAL if VPS exists (import existing, don't recreate):
-   ```bash
-   ./scripts/bootstrap.sh
-   cd tofu && tofu init && tofu plan -var-file=envs/prod.tfvars
-   ```
-4. Configure — pick one:
-   * Quick (no installs needed, just ssh+rsync):
-     ```bash
-     ./scripts/deploy.sh prod
-     ```
-   * Full (adds hardening: UFW, fail2ban, unattended-upgrades — needs ansible, NixOS: `nix-shell -p ansible`):
-     ```bash
-     ansible-playbook -i ansible/inventory/prod.yml ansible/playbooks/site.yml
-     ```
-
-See `docs/runbooks.md`. Secrets: `.env` (gitignored) + `ansible-vault` + GH Secrets (`SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SITE_DOMAIN, ACME_EMAIL` for the VPS; `CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID` for the worker).
-
-## Tunnel Worker (HTTP tunnels + SSH pipes on go.treau.me)
-
-The main site stays on the VPS; the Worker serves the tunnels + pipes.
-
 ```bash
-cd workers/tunnel && npm install
-npm run dev                      # local: http://127.0.0.1:8787 (no secrets)
-npm run deploy                   # needs wrangler login only (long-URL, no tokens)
+cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
+cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
+cp stacks/public/caddy/.env.example stacks/public/caddy/.env
+# fill the three files; .env files are gitignored
+
+just setup                 # checks tools + installs Ansible collections
+just plan azure            # read-only
+just converge vps          # OS hardening + Tailscale + Docker
+just deploy-public         # Caddy + static site to the VPS
 ```
 
-Details: `workers/tunnel/README.md`. The apex cutover onto the Worker is an
-optional, unexecuted migration — `docs/runbooks.md`.
+If the VPS already exists, skip `just plan azure`; import later if you want
+state coverage. The NSG must allow `22/tcp` (your IP), `80/tcp`, `443/tcp`.
+Keep port 22 until Tailscale access is proven.
+
+## Deploy paths
+
+| Change | Command | Destination |
+|---|---|---|
+| `stacks/public/**` | `just deploy-public` | Azure VPS |
+| `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
+| `stacks/homelab/<app>/**` | `just deploy-home <app>` | Homelab over Tailscale |
+| `platform/**` | `just plan <root>` | OpenTofu (human apply) |
+| `fleet/**` | `just converge <node>` | OS configuration |
+
+Website-only changes are rsync'd without restarting Caddy; Caddyfile/compose
+changes recreate the container.
+
+## Homelab access
+
+The homelab VM joins the tailnet and is reached at its MagicDNS name or
+`100.x` address. There is no public DNS or homelab ingress yet. Use
+`tailscale serve` for HTTPS on the tailnet if an app needs it. Cloudflare
+Tunnel is a later, separate path; it must not route through Azure Caddy.
+
+## Secrets and state
+
+- Per-stack `.env` files are plaintext and gitignored. Commit `.env.example`
+  only. This is a deliberate temporary tradeoff; SOPS/age was removed.
+- OpenTofu state is local for now. Back it up off-machine, keep state mode
+  `0600`, and never apply after moving directories until `tofu plan` is empty.
+  `platform/tailscale/terraform.tfstate` contains a live key — treat it as a
+  secret.
+
+## Tunnel Worker
+
+```bash
+cd edge/tunnel-worker && npm install
+npm run dev       # http://127.0.0.1:8787
+npm run deploy    # wrangler login required
+```
+
+Details: `edge/tunnel-worker/README.md`.

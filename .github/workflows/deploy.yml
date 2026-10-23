@@ -1,17 +1,13 @@
 name: deploy
-# Production CD for the MAIN server: rsync apps/caddy + apps/website/src to the
-# Azure VPS and `docker compose up` (treau.me / www, Cloudflare-proxied).
-# Single deploy path: the same script (and same layout) local and in CI.
+# Production CD for the MAIN server: rsync stacks/public (Caddy + static site)
+# to the Azure VPS and `docker compose up`. The Worker and homelab are not in
+# this path.
 on:
   push:
     branches: [main]
-    # Only what scripts/deploy.sh actually ships — keep in sync with the script.
-    # (Ansible playbooks are hardening, applied manually; apps/cloudflared
-    # deploys from the NAT box itself.)
     paths:
-      - apps/caddy/**
-      - apps/website/src/**
-      - scripts/deploy.sh
+      - stacks/public/**
+      - tools/deploy-public.sh
   workflow_dispatch:
 
 permissions:
@@ -46,23 +42,25 @@ jobs:
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
-          cat > ansible/inventory/ci.yml <<EOF
+          cat > fleet/inventory/ci.yml <<EOF
           all:
             vars:
               domain: ${DOMAIN}
               acme_email: ${ACME_EMAIL}
               caddy_version: "2.11"
               deploy_root: /opt/treaulab
-            hosts:
-              vps:
-                ansible_host: ${SSH_HOST}
-                ansible_user: ${SSH_USER}
-                ansible_ssh_private_key_file: ~/.ssh/deploy
+              site_ip: ${SSH_HOST}
+            children:
+              edge:
+                hosts:
+                  vps:
+                    ansible_host: ${SSH_HOST}
+                    ansible_user: ${SSH_USER}
+                    ansible_ssh_private_key_file: ~/.ssh/deploy
           EOF
-      # $HOME is expanded here on purpose: env values don't expand `~`, and the
-      # script embeds SSH_KEY into an unquoted `ssh -i` argument.
+      # $HOME is expanded here on purpose: env values don't expand `~`.
       - name: Deploy over SSH
-        run: SSH_KEY="$HOME/.ssh/deploy" ./scripts/deploy.sh ci
+        run: SSH_KEY="$HOME/.ssh/deploy" tools/deploy-public.sh ci
       - name: Verify production (treau.me through the Cloudflare proxy)
         run: |
           set -euo pipefail

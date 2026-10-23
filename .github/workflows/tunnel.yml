@@ -1,10 +1,10 @@
 name: tunnel
 # Deploy only tested code: the `ci` job (ci.yml) must pass before `deploy`
-# runs. ci.yml also runs standalone on project PRs.
+# runs. ci.yml also runs standalone on worker PRs.
 on:
   push:
     branches: [main]
-    paths: [workers/tunnel/**, apps/website/src/**]
+    paths: [edge/tunnel-worker/**]
   workflow_dispatch:
 
 permissions:
@@ -23,14 +23,13 @@ jobs:
       cancel-in-progress: false
     defaults:
       run:
-        working-directory: workers/tunnel
+        working-directory: edge/tunnel-worker
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
           node-version: 24
       - run: npm ci --no-audit --no-fund
-      - run: npm run sync:public
       # Manual deploys (wrangler login) are the norm; CI deploys only when the
       # repo secrets exist. Without this gate every push goes red, which trains
       # everyone to ignore CI — including the agent-bin release workflow.

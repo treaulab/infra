@@ -1,8 +1,0 @@
----
-- name: Converge single VPS
-  hosts: vps
-  become: true
-  roles:
-    - base
-    - docker
-    - caddy

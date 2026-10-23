@@ -13,7 +13,7 @@
 #      `auth_keys` write scope + tag:ci-ephemeral in Tailscale admin.
 #   2. OAuth client (one long-lived secret pair):
 #      secrets TS_OAUTH_CLIENT_ID + TS_OAUTH_SECRET (`auth_keys` write).
-#   3. Legacy authkey (30-day rotation via tofu/tailnet):
+#   3. Legacy authkey (30-day rotation via platform/tailscale):
 #      secret TS_AUTHKEY_EPHEMERAL (reusable, ephemeral, preapproved).
 #
 # Inputs:
