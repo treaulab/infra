@@ -1,0 +1,41 @@
+{
+	email {$ACME_EMAIL:admin@example.com}
+	admin off
+}
+
+{$DOMAIN:treau.me} {
+	root * /srv/website
+	file_server
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+
+	# One short TTL for EVERYTHING: the site has no build step / hashed
+	# asset names, and robots.txt / sitemap.xml / security.txt are
+	# semantically mutable. Long-lived immutable caching would pin stale
+	# files for a year with no purge path. Never add immutable here
+	# without fingerprinted asset names.
+	header {
+		Cache-Control "public, max-age=3600"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		-Server
+	}
+}
+
+www.{$DOMAIN:treau.me} {
+	redir https://{$DOMAIN:treau.me}{uri} permanent
+}
+
+# Bare IP serves nothing: http://IP aborts, https://IP fails TLS (LE won't issue
+# for a raw IP). Cloudflare and legit clients always connect by hostname.
+http://{$SITE_IP:20.98.16.138} {
+	abort
+}

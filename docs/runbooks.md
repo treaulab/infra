@@ -1,161 +1,145 @@
 # Runbooks
 
 ## First boot (existing manual VPS -> IaC)
-1. VPS already up: skip `tofu apply`. Just confirm the NSG allows
-   `22/tcp` (your IP), `80/tcp`, `443/tcp`, then go to step 2.
-   Adopt `tofu/` later via `tofu import` (RG/VNet/NSG/PIP/NIC/VM) once stable —
-   back up first, review `tofu plan` carefully so nothing gets replaced.
-2. Point DNS: `<domain> -> <public_ip>` (tofu output).
-3. `./scripts/deploy.sh prod` — rsyncs apps + Caddyfile, `docker compose up`.
-4. Verify: `curl -sI https://<domain>/` (should be 200), `docker logs caddy --tail 20`.
 
-## Backups (v1 manual)
-App data lives in Docker named volumes (`caddy-data`, `caddy-config`).
-Snapshot example: `docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:/backup ubuntu tar -czf /backup/caddy-data-$(date +%F).tar.gz -C /data .`. Keep offsite.
+1. Confirm the Azure NSG allows `22/tcp` (your IP), `80/tcp`, `443/tcp`.
+   Keep 22 open until Tailscale access is proven.
+2. Copy and fill:
+   ```bash
+   cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
+   cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
+   cp stacks/public/caddy/.env.example stacks/public/caddy/.env
+   ```
+3. If the VPS exists, skip `tofu apply`; adopt it later via `tofu import`
+   once stable. Back up state first and review `tofu plan` so nothing is
+   replaced.
+4. Configure the host:
+   ```bash
+   just setup
+   just converge vps          # base + Tailscale + Docker
+   just deploy-public         # Caddy + static site
+   ```
+5. Verify: `curl -sI https://<domain>/` (200), `docker logs caddy --tail 20`.
+6. Add the homelab host to `fleet/inventory/prod.yml` using its MagicDNS name
+   or `100.x` address, then `just converge homelab`.
 
-## Upgrade Caddy
-Bump `CADDY_VERSION` in the inventory (`ansible/inventory/prod.yml`), re-run
-`./scripts/deploy.sh prod` (or `ansible-playbook -i ansible/inventory/prod.yml ansible/playbooks/site.yml`), check `docker logs caddy`.
+## Deploy / upgrade Caddy
 
-## NAT box (cloudflared, stable treau.me, VPS untouched)
+- Website-only change: `just deploy-public`; Caddy is not restarted.
+- Caddyfile/compose change: same command; the script detects the config hash
+  and recreates the container.
+- Version bump: update `caddy_version` in `fleet/inventory/prod.yml` (or export
+  `CADDY_VERSION=...` for a one-off), then `just deploy-public`. The deploy
+  script renders `stacks/public/caddy/.env` from the inventory/env.
+- Check logs: `ssh <vps> 'docker logs caddy --tail 50'`.
 
-Computer behind NAT exposing **both** HTTP + SSH on stable subdomains,
-zero VPS egress, no card (CLI flow). Full runbook lives in
-`apps/cloudflared/README.md` — summary:
+Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
+`reverse_proxy` blocks; homelab traffic does not transit the VPS.
 
-1. On the NAT box only: `./apps/cloudflared/install.sh --check-only`
-   (needs outbound `7844/UDP` + `443/TCP`; inbound stays closed).
-2. `cloudflared tunnel login && cloudflared tunnel create nat-box`
-   then `route dns nat-box box.treau.me` + `route dns nat-box ssh-box.treau.me`.
-3. Copy `apps/cloudflared/config.yml.example` → `/etc/cloudflared/config.yml`,
-   fill `<YOUR-TUNNEL-UUID>` (ingress: `box` → `http://localhost:8080`,
-   `ssh-box` → `ssh://localhost:22`, plus `http_status:404` catch-all).
-4. Smoke test `cloudflared tunnel --config /etc/cloudflared/config.yml run nat-box`,
-   then persist via `apps/cloudflared/cloudflared.service.example` → systemd.
-5. Laptop SSH via `apps/cloudflared/ssh-client.example`
-   (`ProxyCommand cloudflared access ssh --hostname %h`).
-6. Prove VPS silence: `docker logs caddy --tail 20` shows nothing new.
-   Rollback = delete the two CNAMEs + stop NAT-box service (VPS unchanged).
+## Backups
 
-## Tailnet shell (hub + ONE burner spoke repo, NOT on VPS)
+Caddy data lives in Docker named volumes (`caddy-data`, `caddy-config`).
+Homelab app data should live in named volumes or host paths outside the
+rsync'd stack directory (deploy uses `rsync --delete`).
 
-This repo is the **hub**: pure reusable logic, zero credentials, runs nothing
-itself. A single burner-owned **public** repo (`dotfiles`: real dotfiles +
-README stating the workflow's purpose + caller file) fans out N tenants, one
-calling job per tenant — one repo, one account, no fleet (GitHub forbids
-matrix on reusable-workflow calls, so tenants are explicit job blocks):
-* Hub: `.github/workflows/tailnet-runner.yml` (`workflow_call`,
-  inputs `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`,
-  `quiet` (public-log scrub — spokes set `"true"`),
-  `startup-delay-seconds` (stagger so jobs don't join at the same second),
-  `tag` + `ts-oidc-client-id`/`ts-audience` (OIDC, preferred); secrets
-  `TS_OAUTH_*` (fallback) or `TS_AUTHKEY_EPHEMERAL` (legacy) passed
-  explicitly by the caller).
-* Spoke template: `.github/workflows/tailnet-runner-caller.yml.example` —
-  paste as `.github/workflows/tailnet-runner.yml`, replace `<PINNED_SHA>`,
-  one calling job per tenant. Preferred: repo VARIABLES `TS_OIDC_CLIENT_ID`/
-  `TS_AUDIENCE` (zero secrets, zero rotation); fallback per-tenant secrets
-  (`TS_OAUTH_*` or `TS_AUTHKEY_<TENANT>`) —
-  Environments are unreachable from reusable-call jobs, so they are not
-  used. No `secrets: inherit`, never `@main`. Each calling job needs
-  `permissions: id-token: write` for OIDC.
-* Jobs run as `gh-<tenant>-<run-id>` (Tailscale SSH in). Hourly mode holds
-  ~1 hour (heartbeat: timestamp + ping ok/fail + `curl box.treau.me` code
-  every 5 min), then exits; debug holds up to 330 min via `hold-minutes`
-  dispatch input (default 90, clamped client-side; job ceiling 360),
-  `echo done > /tmp/tailnet-wake` inside SSH exits early (FIFO wake, zero CPU).
-  Debug dispatches run in a `-debug` concurrency group so long sessions never
-  queue-block the hourly heartbeat.
-  NO ssh/scp smoke by design.
-* Hard rules: triggers schedule + dispatch ONLY (never pull_request/push),
-  fork-PR workflows require approval, cron offsets per job, runner stays idle.
-* Launcher: `./scripts/gh-shell.sh [t1|t2]` dispatches, waits for
-  `gh-<tenant>-*` on the tailnet, then `tailscale ssh` in.
+Example Caddy snapshot:
 
-1. Tailscale admin (once, preferred OIDC — no per-key ceremony):
-   * Trust credentials → OIDC federated identity: issuer
-     `https://token.actions.githubusercontent.com`, subject
-     `repo:<owner>@<owner-id>/<repo>@<repo-id>:*` (immutable format — copy
-     the exact `Received ... from issuer` value from a failed run and replace
-     the tail with `*`; e.g. `repo:andrewwang2161@336265156/dotfiles@1419863416:*`),
-     tags `tag:ci-ephemeral`, scope
-     `auth_keys` write. Copy Client ID + Audience into spoke repo VARIABLES.
-   * Access Controls → `tagOwners: {"tag:ci-ephemeral": ["you"]}`, SSH
-     accept `src: [you]` → `dst: [tag:ci-ephemeral]`, users
-     `["runner","root"]`. No exit-node / subnet routes.
-   * Legacy path (only if OIDC unavailable): Settings → Keys → reusable
-     **ephemeral** key per tenant, own tag, short expiry → value goes ONLY
-     to tofu (never pasted, never chat).
-   * Name the NAT box `box` (`tailscale up --hostname=box`).
-2. Spoke repo(s) (PUBLIC dotfiles + README + caller file, pin `@<sha>`):
-   * One burner → one spoke repo (e.g. `andrewwang2161/dotfiles`). Second
-     burner → second spoke repo, same template, its OWN OIDC vars (each
-     tailnet trusts its own repo subject; vars are per-repo).
-   * OIDC (preferred): set repo VARIABLES `TS_OIDC_CLIENT_ID`/`TS_AUDIENCE`,
-     no grant windows, no secrets.
-   * Bumping the hub pin on hub updates — one command per spoke, run as the
-     account that owns it (no cross-account pushes, no standing edge):
-     ```bash
-     ./scripts/bump-spoke.sh andrewwang2161/dotfiles <hub-sha>  # as burner 1
-     ./scripts/bump-spoke.sh <burner2>/dotfiles <hub-sha>        # as burner 2
-     # or without switching: GH_TOKEN="$(gh auth token --user X)" ./scripts/bump-spoke.sh ...
-     ```
-     The script renders the caller template with the new SHA, skips when
-     already pinned, and never touches vars/secrets.
-   * Legacy authkey path only: invite `slancj` Write for the
-     grant window → `tofu/tailnet` apply writes all secrets (never rendered)
-     → **revoke the grant immediately** (re-grant ~30s per future rotation).
-    * Retired: the old `TS_AUTHKEY_EPHEMERAL` + `BURNER_GH_USER` on `infra`
-      and any standing grants — `infra` holds no credentials, no spoke
-      carries a standing cross-account edge.
-3. Use: hourly schedule fires on its own (watch heartbeats); debug via Run
-   workflow → tenant=all or one → `tailscale ssh runner@gh-<t>-<run-id>`.
-4. Rollback per tenant: revoke its key (+ delete its repo secret).
-   Sibling tenants untouched. Full retreat: delete spoke repo.
-5. Warm-up (once, new accounts): days of human commits → debug dispatches
-   → daily → hourly. New-account-to-instant-24/7 is the most bot-shaped
-   sequence available; don't run it. VPS untouched throughout
-   (`docker logs caddy` silent).
-
-## Secrets (SOPS+age — committed config secrets only)
-
-Scope discipline: SOPS is for **versioned config values** (safe in git as
-ciphertext). Ceremony ephemera (OAuth secrets, PATs) stay terminal-env +
-shred; standing tokens stay keyring/Bitwarden; private keys stay files.
-Never SOPS a private key or a runtime-scoped PAT.
-
-Setup (done once, this box): age identity generated (`age-keygen`),
-**secret in OS keyring** (`service=treaulab-sops`, `key=age-identity`,
-never displayed/stored elsewhere), **pubkey committed** in `.sops.yaml`
-(`age1ztexay0xhcwssf5kp9r5umjrgg7e80et8xy4k4k729ghr80xha5q07jn0r`).
-Per-account recipients get appended there as spokes publish pubkeys.
-
-Use (any `*.enc.yaml`, values encrypted, keys/structure clear):
 ```bash
-export SOPS_AGE_KEY="$(secret-tool lookup service treaulab-sops key age-identity)"
-sops -d sops-demo.enc.yaml        # roundtrip test: readable = identity works
-sops -e plain.yaml > x.enc.yaml   # encrypt (shred plain after)
-sops rotate -i x.enc.yaml         # rotate data key, verify decrypt after
-unset SOPS_AGE_KEY
+docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:/backup ubuntu \
+  tar -czf /backup/caddy-data-$(date +%F).tar.gz -C /data .
 ```
-Live demo: `sops-demo.enc.yaml` (fake values, real workflow —
-roundtripped + rotated at adoption). Delete it once real consumers exist.
 
-Crown-jewel warning: the age secret key decrypts **all history**
-including rotated-out values (no forward secrecy). Back it up
-independently of this box (paper/Bitwarden) or accept total loss on
-keyring failure — either is a conscious choice, document which. Losing it
-means re-encrypting everything to a new identity, not recovery.
+Keep backups off-machine. Back up homelab app data on its own schedule.
 
-## Edge cutover (full-edge, zero Azure egress)
-1. `cd workers/edge && npm install && npx wrangler login` (no secrets needed)
-2. `npm run deploy:dry` (validate without uploading), then `npm run deploy`
-   → note the `*.workers.dev` preview URL.
-3. Verify on preview: `/` → `200`, `/robots.txt`, `/sitemap.xml`,
-   `/.well-known/security.txt`, `/nope-123` → `404`+`noindex`, plus
-   `tunnel doctor` against the preview host (all PASS).
-4. Dashboard → Worker → Custom Domains → add `treau.me` (+ `www.treau.me`).
-   Re-run the same checks on the custom domain.
-5. Azure is now out of the path (no code fetches any origin). Soak 48h with
-   the VPS warm, then optionally stop Caddy / close NSG `80/443`.
-   Rollback anytime = repoint DNS to the proxied VPS record (no code change).
+## Homelab access (Tailscale only)
+
+- Join the homelab VM to the tailnet (`just converge homelab`, or run
+  `tailscale up --hostname homelab-vm` manually). Use `--accept-dns=false` if
+  the host runs AdGuard/its own DNS.
+- Reach apps at the MagicDNS name or `100.x` address. `tailscale serve` can
+  provide HTTPS on the tailnet:
+  ```bash
+  tailscale serve --bg 8222          # https://homelab.<tailnet>.ts.net
+  tailscale serve status
+  ```
+- UFW allows the `tailscale0` interface via the `base` role. Public ports on
+  the homelab are limited to 22 (`base_ufw_ports` in the inventory).
+- Do not use Tailscale Funnel for private services.
+- Cloudflare Tunnel is a later, optional ingress for selected services. It
+  runs on the homelab or the NAT box and never routes through Azure Caddy.
+
+## NAT box (cloudflared, stable treau.me access)
+
+Separate NAT'd host exposing HTTP + SSH on stable subdomains. It is not the
+Proxmox homelab. Full runbook: `stacks/nat-box/cloudflared/README.md`.
+
+1. On the NAT box: `./stacks/nat-box/cloudflared/install.sh --check-only`
+   (outbound `7844/UDP` + `443/TCP`; inbound stays closed).
+2. `cloudflared tunnel login && cloudflared tunnel create nat-box`, then
+   `route dns nat-box box.treau.me` and `route dns nat-box ssh-box.treau.me`.
+3. Copy `config.yml.example` to `/etc/cloudflared/config.yml`, fill the tunnel
+   UUID (ingress `box` -> `http://localhost:8080`, `ssh-box` ->
+   `ssh://localhost:22`, `http_status:404`).
+4. Smoke test, then persist via `cloudflared.service.example` -> systemd.
+5. Laptop SSH via `ssh-client.example` (`ProxyCommand cloudflared access ssh`).
+
+## Tailnet shell (hub + ONE burner spoke repo, NOT on the VPS)
+
+This repo is the **hub**: reusable logic, zero credentials, runs nothing
+itself. A burner-owned **public** repo (`dotfiles`) fans out N tenants, one
+calling job per tenant.
+
+- Hub: `.github/workflows/tailnet-runner.yml` (`workflow_call`, inputs
+  `mode` hourly|debug, `hostname-prefix`, `box-name`, `edge-url`, `quiet`,
+  `startup-delay-seconds`, `tag`, `ts-oidc-client-id`/`ts-audience`; secrets
+  `TS_OAUTH_*` or `TS_AUTHKEY_EPHEMERAL`).
+- Spoke template: `.github/workflows/tailnet-runner-caller.yml.example`.
+- Launcher: `./tools/gh-shell.sh [t1|t2]`.
+- Bump pin: `./tools/bump-spoke.sh <owner/repo> <hub-sha>`.
+
+1. Tailscale admin (once, preferred OIDC): Trust credentials -> OIDC federated
+   identity, issuer `https://token.actions.githubusercontent.com`, subject
+   `repo:<owner>@<owner-id>/<repo>@<repo-id>:*`, tags `tag:ci-ephemeral`,
+   scope `auth_keys` write. Put Client ID + Audience in spoke repo VARIABLES.
+   Access Controls: `tagOwners` for `tag:ci-ephemeral`, SSH accept from you to
+   that tag, users `["runner","root"]`. Name the NAT box `box`.
+2. Spoke repo (public dotfiles + README + caller file), pin
+   `@<sha>`, set `TS_OIDC_CLIENT_ID`/`TS_AUDIENCE`. Legacy authkey path only
+   if OIDC is unavailable.
+3. Use: hourly schedule, or dispatch a tenant and `tailscale ssh` in.
+4. Rollback per tenant: revoke its key/secret, sibling tenants untouched.
+5. Warm-up (new accounts): human commits -> debug dispatches -> daily ->
+   hourly. The VPS stays untouched.
+
+Policy/keys root: `platform/tailscale`. Applies are human/terminal with
+short-lived credentials; CI is fmt/validate only. The local state contains a
+live key — see "OpenTofu state" below.
+
+## Secrets (`.env`, no SOPS)
+
+SOPS/age was removed for now. Plaintext `.env` files are a deliberate
+temporary tradeoff:
+
+- `.env` is gitignored globally; commit `.env.example` only.
+- Caddy `.env` is non-secret (domain/email/version/IP).
+- Homelab/app `.env` files may contain secrets: keep them mode `0600`, never
+  log them, and never commit them. `just secrets-check` guards tracked `.env`.
+- `deploy.yml` renders `stacks/public/caddy/.env` from GitHub Secrets.
+- Do not paste secrets into chat or issue trackers. A future SOPS/age or
+  Docker-secrets migration can replace this without changing stack layouts.
+
+## OpenTofu state (local for now)
+
+Every root under `platform/` uses local state, which is gitignored:
+
+- Back up `terraform.tfstate` and `.backup` off-machine before any move.
+- Keep state mode `0600` and its directory `0700`.
+- Never run concurrent applies; CI only runs `fmt`/`validate`.
+- After moving a root: move the state file with the code, delete the old
+  `.terraform/` (absolute paths), run `tofu init` in the new root, then
+  `tofu state list` and `tofu plan`. **Do not apply until the plan is empty.**
+- `platform/tailscale/terraform.tfstate` holds a live tailnet key. Move it
+  last, verify the checksum, and run `tofu state list`; run `tofu plan` as soon
+  as the required credentials are available. Stop if the plan is not empty.
+- A remote encrypted backend can come later; migrate `tailscale` first with
+  `tofu init -migrate-state`.

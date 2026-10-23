@@ -1,0 +1,8 @@
+---
+- name: Converge managed hosts
+  hosts: all
+  become: true
+  roles:
+    - base
+    - tailscale
+    - docker

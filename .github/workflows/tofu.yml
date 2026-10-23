@@ -1,62 +1,28 @@
 name: tofu
 on:
   pull_request:
-    paths: [tofu/**]
+    paths: [platform/**]
   push:
     branches: [main]
-    paths: [tofu/**]
+    paths: [platform/**]
   workflow_dispatch:
 
 jobs:
-  plan:
+  validate:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [azure, cloudflare, github, tailscale]
     steps:
       - uses: actions/checkout@v5
       - uses: opentofu/setup-opentofu@v1
-      - working-directory: tofu
+      - name: Init, fmt, validate (${{ matrix.root }})
+        working-directory: platform/${{ matrix.root }}
         run: |
           tofu init -backend=false
-          tofu fmt -check
+          tofu fmt -check -recursive
           tofu validate
 
-  # Learning root: tailnet policy + per-account keys + spoke secrets.
-  # Plan/validate only (no credentials in CI) — applies are human, terminal,
-  # short-lived env (see tofu/tailnet/README.md). Never auto-apply: state
-  # holds live key material.
-  plan-tailnet:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
-      - working-directory: tofu/tailnet
-        run: |
-          tofu init -backend=false
-          tofu fmt -check
-          tofu validate
-
-  # Governance root: branch protection (no secret material — safe in state).
-  # Same posture: plan/validate in CI, applies human with admin PAT
-  # (see tofu/github/README.md).
-  plan-github:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
-      - working-directory: tofu/github
-        run: |
-          tofu init -backend=false
-          tofu fmt -check
-          tofu validate
-
-  # DNS root: zone lookup now, records next (see tofu/cloudflare/README.md).
-  # Read-only in CI — no token, safe on PRs; applies are human, terminal.
-  plan-cloudflare:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
-      - working-directory: tofu/cloudflare
-        run: |
-          tofu init -backend=false
-          tofu fmt -check
-          tofu validate
+  # Applies are human, terminal, short-lived credentials. CI never applies:
+  # tailscale state holds live key material; azure state controls the VPS.

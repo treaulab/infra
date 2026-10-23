@@ -1,0 +1,8 @@
+---
+# Ubuntu VPS and Ubuntu homelab VM both use the Ubuntu repo. Override per host
+# if you ever add a Debian/Proxmox host to this play.
+tailscale_repo_os: "{{ 'ubuntu' if ansible_facts['distribution'] == 'Ubuntu' else 'debian' }}"
+tailscale_hostname: "{{ inventory_hostname }}"
+tailscale_accept_dns: false
+# Empty by default; export TAILSCALE_AUTHKEY for a non-interactive join.
+tailscale_authkey: "{{ lookup('env', 'TAILSCALE_AUTHKEY') | default('', true) }}"

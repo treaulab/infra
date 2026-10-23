@@ -1,0 +1,31 @@
+# Copy to fleet/inventory/prod.yml (gitignored) and fill.
+# Hosts are addressed over Tailscale once joined: use the MagicDNS name or the
+# stable 100.x address, not the public IP. Keep a public-IP fallback for the
+# VPS only until Tailscale access is proven.
+all:
+  vars:
+    domain: example.com
+    acme_email: admin@example.com
+    caddy_version: "2.11"
+    deploy_root: /opt/treaulab
+    homelab_root: /opt/homelab
+    # Public IP used by Caddy's bare-IP abort block (not the SSH host if that
+    # is a Tailscale name).
+    site_ip: 1.2.3.4
+    base_ufw_ports: ["22", "80", "443"]
+  children:
+    edge:
+      hosts:
+        vps:
+          ansible_host: 1.2.3.4 # VPS public IP until Tailscale is up
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    homelab:
+      vars:
+        base_ufw_ports: ["22"]
+      hosts:
+        homelab-vm:
+          # Use the homelab VM's MagicDNS name or 100.x address.
+          ansible_host: homelab.example-tailnet.ts.net
+          ansible_user: youruser
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519

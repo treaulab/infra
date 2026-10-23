@@ -1,0 +1,421 @@
+#!/usr/bin/env node
+// treaulab tunnel CLI: expose a local port (HTTP) or ssh (TCP) via the worker.
+// Zero dependencies, Node 22+. Names + ids live in ~/.config/treaulab/tunnels.json.
+// Host rule everywhere: --host flag > TUNNEL_HOST env > https://go.treau.me.
+//
+//   tunnel share [TARGET] [--name N] [--host H] [--json]   ephemeral share + run
+//   tunnel add <name> <target>                             remember (http URL or HOST:PORT)
+//   tunnel up <name> [--host H]                            run the agent (foreground)
+//   tunnel info <name> [--host H]                          details + live check
+//   tunnel ssh <name> [--install] [--print] [ssh-args...]  ssh through the pipe
+//   tunnel list | rm <name> | doctor | logs
+
+import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+	DEFAULT_HOST,
+	ID_RE,
+	NAME_RE,
+	detectKind,
+	newRoomId,
+	parseTcpTarget,
+	resolveHost,
+} from "../lib/shared.js";
+
+const HERE = path.dirname(new URL(import.meta.url).pathname);
+const WORKER_DIR = path.resolve(HERE, "..");
+const AGENTS = {
+	http: path.join(WORKER_DIR, "agent", "agent.js"),
+	tcp: path.join(WORKER_DIR, "agent", "tcp-agent.js"),
+};
+
+const CONF_DIR = path.join(
+	process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+	"treaulab",
+);
+const STATE_FILE = path.join(CONF_DIR, "tunnels.json");
+
+const fail = (msg, code = 1) => {
+	console.error(`tunnel: ${msg}`);
+	process.exit(code);
+};
+const info = (...a) => console.log(...a);
+
+function readJson(file, fallback) {
+	try {
+		return JSON.parse(fs.readFileSync(file, "utf8"));
+	} catch {
+		return fallback;
+	}
+}
+function writeJson(file, obj) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const tmp = `${file}.${process.pid}.tmp`;
+	fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n");
+	fs.renameSync(tmp, file);
+}
+
+// State schema: { tunnels: { <name>: { kind: "http"|"tcp", id, target } } }.
+// One-way upgrade from the old shape ({ room, upstream/to }) on load.
+function loadState() {
+	const raw = readJson(STATE_FILE, { tunnels: {} });
+	const out = { tunnels: {} };
+	for (const [name, t] of Object.entries(raw.tunnels ?? {})) {
+		if (!t || typeof t !== "object") continue;
+		const kind = t.kind === "tcp" || t.kind === "http" ? t.kind : detectKind(t.upstream ?? t.target ?? "");
+		const id = t.id ?? t.room;
+		const target = t.target ?? t.upstream ?? t.to;
+		if (!NAME_RE.test(name) || !id || !target) continue;
+		out.tunnels[name] = { kind, id, target };
+	}
+	return out;
+}
+const saveState = (s) => writeJson(STATE_FILE, s);
+
+function getTunnel(name) {
+	const t = loadState().tunnels[name];
+	if (!t) fail(`unknown tunnel ${JSON.stringify(name)} — see: tunnel list`);
+	return t;
+}
+
+function checkNode() {
+	const [maj] = process.versions.node.split(".").map(Number);
+	if (maj < 22) fail(`node >= 22 required, have ${process.versions.node}`);
+}
+function haveBin(bin) {
+	return spawnSync(process.platform === "win32" ? "where" : "which", [bin]).status === 0;
+}
+
+// Minimal flag parser: --host H, --name N, --json, --install, --print.
+// First non-flag arg is positional; unknown --flags are rejected.
+function parseArgs(argv, { flags = [] } = {}) {
+	const out = { positionals: [] };
+	for (let i = 0; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === "--host" || a === "--name" || a === "--id") {
+			if (!flags.includes(a.slice(2))) fail(`unknown flag ${JSON.stringify(a)} — see: tunnel help`);
+			const v = argv[i + 1];
+			if (!v || v.startsWith("--")) fail(`${a} needs a value`);
+			out[a.slice(2)] = v;
+			i++;
+		} else if (a === "--json" || a === "--install" || a === "--print") {
+			if (!flags.includes(a.slice(2))) fail(`usage: see tunnel help`);
+			out[a.slice(2)] = true;
+		} else if (a.startsWith("--")) {
+			fail(`unknown flag ${JSON.stringify(a)} — see: tunnel help`);
+		} else {
+			out.positionals.push(a);
+		}
+	}
+	return out;
+}
+
+const hostOf = (o) => {
+	const h = (o.host || resolveHost(null)).replace(/\/$/, "");
+	if (!/^https?:\/\//.test(h)) fail(`bad host ${JSON.stringify(h)} — want https://...`);
+	return h;
+};
+const wsBase = (host) => host.replace(/^http/, "ws");
+
+function validateTarget(kind, target) {
+	if (kind === "http") {
+		if (!/^https?:\/\/[^/]+/.test(target)) fail(`bad target ${JSON.stringify(target)} — want http(s)://host[:port]`);
+		return target.replace(/\/$/, "");
+	}
+	if (!parseTcpTarget(target)) fail(`bad target ${JSON.stringify(target)} — want HOST:PORT (e.g. 127.0.0.1:22)`);
+	return target;
+}
+
+// ---- commands ------------------------------------------------------------
+
+function cmdShare(argv) {
+	checkNode();
+	const o = parseArgs(argv, { flags: ["name", "host", "json"] });
+	const rawTarget = o.positionals[0] ?? process.env.UPSTREAM ?? "http://127.0.0.1:8080";
+	const kind = detectKind(rawTarget);
+	const target = validateTarget(kind, rawTarget);
+	const host = hostOf(o);
+	const id = newRoomId();
+	if (o.name) {
+		if (!NAME_RE.test(o.name)) fail(`bad name ${JSON.stringify(o.name)} — want [A-Za-z0-9_-]{1,64}`);
+		const state = loadState();
+		state.tunnels[o.name] = { kind, id, target };
+		saveState(state);
+	}
+	if (o.json) {
+		console.log(JSON.stringify(kind === "http"
+			? { url: `${host}/t/${id}/`, id, target, ...(o.name ? { name: o.name } : {}) }
+			: { id, target, ...(o.name ? { name: o.name } : {}) }));
+	} else if (kind === "http") {
+		info(`tunnel ready: ${host}/t/${id}/`);
+		info(`id: ${id}   target: ${target}${o.name ? `   (saved as ${JSON.stringify(o.name)})` : "   (ephemeral — stops with this process)"}`);
+	} else {
+		info(`pipe ready (id ${id}, target ${target})`);
+		info(`agent will serve ${target}; connect with: tunnel ssh ${o.name ?? "<name>"}${o.name ? "" : "  (save first: re-run with --name <name>)"}`);
+	}
+	runAgent(kind, id, target, host);
+}
+
+function cmdAdd(argv) {
+	const o = parseArgs(argv, { flags: ["host", "id"] });
+	const [name, rawTarget] = o.positionals;
+	if (!name || !rawTarget || o.positionals.length !== 2 || !NAME_RE.test(name)) {
+		fail("usage: tunnel add <name> <target> [--id ID]   (target: http(s)://… or HOST:PORT)");
+	}
+	const kind = detectKind(rawTarget);
+	const target = validateTarget(kind, rawTarget);
+	const id = o.id ?? newRoomId();
+	if (!ID_RE.test(id)) fail(`bad id ${JSON.stringify(id)} — want 20-64 chars [A-Za-z0-9_-]`);
+	const state = loadState();
+	if (state.tunnels[name]) fail(`${JSON.stringify(name)} already exists — tunnel rm ${name} first`);
+	state.tunnels[name] = { kind, id, target };
+	saveState(state);
+	info(`added ${kind} tunnel ${JSON.stringify(name)} -> ${target}`);
+	info(kind === "http" ? `run it: tunnel up ${name}` : `serve it on the box: tunnel up ${name}   then: tunnel ssh ${name}`);
+}
+
+function runAgent(kind, id, target, host) {
+	const script = AGENTS[kind];
+	if (!fs.existsSync(script)) fail(`agent script missing: ${script}`);
+	const env = { ...process.env };
+	if (kind === "http") {
+		env.TUNNEL_URL = `${wsBase(host)}/t/${id}/__agent`;
+		env.UPSTREAM = target;
+	} else {
+		const p = parseTcpTarget(target);
+		env.TUNNEL_URL = `${wsBase(host)}/p/${id}/__agent`;
+		env.SSH_HOST = p.host;
+		env.SSH_PORT = String(p.port);
+	}
+	// Pass target + id + host explicitly so the agent serves THIS tunnel
+	// (no second mint, no double URL print).
+	const child = spawn("node", [script, target, "--id", id, "--host", host], { env, stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function cmdUp(argv) {
+	checkNode();
+	const o = parseArgs(argv, { flags: ["host"] });
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel up <name>");
+	const t = getTunnel(name);
+	const host = hostOf(o);
+	info(`serving ${t.kind} tunnel ${JSON.stringify(name)} -> ${t.target} (Ctrl-C to stop)`);
+	runAgent(t.kind, t.id, t.target, host);
+}
+
+function curlCode(url, extra = []) {
+	return spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", ...extra, url], {
+		encoding: "utf8",
+	}).stdout.trim();
+}
+
+function cmdInfo(argv) {
+	const o = parseArgs(argv, { flags: ["host"] });
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel info <name>");
+	const t = getTunnel(name);
+	const host = hostOf(o);
+	info(`name: ${name}`);
+	info(`kind: ${t.kind}   id: ${t.id}`);
+	info(`target: ${t.target}`);
+	if (!haveBin("curl")) {
+		info("agent: unknown (curl missing)");
+		return;
+	}
+	if (t.kind === "http") {
+		const url = `${host}/t/${t.id}/`;
+		info(`url: ${url}`);
+		const probe = spawnSync(
+			"curl",
+			["-s", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code} %{header_json}", "-H", "X-Tunnel-Probe: status", url],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		const code = probe.split(" ")[0];
+		if (probe.includes("x-tunnel-status") && probe.includes("live")) info("agent: live");
+		else if (code === "404") info("agent: unknown (404 = bad id — re-check saved value)");
+		else info(`agent: offline (run: tunnel up ${name})`);
+	} else {
+		// WS-upgrade probe (http1.1 — curl strips Upgrade over h2):
+		// 101 = agent live, 502 = no agent, 404 = bad id.
+		const code = spawnSync(
+			"curl",
+			["-s", "--http1.1", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code}",
+				"-H", "Connection: Upgrade", "-H", "Upgrade: websocket",
+				"-H", "Sec-WebSocket-Version: 13", "-H", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+				`${host}/p/${t.id}`],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		if (code === "101") info(`agent: live (connect: tunnel ssh ${name})`);
+		else if (code === "502") info(`agent: offline (serve it on the box: tunnel up ${name})`);
+		else if (code === "404") info("agent: unknown (404 = bad id — re-check saved value)");
+		else info(`agent: unknown (probe ${code || "no response"})`);
+	}
+}
+
+function sshProxyCmd(t, host) {
+	return `node ${JSON.stringify(path.join(HERE, "ws-ssh-proxy.js"))} ${wsBase(host)}/p/${t.id}`;
+}
+
+function cmdSsh(argv) {
+	// tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]
+	// Our flags are consumed wherever they appear; everything else after
+	// the name passes through to ssh (including -p, --other-flags).
+	let hostFlag = null;
+	let wantInstall = false;
+	let wantPrint = false;
+	let name = null;
+	const extra = [];
+	for (let i = 0; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === "--host") {
+			hostFlag = argv[i + 1];
+			if (!hostFlag || hostFlag.startsWith("--")) fail("--host needs a value");
+			i++;
+		} else if (a === "--install") {
+			wantInstall = true;
+		} else if (a === "--print") {
+			wantPrint = true;
+		} else if (!name && !a.startsWith("-")) {
+			name = a;
+		} else if (!name && a.startsWith("-")) {
+			fail("usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]");
+		} else {
+			extra.push(a);
+		}
+	}
+	if (!name) fail("usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]");
+	const t = getTunnel(name);
+	if (t.kind !== "tcp") fail(`${JSON.stringify(name)} is an http tunnel — ssh needs a HOST:PORT one (tunnel add <name> 127.0.0.1:22)`);
+	const host = hostOf({ host: hostFlag });
+	const proxy = sshProxyCmd(t, host);
+	if (wantInstall) return cmdSshInstall(name, proxy);
+	if (wantPrint) return info(`ssh -o ${JSON.stringify(`ProxyCommand ${proxy}`)} -o ServerAliveInterval=25 -o ServerAliveCountMax=3 ${name}`);
+	if (!haveBin("ssh")) fail("ssh binary not found on PATH");
+	const args = ["-o", `ProxyCommand ${proxy}`, "-o", "ServerAliveInterval=25", "-o", "ServerAliveCountMax=3", name, ...extra];
+	const child = spawn("ssh", args, { stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function cmdSshInstall(name, proxy) {
+	const block = `Host ${name}\n  HostName ${name}\n  ProxyCommand ${proxy}\n  ServerAliveInterval 25\n  ServerAliveCountMax 3`;
+	const sshConfig = path.join(os.homedir(), ".ssh", "config");
+	const begin = `# >>> treaulab tunnel ${name} >>>`;
+	const end = `# <<< treaulab tunnel ${name} <<<`;
+	const entry = `${begin}\n${block}\n${end}\n`;
+	fs.mkdirSync(path.dirname(sshConfig), { recursive: true });
+	const cur = fs.existsSync(sshConfig) ? fs.readFileSync(sshConfig, "utf8") : "";
+	if (cur.includes(begin)) return info(`already installed in ${sshConfig}`);
+	fs.appendFileSync(sshConfig, (cur.endsWith("\n") || !cur ? "" : "\n") + entry);
+	try {
+		fs.chmodSync(sshConfig, 0o600);
+	} catch {}
+	info(`appended to ${sshConfig} — now plain \`ssh ${name}\` works`);
+}
+
+function cmdList() {
+	const tunnels = loadState().tunnels;
+	const names = Object.keys(tunnels);
+	if (!names.length) return info("no tunnels yet — see: tunnel add <name> <target>");
+	const rows = [["NAME", "KIND", "TARGET"]];
+	for (const n of names.sort()) rows.push([n, tunnels[n].kind, tunnels[n].target]);
+	const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));
+	for (const r of rows) info(r.map((c, i) => c.padEnd(widths[i])).join("  "));
+}
+
+function cmdRm(argv) {
+	const o = parseArgs(argv, {});
+	const [name] = o.positionals;
+	if (!name || o.positionals.length !== 1) fail("usage: tunnel rm <name>");
+	const state = loadState();
+	if (!state.tunnels[name]) fail(`unknown tunnel ${JSON.stringify(name)}`);
+	delete state.tunnels[name];
+	saveState(state);
+	info(`removed ${JSON.stringify(name)} (ids vanish when unused; access dies with the agent)`);
+}
+
+function cmdLogs() {
+	const child = spawn("npx", ["wrangler", "tail"], { cwd: WORKER_DIR, stdio: "inherit" });
+	child.on("exit", (code) => process.exit(code ?? 1));
+}
+
+function cmdDoctor(argv) {
+	checkNode();
+	const o = parseArgs(argv, { flags: ["host"] });
+	let ok = true;
+	const check = (label, pass, hint = "") => {
+		info(`${pass ? "PASS" : "FAIL"}  ${label}${pass || !hint ? "" : ` — ${hint}`}`);
+		if (!pass) ok = false;
+	};
+	check(`node >= 22 (have ${process.versions.node})`, Number(process.versions.node.split(".")[0]) >= 22);
+	check("ssh on PATH", haveBin("ssh"), "install openssh-client");
+	const host = hostOf(o);
+	info(`worker host: ${host} (override: --host H or TUNNEL_HOST)`);
+	if (haveBin("curl")) {
+		check("worker reachable (/health → 200)", curlCode(`${host}/health`) === "200", "is the worker deployed?");
+		check("short IDs rejected (→ 404)", curlCode(`${host}/t/short/`) === "404", "unexpected routing");
+		check("http gate answers (unused ID → 502)", curlCode(`${host}/t/${newRoomId()}/`) === "502", "unexpected status");
+		// Pipe gate needs a real WS-upgrade handshake (http1.1 — curl strips
+		// Upgrade over h2); no agent → 502.
+		const pipeCode = spawnSync(
+			"curl",
+			["-s", "--http1.1", "--max-time", "10", "-o", "/dev/null", "-w", "%{http_code}",
+				"-H", "Connection: Upgrade", "-H", "Upgrade: websocket",
+				"-H", "Sec-WebSocket-Version: 13", "-H", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+				`${host}/p/${newRoomId()}`],
+			{ encoding: "utf8" },
+		).stdout.trim();
+		check("pipe gate answers (unused ID → 502)", pipeCode === "502", `got ${pipeCode || "no response"}`);
+	} else {
+		info("SKIP  worker reachability (curl missing)");
+	}
+	info(`remembered tunnels: ${Object.keys(loadState().tunnels).length} (tunnel list)`);
+	process.exit(ok ? 0 : 1);
+}
+
+function cmdHelp(cmd) {
+	const per = {
+		share: "usage: tunnel share [TARGET] [--name N] [--host H] [--json]\n  expose TARGET (default http://127.0.0.1:8080) and run the agent.\n  TARGET http(s)://… shares a website; HOST:PORT shares ssh. --name saves it.",
+		add: "usage: tunnel add <name> <target> [--id ID]\n  remember a tunnel. target: http(s)://… or HOST:PORT (e.g. 127.0.0.1:22).\n  --id reuses a box-side minted id (tcp-agent.js prints one).",
+		up: "usage: tunnel up <name> [--host H]\n  run the agent for a saved tunnel (foreground, Ctrl-C stops).",
+		info: "usage: tunnel info <name> [--host H]\n  details + live agent check (http and tcp).",
+		ssh: "usage: tunnel ssh <name> [--install] [--print] [--host H] [ssh-args...]\n  ssh through a tcp tunnel. --install writes ~/.ssh/config, --print shows the command.",
+		list: "usage: tunnel list",
+		rm: "usage: tunnel rm <name>",
+		doctor: "usage: tunnel doctor [--host H]",
+		logs: "usage: tunnel logs   (wrangler tail)",
+	};
+	if (cmd && per[cmd]) return info(per[cmd]);
+	info(`usage: tunnel <command> [args] [--host H]
+
+  share [TARGET] [--name N] [--json]  instant share + run (default http://127.0.0.1:8080)
+  add <name> <target> [--id ID]       remember (URL or HOST:PORT)
+  up <name>                           run the agent (foreground)
+  info <name>                         details + live check
+  ssh <name> [--install] [--print]    ssh through a tcp tunnel
+  list | rm <name>                    manage saved tunnels
+  doctor | logs                       self-check / tail worker logs
+
+host: --host H > TUNNEL_HOST env > ${DEFAULT_HOST}
+state: ${STATE_FILE}`);
+}
+
+// ---- main ---------------------------------------------------------------
+
+const [cmd, ...argv] = process.argv.slice(2);
+const cmds = { share: cmdShare, add: cmdAdd, up: cmdUp, info: cmdInfo, ssh: cmdSsh, list: cmdList, rm: cmdRm, logs: cmdLogs, doctor: cmdDoctor, help: (a) => cmdHelp(a[0]) };
+if (!cmd || cmd === "--help" || cmd === "-h") {
+	cmdHelp();
+	process.exit(0);
+}
+if ((argv.includes("--help") || argv.includes("-h")) && cmds[cmd]) {
+	cmdHelp(cmd);
+	process.exit(0);
+}
+if (!cmds[cmd]) {
+	cmdHelp();
+	fail(`unknown command ${JSON.stringify(cmd)}`);
+}
+await cmds[cmd](argv);

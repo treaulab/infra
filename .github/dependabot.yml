@@ -1,7 +1,7 @@
 # Dependabot — propose version bumps as PRs; green CI is the gate.
 # Pinned things stay pinned (SHA pins, OIDC, hub SHA in spokes are out of
 # scope here); this only floats what Dependabot natively tracks:
-# Actions majors, Docker tags, npm in workers/edge.
+# Actions majors, Docker tags, npm in edge/tunnel-worker.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,10 +11,10 @@ updates:
       day: monday
     commit-message:
       prefix: "chore(deps)"
-    # Path-filtered CI (edge/tofu/deploy/agent-bin) still runs per PR.
+    # Path-filtered CI (tunnel/tofu/deploy/agent-bin) still runs per PR.
 
   - package-ecosystem: docker
-    directory: /apps/caddy
+    directory: /stacks/public/caddy
     schedule:
       interval: weekly
       day: monday
@@ -25,7 +25,7 @@ updates:
     # references and proposes major bumps.
 
   - package-ecosystem: npm
-    directory: /workers/edge
+    directory: /edge/tunnel-worker
     schedule:
       interval: weekly
       day: monday

@@ -1,0 +1,47 @@
+name: tunnel
+# Deploy only tested code: the `ci` job (ci.yml) must pass before `deploy`
+# runs. ci.yml also runs standalone on worker PRs.
+on:
+  push:
+    branches: [main]
+    paths: [edge/tunnel-worker/**]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-24.04
+    # Serialize deploys; queue instead of cancelling a mid-flight release.
+    concurrency:
+      group: tunnel-deploy
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: edge/tunnel-worker
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      # Manual deploys (wrangler login) are the norm; CI deploys only when the
+      # repo secrets exist. Without this gate every push goes red, which trains
+      # everyone to ignore CI — including the agent-bin release workflow.
+      # NOTE: `secrets.*` is not allowed in step `if:` (GitHub rejects the
+      # whole file), so the gate lives inside the shell via env passthrough.
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID repo secrets not set — tunnel auto-deploy skipped. Add them in Settings → Secrets → Actions, or deploy manually: npx wrangler login && npm run deploy."
+            exit 0
+          fi
+          npx wrangler deploy

@@ -1,0 +1,32 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
+name = "treaulab-tunnel"
+main = "src/worker.js"
+compatibility_date = "2026-10-11"
+
+# Tunnel-only worker: /t/* (HTTP) + /p/* (SSH pipes) on go.treau.me.
+# The static website lives on the Azure VPS and is never bundled here.
+[[durable_objects.bindings]]
+name = "TUNNEL"
+class_name = "TunnelRoom"
+
+[[durable_objects.bindings]]
+name = "PIPE"
+class_name = "PipeRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TunnelRoom"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["PipeRoom"]
+
+# RelayRoom (old client relay) was removed from code in 97b57d0 with no
+# users; delete its class so deploys stop depending on the export.
+[[migrations]]
+tag = "v4"
+deleted_classes = ["RelayRoom"]

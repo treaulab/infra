@@ -1,0 +1,21 @@
+{
+  "name": "treaulab-tunnel",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tunnel": "./bin/tunnel"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run",
+    "tunnel": "node ./bin/tunnel",
+    "doctor": "node ./bin/tunnel doctor"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

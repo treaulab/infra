@@ -1,0 +1,7 @@
+---
+# Ports opened on every managed host. Homelab overrides this to 22 only;
+# direct Tailscale access is allowed separately on tailscale0.
+base_ufw_ports:
+  - "22"
+  - "80"
+  - "443"

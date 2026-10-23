@@ -1,9 +1,0 @@
-# SOPS creation rules: any *.enc.yaml encrypts values to the age
-# recipient(s) below on `sops -e` / `sops updatekeys`. The recipient is a
-# PUBLIC key (safe in git); the secret identity lives in the OS keyring
-# (service=treaulab-sops, key=age-identity) — never on disk, never in chat.
-# Add per-account recipients here as spokes onboard (each publishes its own
-# age pubkey; ciphertext per file is per-recipient-set, fully auditable).
-creation_rules:
-  - path_regex: \.enc\.yaml$
-    age: age1ztexay0xhcwssf5kp9r5umjrgg7e80et8xy4k4k729ghr80xha5q07jn0r
