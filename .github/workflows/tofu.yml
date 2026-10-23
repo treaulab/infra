@@ -15,7 +15,7 @@ jobs:
       matrix:
         root: [azure, cloudflare, github, tailscale]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: opentofu/setup-opentofu@v1
       - name: Init, fmt, validate (${{ matrix.root }})
         working-directory: platform/${{ matrix.root }}
