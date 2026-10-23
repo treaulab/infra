@@ -22,7 +22,7 @@ jobs:
       group: deploy-vps
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build inventory + key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
