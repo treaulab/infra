@@ -78,7 +78,7 @@
 	"tests": [
 		{
 			// Plan-time proof: ephemeral runners can reach the box.
-			"src": ["tag:ci-ephemeral"],
+			"src": "tag:ci-ephemeral",
 			"accept": ["box:*"],
 			"deny": ["tag:ci-ephemeral:*"],
 		},
