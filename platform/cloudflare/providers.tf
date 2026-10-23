@@ -1,7 +1,8 @@
 # Auth via ENVIRONMENT ONLY — never in code, tfvars, or state inputs:
 #
-#   export CLOUDFLARE_API_TOKEN="..."
-#   # or paste a short-lived token straight into the terminal env (never a file)
+#   printf 'Cloudflare API token: '
+#   read -s CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
+#   # hidden input: not in shell history, not in .env or tfvars
 #
 # Token: dedicated to this root, scoped to the single zone, least privilege:
 #   Zone → DNS  → Edit   (manage records)

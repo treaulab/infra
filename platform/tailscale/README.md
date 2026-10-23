@@ -34,10 +34,21 @@ Nothing here works without two short-lived credentials in env (never in
 files — no tfvars committed, `*.tfvars` gitignored):
 
 ```bash
-export TAILSCALE_OAUTH_CLIENT_ID="k12345..."      # your OAuth client ID
-export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."  # your client secret
+export TAILSCALE_OAUTH_CLIENT_ID="k12345..."       # your OAuth client ID
+printf 'Tailscale OAuth client secret: '
+read -s TAILSCALE_OAUTH_CLIENT_SECRET
+export TAILSCALE_OAUTH_CLIENT_SECRET
+echo
 export TAILSCALE_TAILNET="you@example.com"
-export GITHUB_TOKEN="$(gh auth token)"  # slancj admin session, repo scope.
+printf 'GitHub admin token: '  # repo scope
+read -s GITHUB_TOKEN
+export GITHUB_TOKEN
+echo
+# optional if the admin account is already authenticated:
+# read -r GITHUB_TOKEN < <(gh auth token --user <admin-account>) && export GITHUB_TOKEN
+# fallback instead of the OAuth pair:
+# printf 'Tailscale API key: '
+# read -s TAILSCALE_API_KEY && export TAILSCALE_API_KEY
 ```
 Client prerequisites (set once in Tailscale admin): scopes `auth_keys` +
 `policy_file` + `devices:core:read` + `devices:posture_attributes`, tags

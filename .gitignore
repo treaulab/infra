@@ -111,6 +111,7 @@ temp/
 result
 result-*
 .direnv/
+.envrc
 .envrc.local
 
 # OS/editor
