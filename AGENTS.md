@@ -12,12 +12,10 @@ them.
   `/t/*` HTTP tunnels + `/p/*` SSH pipes (Durable Objects); no website assets.
 - Homelab — private, reached over Tailscale only (`stacks/homelab`). No public
   ingress yet; Cloudflare Tunnel is a later, separate path.
-- `stacks/nat-box/cloudflared/` — existing NAT'd box publishing HTTP+SSH under
-  treau.me subdomains; not the homelab.
 
 **Map** — `platform/` (OpenTofu: azure, cloudflare, github, tailscale; proxmox placeholder),
 `fleet/` (Ansible: OS hardening + Tailscale + Docker + public/homelab stack convergence + opt-in DPI bypass), `stacks/` (public Azure
-Caddy/site, private homelab, NAT box), `edge/` (Cloudflare Worker), `tools/`
+Caddy/site, private homelab), `edge/` (Cloudflare Worker), `tools/`
 (operator helpers), `docs/runbooks.md` (ops manual), `Justfile` (operator
 interface), `.github/workflows/` (CI/CD).
 

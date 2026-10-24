@@ -29,8 +29,7 @@ platform/          OpenTofu roots
 fleet/             Ansible: OS hardening, Tailscale, Docker, stack deploys, opt-in DPI bypass
 stacks/
 ├── public/        Azure VPS: caddy/ + website/src
-├── homelab/       private apps/core stacks (Tailscale only)
-└── nat-box/       existing NAT'd cloudflared host
+└── homelab/       private apps/core stacks (Tailscale only)
 
 edge/
 └── tunnel-worker/ Cloudflare Worker on go.treau.me (tunnel-only)

@@ -121,21 +121,6 @@ tunnel/agent egress CIDRs to `dpi_bypass_extra_exclude_cidrs` to avoid loops.
 `systemctl restart byedpi-nat`. Full variables:
 `fleet/roles/dpi-bypass/README.md`.
 
-## NAT box (cloudflared, stable treau.me access)
-
-Separate NAT'd host exposing HTTP + SSH on stable subdomains. It is not the
-Proxmox homelab. Full runbook: `stacks/nat-box/cloudflared/README.md`.
-
-1. On the NAT box: `./stacks/nat-box/cloudflared/install.sh --check-only`
-   (outbound `7844/UDP` + `443/TCP`; inbound stays closed).
-2. `cloudflared tunnel login && cloudflared tunnel create nat-box`, then
-   `route dns nat-box box.treau.me` and `route dns nat-box ssh-box.treau.me`.
-3. Copy `config.yml.example` to `/etc/cloudflared/config.yml`, fill the tunnel
-   UUID (ingress `box` -> `http://localhost:8080`, `ssh-box` ->
-   `ssh://localhost:22`, `http_status:404`).
-4. Smoke test, then persist via `cloudflared.service.example` -> systemd.
-5. Laptop SSH via `ssh-client.example` (`ProxyCommand cloudflared access ssh`).
-
 ## Tailnet shell (hub + ONE burner spoke repo, NOT on the VPS)
 
 This repo is the **hub**: reusable logic, zero credentials, runs nothing
