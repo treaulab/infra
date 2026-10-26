@@ -16,6 +16,6 @@
     "doctor": "node ./bin/tunnel doctor"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.152.0"
   }
 }
