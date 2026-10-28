@@ -7,3 +7,4 @@ details, not a second interface: use `just ...`.
 - `deploy-home.sh` — compatibility wrapper for `just deploy-home <app>` (Ansible).
 - `bump-spoke.sh` — pin a tailnet-runner spoke to a hub SHA.
 - `gh-shell.sh` — dispatch a tailnet runner and SSH in.
+- `zapret2.sh` — simple one-time installer for zapret2 DPI circumvention.
