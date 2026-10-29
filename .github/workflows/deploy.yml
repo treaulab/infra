@@ -16,9 +16,50 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: fleet/requirements.txt
+      - name: Install Ansible tooling
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r fleet/requirements.txt
+      - name: Prepare example inventory
+        working-directory: fleet
+        run: cp inventory/prod.yml.example inventory/prod.yml
+      - name: Syntax-check deploy playbook
+        working-directory: fleet
+        run: ansible-playbook -i inventory/prod.yml playbooks/deploy.yml --syntax-check
+      - name: Validate Caddy compose config
+        working-directory: stacks/public/caddy
+        run: |
+          caddy_env=.env
+          [[ -f "$caddy_env" ]] || caddy_env=.env.example
+          docker compose --env-file "$caddy_env" config --quiet
+      - name: Validate Caddyfile syntax
+        run: |
+          caddy_env=stacks/public/caddy/.env
+          [[ -f "$caddy_env" ]] || caddy_env=stacks/public/caddy/.env.example
+          docker run --rm --network none --entrypoint caddy \
+            --env-file "$caddy_env" \
+            -v "$PWD/stacks/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
+
   deploy:
+    name: deploy
+    needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    environment:
+      name: production
+      url: https://${{ secrets.SITE_DOMAIN || 'treau.me' }}
     # Serialize deploys; queue instead of cancelling a mid-flight release.
     concurrency:
       group: deploy-vps
@@ -28,10 +69,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: fleet/requirements.txt
       - name: Install Ansible tooling
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install ansible-core
+          python3 -m pip install -r fleet/requirements.txt
       - name: Build inventory + key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}

@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: "npm"
+          cache-dependency-path: edge/tunnel-worker/package-lock.json
       - run: npm ci --no-audit --no-fund
       # Manual deploys (wrangler login) are the norm; CI deploys only when the
       # repo secrets exist. Without this gate every push goes red, which trains
