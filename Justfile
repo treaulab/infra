@@ -12,14 +12,13 @@ setup:
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
-    ansible-galaxy collection install -r fleet/requirements.yml
     echo "OK. Next: cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars"
     echo "            cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
     echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 
-# Lint all fleet Ansible roles/playbooks (requires ansible-lint).
+# Lint fleet Ansible playbooks (requires ansible-lint).
 fleet-check:
-    cd fleet && ansible-lint roles playbooks
+    cd fleet && ansible-lint playbooks
 
 # Plan one OpenTofu root: azure, cloudflare, github, or tailscale.
 plan root="azure":
@@ -84,25 +83,16 @@ check:
     git diff --check
     echo "OK"
 
-# Converge OS + Tailscale + Docker on one inventory host (or all with `all`).
+# Converge OS baseline (UFW + Tailscale + Docker) on one host (or all).
 converge node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/site.yml --limit "{{node}}"
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}"
 
-# OS baseline only: hardening + Tailscale.
+# Backwards-compatible aliases for host convergence.
 bootstrap node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/bootstrap.yml --limit "{{node}}"
+    @just converge "{{node}}"
 
-# Docker engine only.
 docker node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/docker.yml --limit "{{node}}"
-
-# Deploy byedpi DPI bypass to one restricted host (or the whole group).
-unblock node="restricted":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/unblock.yml --limit "{{node}}"
-
-# Remove byedpi and its redirect rules from restricted hosts.
-unblock-off node="restricted":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/unblock.yml --limit "{{node}}" -e dpi_bypass_state=absent
+    @just converge "{{node}}"
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":
@@ -111,21 +101,11 @@ deploy-public env="prod":
     mkdir -p logs
     cd fleet
     ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
-      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy-public.yml --limit vps
+      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy.yml
 
 # Backwards-compatible alias for deploy-public.
 deploy-edge env="prod":
     @just deploy-public "{{env}}"
-
-# Deploy one private homelab stack over Tailscale.
-deploy-home app env="prod":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p logs
-    cd fleet
-    ANSIBLE_LOG_PATH="../logs/deploy-home-{{app}}-$(date +%Y%m%d-%H%M%S).log" \
-      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy-home.yml \
-      --limit homelab-vm -e "stack_name={{app}}"
 
 # Pin a tailnet-runner spoke to a hub SHA.
 bump-spoke repo sha:

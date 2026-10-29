@@ -51,75 +51,11 @@ synced stack directory (deploy uses `rsync --delete`).
 Example Caddy snapshot:
 
 ```bash
-docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:/backup ubuntu \
+docker run --rm -v caddy-data:/data -v /opt/stacks/backups:/backup ubuntu \
   tar -czf /backup/caddy-data-$(date +%F).tar.gz -C /data .
 ```
 
-Keep backups off-machine. Back up homelab app data on its own schedule.
-
-## Deploy a homelab stack
-
-```bash
-just deploy-home <app> [env]     # default env=prod
-```
-
-The playbook resolves `stacks/homelab/apps/<app>` before
-`stacks/homelab/core/<app>`, syncs the stack with `rsync --delete`, and runs
-`docker compose up -d --remove-orphans --pull always` through Ansible. Keep
-mutable app data in named volumes or host paths outside the synced directory.
-A local `.env` is copied separately with mode `0600`; it is excluded from
-rsync so an absent local file does not delete the remote one.
-
-`tools/deploy-home.sh <app> [env]` remains a compatibility wrapper for one
-cycle. For a one-off health check, pass
-`-e homelab_healthcheck_url=http://<host>:<port>/` directly to
-`ansible-playbook`; the default deploy relies on Compose's `--wait`.
-
-## Homelab access (Tailscale only)
-
-- Join the homelab VM to the tailnet (`just converge homelab`, or run
-  `tailscale up --hostname homelab-vm` manually). Use `--accept-dns=false` if
-  the host runs AdGuard/its own DNS.
-- Reach apps at the MagicDNS name or `100.x` address. `tailscale serve` can
-  provide HTTPS on the tailnet:
-  ```bash
-  tailscale serve --bg 8222          # https://homelab.<tailnet>.ts.net
-  tailscale serve status
-  ```
-- UFW allows the `tailscale0` interface via the `base` role. Public ports on
-  the homelab are limited to 22 (`base_ufw_ports` in the inventory).
-- Do not use Tailscale Funnel for private services.
-- Cloudflare Tunnel is a later, optional ingress for selected services. It
-  runs on the homelab or the NAT box and never routes through Azure Caddy.
-
-## Restricted-network DPI bypass (byedpi)
-
-For client hosts whose network interferes with TLS/HTTP. This is not for the
-VPS or any public origin.
-
-1. Add the host to the `restricted` group in `fleet/inventory/prod.yml`
-   (gitignored). The group is empty by default and `unblock.yml` only targets it.
-2. `just unblock <host>` installs official upstream byedpi, verifies the pinned
-   release SHA256, and starts SOCKS5 `127.0.0.1:1080`, transparent `1081`, and
-   privoxy `8118`. Full-device mode redirects the host's own TCP `80`/`443` and
-   rejects QUIC UDP/443 by default.
-3. Verify:
-   ```bash
-   ssh <host> 'sudo systemctl status byedpi-socks byedpi-transparent byedpi-nat privoxy'
-   ssh <host> 'curl -x socks5h://127.0.0.1:1080 -I https://example.com'
-   ssh <host> 'sudo iptables -t nat -S BYEDPI_NAT'
-   ```
-4. If the target cannot reach GitHub, pre-download the exact upstream asset and
-   pass `DPI_BYPASS_ARTIFACT=/path/to/byedpi-17.3-<arch>.tar.gz just unblock <host>`.
-5. Undo: `just unblock-off <host>` stops services and removes the redirect
-   chains, units, binary, and role user.
-
-Caveats: IPv4 only; Docker bridge traffic and UDP are not proxied; QUIC is
-rejected, not proxied. Keep Tailscale in the exclusion list, and add local
-tunnel/agent egress CIDRs to `dpi_bypass_extra_exclude_cidrs` to avoid loops.
-`byedpi-nat.service` is `PartOf=ufw.service`; after a bare `ufw reload`, run
-`systemctl restart byedpi-nat`. Full variables:
-`fleet/roles/dpi-bypass/README.md`.
+Keep backups off-machine.
 
 ## Tailnet shell (hub + ONE burner spoke repo, NOT on the VPS)
 

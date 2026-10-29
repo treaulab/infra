@@ -6,9 +6,8 @@ on:
     branches: [main]
     paths:
       - stacks/public/**
-      - fleet/playbooks/deploy-public.yml
+      - fleet/playbooks/deploy.yml
       - fleet/playbooks/templates/**
-      - fleet/requirements.yml
       - tools/deploy-public.sh
       - .github/workflows/deploy.yml
   workflow_dispatch:
@@ -33,7 +32,6 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install ansible-core
-          ansible-galaxy collection install -r fleet/requirements.yml
       - name: Build inventory + key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -62,7 +60,7 @@ jobs:
               domain: ${DOMAIN}
               acme_email: ${ACME_EMAIL}
               caddy_version: "2.11"
-              deploy_root: /opt/treaulab
+              deploy_root: /opt/stacks
               site_ip: ${SSH_HOST}
             children:
               edge:
@@ -74,4 +72,4 @@ jobs:
           EOF
       - name: Deploy over SSH
         working-directory: fleet
-        run: ansible-playbook -i inventory/ci.yml playbooks/deploy-public.yml --limit vps
+        run: ansible-playbook -i inventory/ci.yml playbooks/deploy.yml

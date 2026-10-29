@@ -23,13 +23,12 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install ansible-core ansible-lint
-          ansible-galaxy collection install -r fleet/requirements.yml
       - name: Prepare example inventory
         working-directory: fleet
         run: cp inventory/prod.yml.example inventory/prod.yml
-      - name: Lint roles and playbooks
+      - name: Lint playbooks
         working-directory: fleet
-        run: ansible-lint roles playbooks
+        run: ansible-lint playbooks
       - name: Syntax-check all playbooks
         working-directory: fleet
         run: |

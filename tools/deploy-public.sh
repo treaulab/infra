@@ -41,6 +41,6 @@ EXTRA+=(-e "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o Conne
 
 {
   printf '== deploy-public %s (Ansible; wrapper is deprecated) log: %s\n' "$ENV" "$LOG"
-  (cd fleet && ansible-playbook -i "inventory/${ENV}.yml" playbooks/deploy-public.yml \
-    --limit vps "${EXTRA[@]}")
+  (cd fleet && ansible-playbook -i "inventory/${ENV}.yml" playbooks/deploy.yml \
+    "${EXTRA[@]}")
 } 2>&1 | tee "$LOG"

@@ -1,9 +1,0 @@
----
-# OS baseline only: hardening + Tailscale. Run before the first stack deploy.
-# Stack lifecycle is handled by the deploy playbooks, not here.
-- name: Bootstrap managed hosts
-  hosts: all
-  become: true
-  roles:
-    - base
-    - tailscale
