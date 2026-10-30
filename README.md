@@ -23,8 +23,8 @@ platform/          OpenTofu roots
 ├── azure/         Azure VPS (RG/VNet/NSG/PIP/NIC/VM)
 ├── cloudflare/    zone lookup (DNS records adopted incrementally)
 ├── github/        branch protection
-├── tailscale/     tailnet ACL + CI keys/secrets
-└── proxmox/       deferred: homelab compute as code
+├── proxmox/       homelab compute: cloud-init base image + Docker VM
+└── tailscale/     tailnet ACL + CI keys/secrets
 
 fleet/             Ansible: host OS baseline, Docker Compose stack convergence
 stacks/

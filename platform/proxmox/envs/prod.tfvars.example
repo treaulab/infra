@@ -1,0 +1,26 @@
+# cp envs/prod.tfvars.example envs/prod.tfvars (gitignored) and fill.
+# Provider credentials can also be supplied via environment variables:
+#   export PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006/"
+#   export PROXMOX_VE_API_TOKEN="terraform@pve!token=00000000-0000-0000-0000-000000000000"
+
+proxmox_endpoint  = "https://192.168.1.100:8006/"
+proxmox_api_token = "terraform@pve!token=00000000-0000-0000-0000-000000000000"
+proxmox_insecure  = true
+proxmox_node_name = "pve"
+
+datastore_iso = "local"
+datastore_vm  = "local-lvm"
+
+vm_name         = "treaulab-homelab-docker"
+vm_cores        = 2
+vm_memory_mb    = 4096
+vm_disk_size_gb = 32
+
+vm_network_bridge = "vmbr0"
+vm_ipv4_address   = "dhcp"
+# For static IP instead of dhcp:
+# vm_ipv4_address = "192.168.1.50/24"
+# vm_ipv4_gateway = "192.168.1.1"
+
+admin_username = "treau"
+admin_ssh_key  = "ssh-ed25519 AAAA... you@machine"

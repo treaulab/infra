@@ -20,13 +20,13 @@ setup:
 fleet-check:
     cd fleet && ansible-lint playbooks
 
-# Plan one OpenTofu root: azure, cloudflare, github, or tailscale.
+# Plan one OpenTofu root: azure, cloudflare, github, proxmox, or tailscale.
 plan root="azure":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{root}}" in
-      azure)
-        cd platform/azure
+      azure|proxmox)
+        cd "platform/{{root}}"
         tofu init
         tofu plan -var-file=envs/prod.tfvars
         ;;
@@ -36,7 +36,7 @@ plan root="azure":
         tofu plan
         ;;
       *)
-        echo "unknown root: {{root}} (use azure|cloudflare|github|tailscale)" >&2
+        echo "unknown root: {{root}} (use azure|cloudflare|github|proxmox|tailscale)" >&2
         exit 2
         ;;
     esac
@@ -59,7 +59,7 @@ check:
     #!/usr/bin/env bash
     set -euo pipefail
     tofu fmt -check -recursive platform
-    for r in azure cloudflare github tailscale; do
+    for r in azure cloudflare github tailscale proxmox; do
       echo "== validate $r"
       (cd "platform/$r" && tofu init -backend=false >/dev/null && tofu validate)
     done
