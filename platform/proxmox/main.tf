@@ -1,5 +1,5 @@
 resource "proxmox_download_file" "cloud_image" {
-  content_type       = "iso"
+  content_type       = "import"
   datastore_id       = var.datastore_iso
   node_name          = var.proxmox_node_name
   url                = var.cloud_image_url
