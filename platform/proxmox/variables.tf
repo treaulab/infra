@@ -34,7 +34,7 @@ variable "datastore_vm" {
 }
 
 variable "cloud_image_url" {
-  description = "Download URL for the cloud-init base image"
+  description = "Download URL for the latest Ubuntu LTS cloud-init minimal image"
   type        = string
   default     = "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img"
 }
@@ -43,6 +43,12 @@ variable "cloud_image_file_name" {
   description = "File name for the downloaded cloud image in the datastore"
   type        = string
   default     = "ubuntu-24.04-minimal-cloudimg-amd64.img"
+}
+
+variable "cloud_image_checksum" {
+  description = "Optional SHA256 checksum for the cloud image"
+  type        = string
+  default     = null
 }
 
 variable "vm_id" {
