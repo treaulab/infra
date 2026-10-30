@@ -11,10 +11,10 @@ datastore_vm      = "local-lvm"
 
 # Ubuntu 26.04 LTS ('Resolute Raccoon') minimal cloud image (default)
 cloud_image_url       = "https://cloud-images.ubuntu.com/minimal/releases/resolute/release/ubuntu-26.04-minimal-cloudimg-amd64.img"
-cloud_image_file_name = "ubuntu-26.04-minimal-cloudimg-amd64.raw"
+cloud_image_file_name = "ubuntu-26.04-minimal-cloudimg-amd64.qcow2"
 cloud_image_checksum  = "6c083e6bea1573aab619c1dfa8d17bb7e3a8618fbd6cb57fa39d517b20062aa4"
 
-vm_name          = "homelab"
+vm_name          = "node-01"
 vm_cores         = 2
 vm_memory_mb     = 4096
 vm_memory_min_mb = 2048 # Dynamic ballooning threshold

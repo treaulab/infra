@@ -21,7 +21,7 @@ all:
       vars:
         base_ufw_ports: ["22"]
       hosts:
-        homelab:
+        node-01:
           ansible_host: 192.168.1.50    # Proxmox VM LAN IP until Tailscale is up
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"

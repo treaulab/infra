@@ -8,10 +8,29 @@ resource "proxmox_download_file" "cloud_image" {
   checksum_algorithm = var.cloud_image_checksum != null ? "sha256" : null
 }
 
+resource "proxmox_virtual_environment_file" "cloud_init_vendor_data" {
+  content_type = "snippets"
+  datastore_id = var.datastore_iso
+  node_name    = var.proxmox_node_name
+
+  source_raw {
+    data = <<-EOF
+    #cloud-config
+    package_update: true
+    packages:
+      - qemu-guest-agent
+    runcmd:
+      - systemctl enable --now qemu-guest-agent
+    EOF
+
+    file_name = "vendor-data-qemu-guest-agent.yaml"
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "docker_host" {
   name        = var.vm_name
-  description = "Managed by OpenTofu (platform/proxmox) - Homelab Docker Host"
-  tags        = ["homelab", "docker", "tofu", "ubuntu-26.04"]
+  description = "Managed by OpenTofu (platform/proxmox) - Internal Docker Host"
+  tags        = ["internal", "docker", "tofu", "ubuntu-26.04"]
   node_name   = var.proxmox_node_name
   vm_id       = var.vm_id
 
@@ -21,9 +40,16 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
     order = var.vm_startup_order
   }
 
-  # Modern Q35 PCIe chipset & dedicated virtio-scsi controller per disk
+  # Modern UEFI (OVMF) boot and Q35 PCIe architecture
+  bios          = "ovmf"
   machine       = "q35"
   scsi_hardware = "virtio-scsi-single"
+  tablet_device = false
+
+  efi_disk {
+    datastore_id = var.datastore_vm
+    type         = "4m"
+  }
 
   agent {
     enabled = true
@@ -83,8 +109,9 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
   }
 
   initialization {
-    datastore_id = var.datastore_vm
-    interface    = "scsi1"
+    datastore_id        = var.datastore_vm
+    interface           = "scsi1"
+    vendor_data_file_id = proxmox_virtual_environment_file.cloud_init_vendor_data.id
 
     ip_config {
       ipv4 {

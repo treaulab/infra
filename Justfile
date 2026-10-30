@@ -45,7 +45,7 @@ plan root="azure":
 plan-all:
     #!/usr/bin/env bash
     set -euo pipefail
-    for r in azure cloudflare github tailscale; do
+    for r in azure cloudflare github tailscale proxmox; do
       echo "== plan $r"
       just plan "$r"
     done

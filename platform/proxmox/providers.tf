@@ -7,4 +7,9 @@
 # bpg/proxmox natively reads PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN,
 # and PROXMOX_VE_INSECURE from the environment.
 
-provider "proxmox" {}
+provider "proxmox" {
+  ssh {
+    agent    = true
+    username = "root"
+  }
+}

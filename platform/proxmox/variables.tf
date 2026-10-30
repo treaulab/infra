@@ -25,7 +25,7 @@ variable "cloud_image_url" {
 variable "cloud_image_file_name" {
   description = "File name for the downloaded cloud image in the datastore (.raw, .qcow2, or .vmdk for import)"
   type        = string
-  default     = "ubuntu-26.04-minimal-cloudimg-amd64.raw"
+  default     = "ubuntu-26.04-minimal-cloudimg-amd64.qcow2"
 }
 
 variable "cloud_image_checksum" {
@@ -43,7 +43,7 @@ variable "vm_id" {
 variable "vm_name" {
   description = "Hostname and display name for the VM"
   type        = string
-  default     = "homelab"
+  default     = "node-01"
 }
 
 variable "vm_on_boot" {
