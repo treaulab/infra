@@ -43,7 +43,7 @@ variable "vm_id" {
 variable "vm_name" {
   description = "Hostname and display name for the VM"
   type        = string
-  default     = "treaulab-homelab-docker"
+  default     = "homelab"
 }
 
 variable "vm_on_boot" {
