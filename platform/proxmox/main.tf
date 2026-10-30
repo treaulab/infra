@@ -44,7 +44,7 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
 
   disk {
     datastore_id = var.datastore_vm
-    file_id      = proxmox_download_file.cloud_image.id
+    import_from  = proxmox_download_file.cloud_image.id
     interface    = "scsi0"
     iothread     = true
     discard      = "on"
