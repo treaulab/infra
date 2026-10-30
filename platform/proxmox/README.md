@@ -22,19 +22,15 @@ Physical Host (Proxmox VE 8.x)
                  └─ Ansible (fleet/playbooks/host.yml) converges Docker + Tailscale
 ```
 
-## Hardware Virtualization Defaults
+## Secrets and Authentication
 
-- **OS**: Ubuntu 26.04 LTS (Resolute Raccoon) minimal cloud-init image (~420MB base) with verified SHA-256 checksum.
-- **Machine Type**: `q35` (Modern PCIe bus layout).
-- **SCSI Controller**: `virtio-scsi-single` (Dedicated controller queue per virtual disk).
-- **Async I/O Engine**: `aio = "io_uring"` (High-throughput Linux asynchronous I/O engine in Proxmox VE 8+).
-- **Storage Flags**: `discard = "on"` (TRIM pass-through) and `ssd = true` (Flash scheduling).
-- **CPU**: `type = "host"` (Passes all host CPU flags including AES-NI and vector extensions) + `numa = true`.
-- **Memory**: Dynamic ballooning (`floating` min memory threshold) so idle RAM is reclaimed by the Proxmox host.
-- **Boot Lifecycle**: `on_boot = true` and `startup { order = 1 }` for automated recovery after host reboots.
-- **Network**: VirtIO multi-queue (`queues = var.vm_cores`) with Proxmox firewall integration.
-- **Entropy**: Dedicated VirtIO RNG device (`/dev/urandom`) to eliminate guest entropy exhaustion during boot and SSH key generation.
-- **Serial Console**: Built-in serial device for out-of-band `qm terminal` and Proxmox xterm.js access.
+Following repository policy, provider API credentials are **never** stored in `.env`, `variables.tf`, or `tfvars`. They are loaded into the shell from the gitignored `.envrc` via `direnv` (see `.envrc.example`):
+
+```bash
+export PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006/"
+export PROXMOX_VE_API_TOKEN="terraform@pve!token=00000000-0000-0000-0000-000000000000"
+export PROXMOX_VE_INSECURE="true"
+```
 
 ## Prerequisites
 
@@ -43,7 +39,7 @@ Physical Host (Proxmox VE 8.x)
    - In the Proxmox web UI, navigate to **Datacenter -> Permissions -> API Tokens**.
    - Create a token for a user (e.g., `terraform@pve`, Token ID: `token`).
    - Grant appropriate permissions (e.g. `PVEVMAdmin` role or custom permissions for VM lifecycle and storage content upload).
-   - Note the Secret Key (it will only be shown once).
+   - Add the credentials to your gitignored `.envrc` and run `direnv allow .`.
 3. **Datastores**:
    - `datastore_iso`: storage supporting `ISO image` content type (default `local`).
    - `datastore_vm`: storage supporting `Disk image` content type (default `local-lvm`).
@@ -51,27 +47,18 @@ Physical Host (Proxmox VE 8.x)
 ## Quickstart
 
 ```bash
-cd platform/proxmox
+# 1. Ensure provider credentials are loaded in your shell via direnv:
+#    cp .envrc.example .envrc && chmod 600 .envrc && direnv allow .
 
-# 1. Copy example tfvars
-cp envs/prod.tfvars.example envs/prod.tfvars
+# 2. Copy example tfvars for non-secret VM compute parameters
+cp platform/proxmox/envs/prod.tfvars.example platform/proxmox/envs/prod.tfvars
 
-# 2. Edit envs/prod.tfvars with your Proxmox endpoint, token, and SSH key
-chmod 600 envs/prod.tfvars
-
-# 3. Plan (or use `just plan proxmox` from repo root)
-tofu init
-tofu plan -var-file=envs/prod.tfvars
+# 3. Plan via Justfile
+just plan proxmox
 
 # 4. Apply (human-run only)
+cd platform/proxmox
 tofu apply -var-file=envs/prod.tfvars
-```
-
-Alternatively, credentials can be set via environment variables in a gitignored `.envrc`:
-```bash
-export PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006/"
-export PROXMOX_VE_API_TOKEN="terraform@pve!token=00000000-0000-0000-0000-000000000000"
-export PROXMOX_VE_INSECURE="true"
 ```
 
 ## Handoff to Ansible

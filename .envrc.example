@@ -16,5 +16,10 @@ export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."
 # Cloudflare API token: Zone -> DNS:Edit + Zone -> Zone:Read for treau.me.
 export CLOUDFLARE_API_TOKEN="..."
 
+# Proxmox VE API provider (homelab compute).
+export PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006/"
+export PROXMOX_VE_API_TOKEN="terraform@pve!token=00000000-0000-0000-0000-000000000000"
+export PROXMOX_VE_INSECURE="true"
+
 # GitHub: do not store a static token here. Use the admin account dynamically:
 #   GITHUB_TOKEN="$(gh auth token --user slancj)" just plan tailscale

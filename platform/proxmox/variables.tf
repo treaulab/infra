@@ -1,20 +1,3 @@
-variable "proxmox_endpoint" {
-  description = "Proxmox VE API URL (e.g. https://proxmox.home.lan:8006/)"
-  type        = string
-}
-
-variable "proxmox_api_token" {
-  description = "Proxmox API token in format USER@REALM!TOKENID=UUID"
-  type        = string
-  sensitive   = true
-}
-
-variable "proxmox_insecure" {
-  description = "Skip TLS certificate verification for self-signed Proxmox certificates"
-  type        = bool
-  default     = true
-}
-
 variable "proxmox_node_name" {
   description = "Target Proxmox node name"
   type        = string
