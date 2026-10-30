@@ -5,8 +5,9 @@ Ansible only syncs configuration and converges compose projects.
 
 ```bash
 cp inventory/prod.yml.example inventory/prod.yml   # gitignored
-just converge vps      # Host OS baseline: UFW, Tailscale, Docker
-just deploy-public     # Deploy Caddy + static website stack to VPS
+just converge vps          # Host OS baseline on VPS: UFW, Tailscale, Docker
+just converge homelab      # Host OS baseline on Proxmox homelab VM
+just deploy-public         # Deploy Caddy + static website stack to VPS
 ```
 
 ## Structure

@@ -7,6 +7,12 @@
     tailscale_authkey: "{{ lookup('env', 'TAILSCALE_AUTHKEY') | default('', true) }}"
     tailscale_hostname: "{{ inventory_hostname }}"
   tasks:
+    - name: Wait for cloud-init to finish if running
+      ansible.builtin.command:
+        cmd: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+
     - name: Install base security & utility packages
       ansible.builtin.apt:
         name:
