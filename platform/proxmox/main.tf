@@ -28,6 +28,9 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
   agent {
     enabled = true
     trim    = true
+    wait_for_ip {
+      disabled = true
+    }
   }
 
   cpu {
@@ -75,7 +78,14 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
   # Out-of-band serial device for xterm.js / qm terminal console
   serial_device {}
 
+  vga {
+    type = "std"
+  }
+
   initialization {
+    datastore_id = var.datastore_vm
+    interface    = "scsi1"
+
     ip_config {
       ipv4 {
         address = var.vm_ipv4_address
