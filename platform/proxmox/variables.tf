@@ -23,9 +23,9 @@ variable "cloud_image_url" {
 }
 
 variable "cloud_image_file_name" {
-  description = "File name for the downloaded cloud image in the datastore"
+  description = "File name for the downloaded cloud image in the datastore (.raw, .qcow2, or .vmdk for import)"
   type        = string
-  default     = "ubuntu-26.04-minimal-cloudimg-amd64.img"
+  default     = "ubuntu-26.04-minimal-cloudimg-amd64.raw"
 }
 
 variable "cloud_image_checksum" {
