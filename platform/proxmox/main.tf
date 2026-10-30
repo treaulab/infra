@@ -31,10 +31,9 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
   }
 
   cpu {
-    cores        = var.vm_cores
-    type         = var.vm_cpu_type
-    architecture = "x86_64"
-    numa         = var.vm_cpu_numa
+    cores = var.vm_cores
+    type  = var.vm_cpu_type
+    numa  = var.vm_cpu_numa
   }
 
   # Dynamic memory ballooning (reclaims unused RAM for the host)
