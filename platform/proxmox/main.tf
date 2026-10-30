@@ -11,9 +11,15 @@ resource "proxmox_download_file" "cloud_image" {
 resource "proxmox_virtual_environment_vm" "docker_host" {
   name        = var.vm_name
   description = "Managed by OpenTofu (platform/proxmox) - Homelab Docker Host"
-  tags        = ["homelab", "docker", "tofu"]
+  tags        = ["homelab", "docker", "tofu", "ubuntu-26.04"]
   node_name   = var.proxmox_node_name
   vm_id       = var.vm_id
+
+  # Automatic startup and sequencing on host boot
+  on_boot = var.vm_on_boot
+  startup {
+    order = var.vm_startup_order
+  }
 
   # Modern Q35 PCIe chipset & dedicated virtio-scsi controller per disk
   machine       = "q35"
@@ -28,10 +34,13 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
     cores        = var.vm_cores
     type         = var.vm_cpu_type
     architecture = "x86_64"
+    numa         = var.vm_cpu_numa
   }
 
+  # Dynamic memory ballooning (reclaims unused RAM for the host)
   memory {
     dedicated = var.vm_memory_mb
+    floating  = var.vm_memory_min_mb
   }
 
   disk {
@@ -72,6 +81,14 @@ resource "proxmox_virtual_environment_vm" "docker_host" {
       ipv4 {
         address = var.vm_ipv4_address
         gateway = var.vm_ipv4_gateway
+      }
+    }
+
+    dynamic "dns" {
+      for_each = var.vm_dns_servers != null ? [1] : []
+      content {
+        domain  = var.vm_dns_domain
+        servers = var.vm_dns_servers
       }
     }
 

@@ -34,21 +34,21 @@ variable "datastore_vm" {
 }
 
 variable "cloud_image_url" {
-  description = "Download URL for the latest Ubuntu LTS cloud-init minimal image"
+  description = "Download URL for the Ubuntu 26.04 LTS ('Resolute Raccoon') minimal cloud-init image"
   type        = string
-  default     = "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img"
+  default     = "https://cloud-images.ubuntu.com/minimal/releases/resolute/release/ubuntu-26.04-minimal-cloudimg-amd64.img"
 }
 
 variable "cloud_image_file_name" {
   description = "File name for the downloaded cloud image in the datastore"
   type        = string
-  default     = "ubuntu-24.04-minimal-cloudimg-amd64.img"
+  default     = "ubuntu-26.04-minimal-cloudimg-amd64.img"
 }
 
 variable "cloud_image_checksum" {
-  description = "Optional SHA256 checksum for the cloud image"
+  description = "SHA256 checksum for the Ubuntu 26.04 LTS minimal cloud image"
   type        = string
-  default     = null
+  default     = "6c083e6bea1573aab619c1dfa8d17bb7e3a8618fbd6cb57fa39d517b20062aa4"
 }
 
 variable "vm_id" {
@@ -63,6 +63,18 @@ variable "vm_name" {
   default     = "treaulab-homelab-docker"
 }
 
+variable "vm_on_boot" {
+  description = "Automatically start the VM when the Proxmox host boots"
+  type        = bool
+  default     = true
+}
+
+variable "vm_startup_order" {
+  description = "Startup priority sequence for the VM on host boot"
+  type        = number
+  default     = 1
+}
+
 variable "vm_cores" {
   description = "Number of CPU cores"
   type        = number
@@ -70,15 +82,27 @@ variable "vm_cores" {
 }
 
 variable "vm_cpu_type" {
-  description = "Emulated CPU type ('host' exposes host CPU capabilities to guest)"
+  description = "Emulated CPU type ('host' exposes all host CPU flags like AES-NI and AVX2)"
   type        = string
   default     = "host"
 }
 
+variable "vm_cpu_numa" {
+  description = "Enable NUMA architecture inside the guest VM for multi-core memory performance"
+  type        = bool
+  default     = true
+}
+
 variable "vm_memory_mb" {
-  description = "Dedicated RAM in megabytes"
+  description = "Maximum dedicated RAM in megabytes"
   type        = number
   default     = 4096
+}
+
+variable "vm_memory_min_mb" {
+  description = "Minimum floating RAM in megabytes for VirtIO dynamic ballooning"
+  type        = number
+  default     = 2048
 }
 
 variable "vm_disk_size_gb" {
@@ -107,6 +131,18 @@ variable "vm_ipv4_address" {
 
 variable "vm_ipv4_gateway" {
   description = "IPv4 default gateway (required if static IPv4 is used)"
+  type        = string
+  default     = null
+}
+
+variable "vm_dns_servers" {
+  description = "Optional custom DNS server IPs for guest cloud-init resolution"
+  type        = list(string)
+  default     = null
+}
+
+variable "vm_dns_domain" {
+  description = "Optional search domain for guest cloud-init resolution"
   type        = string
   default     = null
 }

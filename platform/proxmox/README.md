@@ -4,7 +4,7 @@ OpenTofu root for homelab compute virtualization on Proxmox VE using the
 [`bpg/proxmox`](https://registry.terraform.io/providers/bpg/proxmox/latest/docs) provider.
 
 Provisions a standardized cloud-init Docker VM on bare-metal Proxmox hardware using
-modern virtualization defaults and the latest Ubuntu LTS release (**Ubuntu 24.04 LTS Noble Numbat**).
+modern virtualization defaults and **Ubuntu 26.04 LTS ("Resolute Raccoon")** minimal cloud images.
 Once provisioned, configuration management is handed off to Ansible (`fleet/`).
 
 ## Architecture
@@ -12,22 +12,26 @@ Once provisioned, configuration management is handed off to Ansible (`fleet/`).
 ```text
 Physical Host (Proxmox VE 8.x)
   └─ OpenTofu (platform/proxmox)
-       ├─ Downloads Ubuntu 24.04 LTS minimal cloud image (proxmox_download_file)
+       ├─ Downloads Ubuntu 26.04 LTS minimal cloud image (proxmox_download_file)
        └─ Deploys Docker Host VM (proxmox_virtual_environment_vm)
-            ├─ Modern Q35 chipset + virtio-scsi-single + io_uring AIO
-            ├─ VirtIO multiqueue networking + VirtIO RNG device
-            └─ Cloud-init sets up admin user + SSH key
+            ├─ Modern Q35 PCIe chipset + virtio-scsi-single + io_uring AIO
+            ├─ VirtIO multiqueue networking + VirtIO RNG device + NUMA
+            ├─ Memory ballooning (floating min RAM to reclaim idle host memory)
+            ├─ Automated startup sequencing (on_boot = true)
+            └─ Cloud-init sets up admin user + SSH key + dynamic DNS
                  └─ Ansible (fleet/playbooks/host.yml) converges Docker + Tailscale
 ```
 
 ## Hardware Virtualization Defaults
 
-- **OS**: Ubuntu 24.04 LTS (Noble Numbat) minimal cloud-init image (~350MB base).
+- **OS**: Ubuntu 26.04 LTS (Resolute Raccoon) minimal cloud-init image (~420MB base) with verified SHA-256 checksum.
 - **Machine Type**: `q35` (Modern PCIe bus layout).
 - **SCSI Controller**: `virtio-scsi-single` (Dedicated controller queue per virtual disk).
-- **Async I/O Engine**: `io_uring` (Modern Linux asynchronous I/O engine for maximum NVMe/SSD IOPS).
+- **Async I/O Engine**: `aio = "io_uring"` (High-throughput Linux asynchronous I/O engine in Proxmox VE 8+).
 - **Storage Flags**: `discard = "on"` (TRIM pass-through) and `ssd = true` (Flash scheduling).
-- **CPU**: `type = "host"` (Passes all host CPU flags including AES-NI and vector extensions).
+- **CPU**: `type = "host"` (Passes all host CPU flags including AES-NI and vector extensions) + `numa = true`.
+- **Memory**: Dynamic ballooning (`floating` min memory threshold) so idle RAM is reclaimed by the Proxmox host.
+- **Boot Lifecycle**: `on_boot = true` and `startup { order = 1 }` for automated recovery after host reboots.
 - **Network**: VirtIO multi-queue (`queues = var.vm_cores`) with Proxmox firewall integration.
 - **Entropy**: Dedicated VirtIO RNG device (`/dev/urandom`) to eliminate guest entropy exhaustion during boot and SSH key generation.
 - **Serial Console**: Built-in serial device for out-of-band `qm terminal` and Proxmox xterm.js access.
