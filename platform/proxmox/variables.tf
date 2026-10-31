@@ -1,7 +1,7 @@
 variable "proxmox_node_name" {
   description = "Target Proxmox node name"
   type        = string
-  default     = "pve"
+  default     = "atlas"
 }
 
 variable "datastore_iso" {

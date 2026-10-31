@@ -5,10 +5,13 @@
 # This is the temporary plaintext-local convenience path. Later, replace the
 # secret exports with `secret-tool` (GNOME Keyring) or `op read` (1Password).
 
-# Tailscale OAuth client (preferred).
+# Tailscale OAuth client (preferred for OpenTofu / Tailscale API).
 export TAILSCALE_OAUTH_CLIENT_ID="k..."
 export TAILSCALE_TAILNET="you@example.com"
 export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."
+
+# Tailscale device auth key for fleet host enrollment (Ansible converge).
+# export TAILSCALE_AUTHKEY="tskey-auth-..."
 
 # Fallback instead of the OAuth pair; use one path, not both:
 # export TAILSCALE_API_KEY="tskey-api-..."

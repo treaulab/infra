@@ -87,7 +87,7 @@
         repo: "{{ zapret_repo_url }}"
         dest: /opt/zapret2
         version: "{{ zapret_commit }}"
-        force: false
+        force: true
       when: enable_zapret | default(false) | bool
 
     - name: Remove historical cloudflared bypass hook
@@ -216,7 +216,7 @@
 
     - name: Join tailnet if auth key provided and not running
       ansible.builtin.command:
-        cmd: "tailscale up --hostname {{ tailscale_hostname }} --authkey {{ tailscale_authkey }}"
+        cmd: "tailscale up --hostname {{ tailscale_hostname }} --authkey {{ tailscale_authkey }} --operator={{ ansible_user }}"
       when:
         - tailscale_authkey | length > 0
         - tailscale_status.stdout | length == 0 or ((tailscale_status.stdout | default('{}', true)) | from_json).BackendState | default('') != 'Running'
