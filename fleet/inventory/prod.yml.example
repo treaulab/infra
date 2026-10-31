@@ -20,6 +20,7 @@ all:
     internal:
       vars:
         base_ufw_ports: ["22"]
+        enable_zapret: false # Set to true to automatically build/install zapret2 for DPI circumvention
       hosts:
         node-01:
           ansible_host: 192.168.1.50    # Proxmox VM LAN IP until Tailscale is up

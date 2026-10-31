@@ -1,0 +1,4 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# daily refresh of zapret2 nozapret set (LAN CIDR only)
+17 4 * * * root /opt/zapret2/ipset/refresh-exclude-live.sh >>/var/log/zapret2-exclude-refresh.log 2>&1

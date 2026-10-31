@@ -6,6 +6,9 @@
   vars:
     tailscale_authkey: "{{ lookup('env', 'TAILSCALE_AUTHKEY') | default('', true) }}"
     tailscale_hostname: "{{ inventory_hostname }}"
+    zapret_repo_url: "https://gitlab.com/samuellance73/zapret2.git"
+    zapret_commit: "4a33055448ce5f4e7acc704e1fbe0d8a8a6aa08d"
+    zapret_lan_cidr: "192.168.10.0/24"
   tasks:
     - name: Wait for cloud-init to finish if running
       ansible.builtin.command:
@@ -28,6 +31,7 @@
           - tmux
           - netcat-openbsd
           - qemu-guest-agent
+          - git
         state: present
         update_cache: true
 
@@ -55,13 +59,147 @@
           APT::Periodic::Unattended-Upgrade "1";
         mode: "0644"
 
-    # --- Tailscale ---
-    - name: Install Tailscale via official script # noqa: command-instead-of-module
-      ansible.builtin.shell:
-        cmd: set -o pipefail && curl -fsSL https://tailscale.com/install.sh | sh
-        executable: /bin/bash
+    # --- Zapret2 (DPI Circumvention) ---
+    - name: Install zapret2 build and runtime dependencies
+      ansible.builtin.apt:
+        name:
+          - build-essential
+          - make
+          - gcc
+          - pkg-config
+          - libluajit-5.1-dev
+          - zlib1g-dev
+          - libnetfilter-queue-dev
+          - libnfnetlink-dev
+          - libmnl-dev
+          - libcap-dev
+          - libsystemd-dev
+          - nftables
+          - iproute2
+          - cron
+          - curl
+          - ca-certificates
+        state: present
+      when: enable_zapret | default(false) | bool
+
+    - name: Clone zapret2 mirror repository
+      ansible.builtin.git:
+        repo: "{{ zapret_repo_url }}"
+        dest: /opt/zapret2
+        version: "{{ zapret_commit }}"
+        force: false
+      when: enable_zapret | default(false) | bool
+
+    - name: Remove historical cloudflared bypass hook
+      ansible.builtin.file:
+        path: /opt/zapret2/init.d/sysv/custom.d/10-cloudflared-bypass
+        state: absent
+      when: enable_zapret | default(false) | bool
+
+    - name: Compile nfqws2 binary with systemd integration
+      ansible.builtin.command:
+        cmd: make systemd
+        chdir: /opt/zapret2
       args:
-        creates: /usr/bin/tailscale
+        creates: /opt/zapret2/binaries/my/nfqws2
+      when: enable_zapret | default(false) | bool
+
+    - name: Create tpws system user for zapret2
+      ansible.builtin.user:
+        name: tpws
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+      when: enable_zapret | default(false) | bool
+
+    - name: Deploy zapret2 configuration
+      ansible.builtin.copy:
+        src: files/zapret2/config
+        dest: /opt/zapret2/config
+        mode: "0644"
+      when: enable_zapret | default(false) | bool
+
+    - name: Deploy zapret2 exclusion live refresh script
+      ansible.builtin.copy:
+        src: files/zapret2/refresh-exclude-live.sh
+        dest: /opt/zapret2/ipset/refresh-exclude-live.sh
+        mode: "0755"
+      when: enable_zapret | default(false) | bool
+
+    - name: Configure zapret2 exclusion daily cron
+      ansible.builtin.copy:
+        src: files/zapret2/zapret2-exclude.cron
+        dest: /etc/cron.d/zapret2-exclude
+        mode: "0644"
+      when: enable_zapret | default(false) | bool
+
+    - name: Configure zapret2 LAN exclusions
+      ansible.builtin.copy:
+        dest: "/opt/zapret2/ipset/{{ item }}"
+        content: "{{ zapret_lan_cidr }}\n"
+        mode: "0644"
+      loop:
+        - zapret-hosts-user-exclude.txt
+        - zapret-ip-exclude.txt
+      when: enable_zapret | default(false) | bool
+
+    - name: Set executable permissions on zapret2 sysv init script
+      ansible.builtin.file:
+        path: /opt/zapret2/init.d/sysv/zapret2
+        mode: "0755"
+      when: enable_zapret | default(false) | bool
+
+    - name: Install zapret2 systemd service
+      ansible.builtin.copy:
+        src: files/zapret2/zapret2.service
+        dest: /etc/systemd/system/zapret2.service
+        mode: "0644"
+      when: enable_zapret | default(false) | bool
+
+    - name: Enable and restart zapret2 service
+      ansible.builtin.systemd:
+        name: zapret2
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      when: enable_zapret | default(false) | bool
+
+    - name: Refresh nozapret exclusion set
+      ansible.builtin.command:
+        cmd: /opt/zapret2/ipset/refresh-exclude-live.sh
+      changed_when: false
+      when: enable_zapret | default(false) | bool
+
+    - name: Wait for nftables queue 300 rule to be active
+      ansible.builtin.command:
+        cmd: nft list table inet zapret2
+      register: nft_zapret
+      until: "'queue flags bypass to 300' in nft_zapret.stdout"
+      retries: 30
+      delay: 1
+      changed_when: false
+      when: enable_zapret | default(false) | bool
+
+    # --- Tailscale ---
+    - name: Download Tailscale apt repository key
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Configure Tailscale apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+        state: present
+        filename: tailscale
+
+    - name: Install Tailscale package
+      ansible.builtin.apt:
+        name:
+          - tailscale
+          - tailscale-archive-keyring
+        state: present
+        update_cache: true
 
     - name: Enable and start tailscaled
       ansible.builtin.systemd:
@@ -104,3 +242,9 @@
         name: "{{ ansible_user }}"
         groups: docker
         append: true
+
+  handlers:
+    - name: Restart zapret2
+      ansible.builtin.systemd:
+        name: zapret2
+        state: restarted
