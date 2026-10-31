@@ -41,9 +41,6 @@ fleet/collections/
 *.p12
 *.pfx
 *.kdbx
-# cloudflared live credentials (examples stay committed)
-stacks/nat-box/cloudflared/config.yml
-stacks/nat-box/cloudflared/token.env
 secrets/
 
 # azure / gh cli

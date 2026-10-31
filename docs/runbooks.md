@@ -8,7 +8,7 @@
    ```bash
    cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
    cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
-   cp stacks/public/caddy/.env.example stacks/public/caddy/.env
+   # Caddy .env is rendered on the VPS by the deploy playbook.
    ```
 3. If the VPS exists, skip `tofu apply`; adopt it later via `tofu import`
    once stable. Back up state first and review `tofu plan` so nothing is
@@ -25,13 +25,19 @@
 
 ## Deploy / upgrade Caddy
 
-- Website-only change: `just deploy-public`; Caddy is not restarted.
-- Caddyfile/compose change: same command; the script detects the config hash
-  and recreates the container.
-- Version bump: update `caddy_version` in `fleet/inventory/prod.yml` (or export
-  `CADDY_VERSION=...` for a one-off), then `just deploy-public`. The deploy
-  script renders `stacks/public/caddy/.env` from the inventory/env.
+- Website-only change: `just deploy-public`; Ansible syncs the site without
+  restarting Caddy.
+- Caddyfile change: same command; an Ansible handler recreates the container.
+- Compose/`.env` change: same command; the compose convergence applies it
+  (typically by recreating the container when its config hash changes).
+- Version bump: update `caddy_version` in `fleet/inventory/prod.yml`, then
+  `just deploy-public`. For a one-off, run the playbook with
+  `-e caddy_version=...` (or use the compatibility wrapper, which still maps
+  `CADDY_VERSION`). The playbook templates `stacks/public/caddy/.env` on the
+  host from inventory variables.
 - Check logs: `ssh <vps> 'docker logs caddy --tail 50'`.
+- The `deploy-public` playbook also waits for `https://<domain>/` to return
+  `200`; CI uses the same external check.
 
 Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
 `reverse_proxy` blocks; homelab traffic does not transit the VPS.
@@ -40,48 +46,16 @@ Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
 
 Caddy data lives in Docker named volumes (`caddy-data`, `caddy-config`).
 Homelab app data should live in named volumes or host paths outside the
-rsync'd stack directory (deploy uses `rsync --delete`).
+synced stack directory (deploy uses `rsync --delete`).
 
 Example Caddy snapshot:
 
 ```bash
-docker run --rm -v caddy-data:/data -v /opt/treaulab/backups:/backup ubuntu \
+docker run --rm -v caddy-data:/data -v /opt/stacks/backups:/backup ubuntu \
   tar -czf /backup/caddy-data-$(date +%F).tar.gz -C /data .
 ```
 
-Keep backups off-machine. Back up homelab app data on its own schedule.
-
-## Homelab access (Tailscale only)
-
-- Join the homelab VM to the tailnet (`just converge homelab`, or run
-  `tailscale up --hostname homelab-vm` manually). Use `--accept-dns=false` if
-  the host runs AdGuard/its own DNS.
-- Reach apps at the MagicDNS name or `100.x` address. `tailscale serve` can
-  provide HTTPS on the tailnet:
-  ```bash
-  tailscale serve --bg 8222          # https://homelab.<tailnet>.ts.net
-  tailscale serve status
-  ```
-- UFW allows the `tailscale0` interface via the `base` role. Public ports on
-  the homelab are limited to 22 (`base_ufw_ports` in the inventory).
-- Do not use Tailscale Funnel for private services.
-- Cloudflare Tunnel is a later, optional ingress for selected services. It
-  runs on the homelab or the NAT box and never routes through Azure Caddy.
-
-## NAT box (cloudflared, stable treau.me access)
-
-Separate NAT'd host exposing HTTP + SSH on stable subdomains. It is not the
-Proxmox homelab. Full runbook: `stacks/nat-box/cloudflared/README.md`.
-
-1. On the NAT box: `./stacks/nat-box/cloudflared/install.sh --check-only`
-   (outbound `7844/UDP` + `443/TCP`; inbound stays closed).
-2. `cloudflared tunnel login && cloudflared tunnel create nat-box`, then
-   `route dns nat-box box.treau.me` and `route dns nat-box ssh-box.treau.me`.
-3. Copy `config.yml.example` to `/etc/cloudflared/config.yml`, fill the tunnel
-   UUID (ingress `box` -> `http://localhost:8080`, `ssh-box` ->
-   `ssh://localhost:22`, `http_status:404`).
-4. Smoke test, then persist via `cloudflared.service.example` -> systemd.
-5. Laptop SSH via `ssh-client.example` (`ProxyCommand cloudflared access ssh`).
+Keep backups off-machine.
 
 ## Tailnet shell (hub + ONE burner spoke repo, NOT on the VPS)
 
@@ -149,7 +123,8 @@ temporary tradeoff:
   ```bash
   GITHUB_TOKEN="$(gh auth token --user slancj)" just plan tailscale
   ```
-- `deploy.yml` renders `stacks/public/caddy/.env` from GitHub Secrets.
+- `deploy.yml` creates a CI inventory from GitHub Secrets; the
+  `deploy-public` playbook templates the Caddy `.env` on the host.
 - Do not paste secrets into chat or issue trackers. A future SOPS/age or
   Docker-secrets migration can replace this without changing stack layouts.
 

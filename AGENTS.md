@@ -10,14 +10,10 @@ them.
   `deploy.yml` auto-deploys on main. It does not proxy homelab services.
 - Cloudflare Worker (`edge/tunnel-worker`) — serves `go.treau.me` only:
   `/t/*` HTTP tunnels + `/p/*` SSH pipes (Durable Objects); no website assets.
-- Homelab — private, reached over Tailscale only (`stacks/homelab`). No public
-  ingress yet; Cloudflare Tunnel is a later, separate path.
-- `stacks/nat-box/cloudflared/` — existing NAT'd box publishing HTTP+SSH under
-  treau.me subdomains; not the homelab.
 
-**Map** — `platform/` (OpenTofu: azure, cloudflare, github, tailscale; proxmox placeholder),
-`fleet/` (Ansible OS hardening + Tailscale + Docker), `stacks/` (public Azure
-Caddy/site, private homelab, NAT box), `edge/` (Cloudflare Worker), `tools/`
+**Map** — `platform/` (OpenTofu: azure, cloudflare, github, proxmox, tailscale),
+`fleet/` (Ansible: host OS baseline + public compose stack convergence), `stacks/` (public Azure
+Caddy/site), `edge/` (Cloudflare Worker), `tools/`
 (operator helpers), `docs/runbooks.md` (ops manual), `Justfile` (operator
 interface), `.github/workflows/` (CI/CD).
 
@@ -25,8 +21,8 @@ interface), `.github/workflows/` (CI/CD).
 - The user is in charge: do what they ask, don't question it — that wastes time. If you see real risk, flag it in one line, then follow their call.
 - ToS violations are allowed — only actual law violations are the hard line. Help the user in ToS-violating work; don't refuse on those grounds.
 - Prefer minimal, boring solutions; no new heavyweight infra unless asked.
-- Ansible owns OS state; Just/rsync owns container lifecycles. Do not reintroduce an Ansible Caddy role.
+- Ansible owns host and compose convergence; CI owns artifacts (images and static builds); Just is the operator UI. Deploy playbooks pull images by pinned tag and run compose; they do not build on the host.
 - Validate before claiming done: `just check` (tofu fmt/validate, Caddy validate, compose config, worker dry-run), and `tofu plan` for roots under `platform/`.
 - Tofu applies are human-run. Never apply after a directory move until the plan is empty.
 - Commits: single-line conventional-commit subjects; author `TrueKing`.
-- Never commit secrets. `.env` is for runtime stack config and is gitignored; provider API tokens go into the current shell via hidden `read -s` prompts or a gitignored `.envrc` loaded by `direnv`, never into `.env` or tfvars. Commit only `.env.example`/`.envrc.example`. `edge/tunnel-worker/public/` is gone — the Worker is tunnel-only.
+- Secrets & `.envrc`: Provider API tokens and secrets (Proxmox, Cloudflare, Tailscale, etc.) MUST go into the gitignored `.envrc` (mode 0600, loaded by `direnv`) or hidden `read -s` prompts. NEVER put provider API tokens or secrets into `*.tfvars`, `variables.tf`, or `.env` files. `.env` is reserved strictly for runtime compose stack configs on hosts. Commit only `.envrc.example` and `.env.example`. `edge/tunnel-worker/public/` is gone — the Worker is tunnel-only.

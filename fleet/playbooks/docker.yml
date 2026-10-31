@@ -1,7 +1,0 @@
----
-# Docker engine + Compose plugin only. Safe to re-run independently.
-- name: Install Docker
-  hosts: all
-  become: true
-  roles:
-    - docker

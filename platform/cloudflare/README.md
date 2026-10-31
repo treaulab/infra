@@ -41,5 +41,5 @@ resource "cloudflare_dns_record" "www" {
 Rules: local state (gitignored), applies are human/terminal-only, one record
 per change. Known gotchas when adopting: Workers custom-domain records and
 cfargotunnel CNAMEs may be provider-managed — inspect in the dashboard
-before declaring them here. CI (`tofu.yml`) runs fmt/validate only, no
+before declaring them here. CI (`check.yml`) runs fmt/validate only, no
 credentials; applies never happen in CI.

@@ -12,18 +12,21 @@ setup:
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
-    ansible-galaxy collection install -r fleet/requirements.yml
     echo "OK. Next: cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars"
     echo "            cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
     echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 
-# Plan one OpenTofu root: azure, cloudflare, github, or tailscale.
+# Lint fleet Ansible playbooks (requires ansible-lint).
+fleet-check:
+    cd fleet && ansible-lint playbooks
+
+# Plan one OpenTofu root: azure, cloudflare, github, proxmox, or tailscale.
 plan root="azure":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{root}}" in
-      azure)
-        cd platform/azure
+      azure|proxmox)
+        cd "platform/{{root}}"
         tofu init
         tofu plan -var-file=envs/prod.tfvars
         ;;
@@ -33,7 +36,7 @@ plan root="azure":
         tofu plan
         ;;
       *)
-        echo "unknown root: {{root}} (use azure|cloudflare|github|tailscale)" >&2
+        echo "unknown root: {{root}} (use azure|cloudflare|github|proxmox|tailscale)" >&2
         exit 2
         ;;
     esac
@@ -42,7 +45,7 @@ plan root="azure":
 plan-all:
     #!/usr/bin/env bash
     set -euo pipefail
-    for r in azure cloudflare github tailscale; do
+    for r in azure cloudflare github tailscale proxmox; do
       echo "== plan $r"
       just plan "$r"
     done
@@ -56,7 +59,7 @@ check:
     #!/usr/bin/env bash
     set -euo pipefail
     tofu fmt -check -recursive platform
-    for r in azure cloudflare github tailscale; do
+    for r in azure cloudflare github tailscale proxmox; do
       echo "== validate $r"
       (cd "platform/$r" && tofu init -backend=false >/dev/null && tofu validate)
     done
@@ -80,29 +83,29 @@ check:
     git diff --check
     echo "OK"
 
-# Converge OS + Tailscale + Docker on one inventory host (or all with `all`).
+# Converge OS baseline (UFW + Tailscale + Docker) on one host (or all).
 converge node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/site.yml --limit "{{node}}"
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}"
 
-# OS baseline only: hardening + Tailscale.
+# Backwards-compatible aliases for host convergence.
 bootstrap node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/bootstrap.yml --limit "{{node}}"
+    @just converge "{{node}}"
 
-# Docker engine only.
 docker node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/docker.yml --limit "{{node}}"
+    @just converge "{{node}}"
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":
-    tools/deploy-public.sh "{{env}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p logs
+    cd fleet
+    ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
+      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy.yml
 
 # Backwards-compatible alias for deploy-public.
 deploy-edge env="prod":
     @just deploy-public "{{env}}"
-
-# Deploy one private homelab stack over Tailscale.
-deploy-home app env="prod":
-    tools/deploy-home.sh "{{app}}" "{{env}}"
 
 # Pin a tailnet-runner spoke to a hub SHA.
 bump-spoke repo sha:

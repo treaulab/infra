@@ -146,7 +146,7 @@ grant window, more labor per rotation.
 
 ## 7. CI posture
 
-`.github/workflows/tofu.yml` runs `init -backend=false` + `fmt -check` +
+`.github/workflows/check.yml` runs `init -backend=false` + `fmt -check` +
 `validate` on this root (no credentials, safe on PRs). Applies
 are human, terminal, short-lived env — never CI-provisioned. Burner and
 future accounts never receive IaC credentials.

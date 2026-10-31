@@ -1,9 +1,0 @@
----
-# OS baseline only: hardening + Tailscale. Run before the first stack deploy.
-# Container lifecycles belong to Just/rsync, not Ansible.
-- name: Bootstrap managed hosts
-  hosts: all
-  become: true
-  roles:
-    - base
-    - tailscale

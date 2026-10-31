@@ -7,10 +7,7 @@ all:
     domain: example.com
     acme_email: admin@example.com
     caddy_version: "2.11"
-    deploy_root: /opt/treaulab
-    homelab_root: /opt/homelab
-    # Public IP used by Caddy's bare-IP abort block (not the SSH host if that
-    # is a Tailscale name).
+    deploy_root: /opt/stacks
     site_ip: 1.2.3.4
     base_ufw_ports: ["22", "80", "443"]
   children:
@@ -20,12 +17,20 @@ all:
           ansible_host: 1.2.3.4 # VPS public IP until Tailscale is up
           ansible_user: azureuser
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-    homelab:
+    internal:
+      vars:
+        base_ufw_ports: ["22"]
+        enable_zapret: false # Set to true to automatically build/install zapret2 for DPI circumvention
+      hosts:
+        node-01:
+          ansible_host: 192.168.1.50    # Proxmox VM LAN IP until Tailscale is up
+          ansible_user: treau           # Matches admin_username in platform/proxmox
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+    untrusted:
       vars:
         base_ufw_ports: ["22"]
       hosts:
-        homelab-vm:
-          # Use the homelab VM's MagicDNS name or 100.x address.
-          ansible_host: homelab.example-tailnet.ts.net
-          ansible_user: youruser
-          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+        i:
+          ansible_host: 100.x.y.z       # Machine i's Tailscale IP
+          ansible_user: treau           # User on machine i
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"

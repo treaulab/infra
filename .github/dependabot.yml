@@ -1,7 +1,7 @@
-# Dependabot — propose version bumps as PRs; green CI is the gate.
+# Dependabot — propose version bumps as PRs; green CI (check.yml) is the gate.
 # Pinned things stay pinned (SHA pins, OIDC, hub SHA in spokes are out of
-# scope here); this only floats what Dependabot natively tracks:
-# Actions majors, Docker tags, npm in edge/tunnel-worker.
+# scope here); this floats what Dependabot natively tracks:
+# Actions majors, Docker tags, npm in edge/tunnel-worker, pip in fleet, and tofu providers.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,7 +11,6 @@ updates:
       day: monday
     commit-message:
       prefix: "chore(deps)"
-    # Path-filtered CI (tunnel/tofu/deploy/agent-bin) still runs per PR.
 
   - package-ecosystem: docker
     directory: /stacks/public/caddy
@@ -20,9 +19,6 @@ updates:
       day: monday
     commit-message:
       prefix: "chore(deps)"
-    # Caddy floats on the 2.11 minor tag (patch auto-updates on next
-    # `docker compose --pull always`); Dependabot watches the base-image
-    # references and proposes major bumps.
 
   - package-ecosystem: npm
     directory: /edge/tunnel-worker
@@ -31,4 +27,43 @@ updates:
       day: monday
     commit-message:
       prefix: "chore(deps)"
-    # wrangler ^4 floats minors; Dependabot proposes majors + advisories.
+
+  - package-ecosystem: pip
+    directory: /fleet
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: terraform
+    directory: /platform/azure
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: terraform
+    directory: /platform/cloudflare
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: terraform
+    directory: /platform/github
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: terraform
+    directory: /platform/tailscale
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"

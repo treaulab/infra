@@ -23,14 +23,12 @@ platform/          OpenTofu roots
 ├── azure/         Azure VPS (RG/VNet/NSG/PIP/NIC/VM)
 ├── cloudflare/    zone lookup (DNS records adopted incrementally)
 ├── github/        branch protection
-├── tailscale/     tailnet ACL + CI keys/secrets
-└── proxmox/       deferred: homelab compute as code
+├── proxmox/       homelab compute: cloud-init base image + Docker VM
+└── tailscale/     tailnet ACL + CI keys/secrets
 
-fleet/             Ansible: OS hardening, Tailscale, Docker
+fleet/             Ansible: host OS baseline, Docker Compose stack convergence
 stacks/
-├── public/        Azure VPS: caddy/ + website/src
-├── homelab/       private apps/core stacks (Tailscale only)
-└── nat-box/       existing NAT'd cloudflared host
+└── public/        Azure VPS: caddy/ + website/src
 
 edge/
 └── tunnel-worker/ Cloudflare Worker on go.treau.me (tunnel-only)
@@ -45,8 +43,9 @@ Justfile           single operator interface
 ```bash
 cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
 cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
-cp stacks/public/caddy/.env.example stacks/public/caddy/.env
-# fill the three files; .env files are gitignored
+# Caddy's .env is rendered on the VPS from inventory; a local copy is only
+# needed if you want `just check` to use non-example values.
+# fill the inventory + tfvars; .env files are gitignored
 
 just setup                 # checks tools + installs Ansible collections
 just plan azure            # read-only
@@ -64,19 +63,14 @@ Keep port 22 until Tailscale access is proven.
 |---|---|---|
 | `stacks/public/**` | `just deploy-public` | Azure VPS |
 | `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
-| `stacks/homelab/<app>/**` | `just deploy-home <app>` | Homelab over Tailscale |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
-| `fleet/**` | `just converge <node>` | OS configuration |
+| `fleet/playbooks/host.yml` | `just converge <node>` | Host OS baseline |
+| `fleet/playbooks/deploy.yml` | `just deploy-public` | Compose stack convergence |
 
-Website-only changes are rsync'd without restarting Caddy; Caddyfile/compose
-changes recreate the container.
-
-## Homelab access
-
-The homelab VM joins the tailnet and is reached at its MagicDNS name or
-`100.x` address. There is no public DNS or homelab ingress yet. Use
-`tailscale serve` for HTTPS on the tailnet if an app needs it. Cloudflare
-Tunnel is a later, separate path; it must not route through Azure Caddy.
+Website-only changes are synced without restarting Caddy; Caddyfile, compose,
+or `.env` changes recreate the container. `tools/deploy-public.sh`
+remains a compatibility wrapper for one transition cycle;
+prefer the `just` recipes.
 
 ## Secrets and state
 

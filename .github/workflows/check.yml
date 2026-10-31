@@ -1,0 +1,149 @@
+name: check
+
+# Unified PR gate and CI suite. Mirrors `just check` across the entire repo.
+# Runs on every pull request and push to main without path filters, ensuring
+# a single stable status check ("check") for branch protection.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tofu:
+    name: tofu (${{ matrix.root }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [azure, cloudflare, github, tailscale, proxmox]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v1
+      - name: Cache OpenTofu providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tofu-${{ runner.os }}-${{ matrix.root }}-${{ hashFiles(format('platform/{0}/.terraform.lock.hcl', matrix.root)) }}
+          restore-keys: |
+            tofu-${{ runner.os }}-${{ matrix.root }}-
+            tofu-${{ runner.os }}-
+      - name: Init, fmt, and validate (${{ matrix.root }})
+        working-directory: platform/${{ matrix.root }}
+        env:
+          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          tofu fmt -check -recursive
+          tofu init -backend=false
+          tofu validate
+
+  fleet:
+    name: fleet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: fleet
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: fleet/requirements.txt
+      - name: Install Ansible tooling
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+      - name: Prepare example inventory
+        run: cp inventory/prod.yml.example inventory/prod.yml
+      - name: Lint playbooks
+        run: ansible-lint playbooks
+      - name: Syntax-check playbooks
+        run: |
+          set -euo pipefail
+          for playbook in playbooks/*.yml; do
+            echo "== $playbook"
+            ansible-playbook -i inventory/prod.yml "$playbook" --syntax-check
+          done
+
+  caddy:
+    name: caddy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate Caddy compose config
+        working-directory: stacks/public/caddy
+        run: |
+          caddy_env=.env
+          [[ -f "$caddy_env" ]] || caddy_env=.env.example
+          docker compose --env-file "$caddy_env" config --quiet
+      - name: Validate Caddyfile syntax
+        run: |
+          caddy_env=stacks/public/caddy/.env
+          [[ -f "$caddy_env" ]] || caddy_env=stacks/public/caddy/.env.example
+          docker run --rm --network none --entrypoint caddy \
+            --env-file "$caddy_env" \
+            -v "$PWD/stacks/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
+
+  worker:
+    name: worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: edge/tunnel-worker
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+          cache-dependency-path: edge/tunnel-worker/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - name: Syntax check
+        run: |
+          set -euo pipefail
+          for f in src/*.js lib/*.js agent/*.js bin/*.js bin/tunnel; do
+            node --check "$f"
+          done
+          python3 -m py_compile agent/agent.py
+      - name: Wrangler dry-run
+        run: npm run deploy:dry
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check git diff / whitespace
+        run: git diff --check
+
+  check:
+    name: check
+    if: always()
+    needs: [tofu, fleet, caddy, worker, hygiene]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Evaluate prerequisite checks
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Job results: $results"
+          if echo "$results" | grep -qE "failure|cancelled"; then
+            echo "::error::One or more prerequisite check jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All checks passed successfully."

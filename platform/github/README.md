@@ -2,7 +2,7 @@
 
 Learning root, local state, **no secret material** (branch policy only —
 safe to learn on, safe in state). Applies are human with a short-lived
-admin PAT; CI is validate-only (see `.github/workflows/tofu.yml`).
+admin PAT; CI is validate-only (see `.github/workflows/check.yml`).
 
 **Status: applied 2026-10-14 — live on `treaulab/infra#main`, `tofu plan` clean.**
 
@@ -46,10 +46,8 @@ exists): `gh api repos/treaulab/infra/branches/main/protection --jq .required_pu
 → `true`.
 
 Tightening path (stepwise, each its own apply):
-1. `required_status_checks { contexts = [...] }` — only once a check runs
-   on every PR: `ci.yml` is path-filtered and not yet on main, so land it
-   there and drop the filter first — requiring a check that never reports
-   bricks merges.
+1. `required_status_checks { contexts = ["check"] }` — unified check from
+   `.github/workflows/check.yml` runs on every PR without path filters.
 2. `enforce_admins = true` — full PR-only, including you.
 3. `required_linear_history` / signed commits — hygiene, opt-in.
 
