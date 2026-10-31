@@ -98,7 +98,7 @@ jobs:
     needs: [build, smoke]
     if: startsWith(github.ref, 'refs/tags/agent-v')
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
