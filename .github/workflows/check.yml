@@ -24,7 +24,7 @@ jobs:
       matrix:
         root: [azure, cloudflare, github, tailscale, proxmox]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: opentofu/setup-opentofu@v1
       - name: Cache OpenTofu providers
         uses: actions/cache@v4
@@ -52,7 +52,7 @@ jobs:
       run:
         working-directory: fleet
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Validate Caddy compose config
         working-directory: stacks/public/caddy
         run: |
@@ -103,7 +103,7 @@ jobs:
       run:
         working-directory: edge/tunnel-worker
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Check git diff / whitespace
         run: git diff --check
 
