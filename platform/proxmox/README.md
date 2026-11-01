@@ -46,19 +46,17 @@ export PROXMOX_VE_INSECURE="true"
 
 ## Quickstart
 
+All VM fleet definitions live right at the top of `platform/proxmox/main.tf` in the `locals.vms` block. No `.tfvars` file or `-var-file` flags needed.
+
 ```bash
 # 1. Ensure provider credentials are loaded in your shell via direnv:
 #    cp .envrc.example .envrc && chmod 600 .envrc && direnv allow .
 
-# 2. Copy example tfvars for non-secret VM compute parameters
-cp platform/proxmox/envs/prod.tfvars.example platform/proxmox/envs/prod.tfvars
-
-# 3. Plan via Justfile
+# 2. Plan via Justfile
 just plan proxmox
 
-# 4. Apply (human-run only)
-cd platform/proxmox
-tofu apply -var-file=envs/prod.tfvars
+# 3. Apply (human-run only)
+tofu -chdir=platform/proxmox apply
 ```
 
 ## Handoff to Ansible

@@ -25,12 +25,12 @@ plan root="azure":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{root}}" in
-      azure|proxmox)
+      azure)
         cd "platform/{{root}}"
         tofu init
         tofu plan -var-file=envs/prod.tfvars
         ;;
-      cloudflare|github|tailscale)
+      cloudflare|github|tailscale|proxmox)
         cd "platform/{{root}}"
         tofu init
         tofu plan
