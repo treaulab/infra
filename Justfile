@@ -94,8 +94,8 @@ bootstrap node="all":
 docker node="all":
     @just converge "{{node}}"
 
-# Converge minimal K3s on target node (default: node-01).
-k3s node="node-01":
+# Converge minimal K3s on target node (default: venus).
+k3s node="venus":
     #!/usr/bin/env bash
     set -euo pipefail
     cd fleet
@@ -115,9 +115,15 @@ k3s node="node-01":
 k *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    cfg=".kube/k3s-node-01.yaml"
-    if [ ! -f "$cfg" ]; then
-      echo "ERROR: $cfg not found. Run 'just k3s node-01' first." >&2
+    cfg=""
+    for candidate in .kube/k3s-venus.yaml .kube/k3s-node-01.yaml .kube/k3s-*.yaml; do
+      if [ -f "$candidate" ]; then
+        cfg="$candidate"
+        break
+      fi
+    done
+    if [ -z "$cfg" ]; then
+      echo "ERROR: no kubeconfig found in .kube/. Run 'just k3s' first." >&2
       exit 1
     fi
     KUBECONFIG="$cfg" kubectl {{args}}

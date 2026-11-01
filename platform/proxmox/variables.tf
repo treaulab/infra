@@ -113,8 +113,12 @@ variable "vms" {
   }))
   default = {
     mercury = {
-      vm_id        = 100
+      vm_id        = 500
       ipv4_address = "192.168.10.50/24"
+    }
+    venus = {
+      vm_id        = 501
+      ipv4_address = "192.168.10.51/24"
     }
   }
 }

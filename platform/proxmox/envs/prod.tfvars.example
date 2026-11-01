@@ -23,10 +23,17 @@ admin_ssh_key  = "ssh-ed25519 AAAA... you@machine"
 
 # Declarative VM Fleet Map
 vms = {
-  node-01 = {
-    vm_id        = 100
-    ipv4_address = "192.168.1.50/24"
-    tags         = ["internal", "k3s", "tofu", "ubuntu-26.04"]
-    description  = "Managed by OpenTofu (platform/proxmox) - Dedicated K3s Host"
+  mercury = {
+    vm_id        = 500
+    ipv4_address = "192.168.10.50/24"
+    tags         = ["internal", "docker", "tofu", "ubuntu-26.04"]
+    description  = "Managed by OpenTofu (platform/proxmox) - Internal Docker Host"
+  }
+  venus = {
+    vm_id         = 501
+    ipv4_address  = "192.168.10.51/24"
+    startup_order = 2
+    tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+    description   = "Managed by OpenTofu (platform/proxmox) - Dedicated K3s Host"
   }
 }

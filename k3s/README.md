@@ -10,9 +10,9 @@ Declarative Kubernetes state for the homelab cluster.
 
 ## Quick Start
 
-1. Install/converge K3s on the target node (`node-01` by default):
+1. Install/converge K3s on the target node (`venus` by default):
    ```bash
-   just k3s node=node-01
+   just k3s node=venus
    ```
 
 2. Run `kubectl` commands against the cluster over Tailscale:
