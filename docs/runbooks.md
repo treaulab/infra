@@ -6,7 +6,6 @@
    Keep 22 open until Tailscale access is proven.
 2. Copy and fill:
    ```bash
-   cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars
    cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml
    # Caddy .env is rendered on the VPS by the deploy playbook.
    ```

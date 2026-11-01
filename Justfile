@@ -12,8 +12,7 @@ setup:
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
-    echo "OK. Next: cp platform/azure/envs/prod.tfvars.example platform/azure/envs/prod.tfvars"
-    echo "            cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
+    echo "OK. Next: cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
     echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 
 # Lint fleet Ansible playbooks (requires ansible-lint).
@@ -25,12 +24,7 @@ plan root="azure":
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{root}}" in
-      azure)
-        cd "platform/{{root}}"
-        tofu init
-        tofu plan -var-file=envs/prod.tfvars
-        ;;
-      cloudflare|github|tailscale|proxmox)
+      azure|cloudflare|github|tailscale|proxmox)
         cd "platform/{{root}}"
         tofu init
         tofu plan
@@ -91,22 +85,6 @@ converge node="all":
     target="${target#node=}"
     cd fleet
     ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
-
-# Backwards-compatible aliases for host convergence.
-bootstrap node="all":
-    @just converge "{{node}}"
-
-docker node="all":
-    @just converge "{{node}}"
-
-# Converge minimal K3s on target node (default: venus).
-k3s node="venus":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target="{{node}}"
-    target="${target#node=}"
-    cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "$target"
     cd ..
     mkdir -p .kube
     kube_file=".kube/k3s-$target.yaml"
@@ -117,6 +95,17 @@ k3s node="venus":
       fi
       echo "Kubeconfig ready: KUBECONFIG=$kube_file kubectl get nodes"
     fi
+
+# Backwards-compatible aliases for host convergence.
+bootstrap node="all":
+    @just converge "{{node}}"
+
+docker node="all":
+    @just converge "{{node}}"
+
+# Alias for converging a K3s node (default: venus).
+k3s node="venus":
+    @just converge "{{node}}"
 
 # Run kubectl against the homelab cluster.
 k *args:

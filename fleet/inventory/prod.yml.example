@@ -20,7 +20,6 @@ all:
     internal:
       vars:
         base_ufw_ports: ["22"]
-        enable_zapret: false # Set to true to automatically build/install zapret2 for DPI circumvention
       hosts:
         mercury:
           ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
@@ -30,6 +29,7 @@ all:
           ansible_host: 192.168.10.12   # Proxmox VM 501 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          enable_k3s: true              # Automatically converges K3s control plane
           k3s_tls_san:                  # Extra SANs for k3s API server certificate
             - "100.x.y.z"               # Tailscale IP
             - "venus"

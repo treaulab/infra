@@ -1,46 +1,103 @@
-# L1: single Azure VPS networking. Web-only (80/443 + SSH).
-#
+terraform {
+  required_version = ">= 1.7.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+# Provider credentials can be passed via environment variables (ARM_SUBSCRIPTION_ID, ARM_CLIENT_ID, etc.)
+# or configured below in locals.
+provider "azurerm" {
+  features {}
+  subscription_id = local.subscription_id != "" ? local.subscription_id : null
+}
+
+# ==============================================================================
+# CONFIGURATION
+# ==============================================================================
+locals {
+  # Azure Subscription ID (leave empty to use ARM_SUBSCRIPTION_ID environment variable)
+  subscription_id = ""
+
+  # Resource Group
+  resource_group_name   = "treaulab-prod-rg"
+  azure_region          = "westeurope"
+  create_resource_group = false
+
+  # Networking
+  vnet_name   = "treaulab-prod-vnet"
+  vnet_cidr   = "10.0.0.0/16"
+  subnet_name = "main"
+  subnet_cidr = "10.0.1.0/24"
+
+  # VM Configuration
+  vm_name        = "treaulab-prod-vps"
+  vm_size        = "Standard_B2s"
+  admin_username = "azureuser"
+  admin_ssh_key  = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID1DPvhdKAa5lv7h28N63he3QDzplgzmRVhqtksMHqxT trueking@latitude"
+
+  # Security Rules: Lock down port 22 to specific CIDR (e.g., "203.0.113.10/32") or "*" for open
+  allowed_ssh_cidr = "*"
+
+  tags = {
+    managed-by = "tofu"
+    project    = "treaulab-infra"
+    env        = "prod"
+  }
+
+  # Resolved Resource Group attributes
+  rg_name  = local.create_resource_group ? azurerm_resource_group.main[0].name : data.azurerm_resource_group.existing[0].name
+  location = local.create_resource_group ? azurerm_resource_group.main[0].location : data.azurerm_resource_group.existing[0].location
+}
+
+# ==============================================================================
+# RESOURCES
+# ==============================================================================
+
+# Single Azure VPS networking. Web-only (80/443 + SSH).
 # Import existing resources instead of recreating:
 #   tofu import azurerm_resource_group.main /subscriptions/<sub>/resourceGroups/<rg>
 #   tofu import azurerm_virtual_network.main <id>  (see outputs after plan)
 
 data "azurerm_resource_group" "existing" {
-  count = var.create_resource_group ? 0 : 1
-  name  = var.resource_group_name
+  count = local.create_resource_group ? 0 : 1
+  name  = local.resource_group_name
 }
 
 resource "azurerm_resource_group" "main" {
-  count    = var.create_resource_group ? 1 : 0
-  name     = var.resource_group_name
-  location = var.location
-  tags     = var.tags
-}
-
-locals {
-  rg_name  = var.create_resource_group ? azurerm_resource_group.main[0].name : data.azurerm_resource_group.existing[0].name
-  location = var.create_resource_group ? azurerm_resource_group.main[0].location : data.azurerm_resource_group.existing[0].location
+  count    = local.create_resource_group ? 1 : 0
+  name     = local.resource_group_name
+  location = local.azure_region
+  tags     = local.tags
 }
 
 resource "azurerm_virtual_network" "main" {
-  name                = var.vnet_name
+  name                = local.vnet_name
   resource_group_name = local.rg_name
   location            = local.location
-  address_space       = [var.vnet_cidr]
-  tags                = var.tags
+  address_space       = [local.vnet_cidr]
+  tags                = local.tags
 }
 
 resource "azurerm_subnet" "main" {
-  name                 = var.subnet_name
+  name                 = local.subnet_name
   resource_group_name  = local.rg_name
   virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = [var.subnet_cidr]
+  address_prefixes     = [local.subnet_cidr]
 }
 
 resource "azurerm_network_security_group" "main" {
-  name                = "${var.vm_name}-nsg"
+  name                = "${local.vm_name}-nsg"
   resource_group_name = local.rg_name
   location            = local.location
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "ssh"
@@ -50,7 +107,7 @@ resource "azurerm_network_security_group" "main" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = var.allowed_ssh_cidr
+    source_address_prefix      = local.allowed_ssh_cidr
     destination_address_prefix = "*"
   }
 
@@ -80,19 +137,19 @@ resource "azurerm_network_security_group" "main" {
 }
 
 resource "azurerm_public_ip" "main" {
-  name                = "${var.vm_name}-pip"
+  name                = "${local.vm_name}-pip"
   resource_group_name = local.rg_name
   location            = local.location
   allocation_method   = "Static"
   sku                 = "Standard"
-  tags                = var.tags
+  tags                = local.tags
 }
 
 resource "azurerm_network_interface" "main" {
-  name                = "${var.vm_name}-nic"
+  name                = "${local.vm_name}-nic"
   resource_group_name = local.rg_name
   location            = local.location
-  tags                = var.tags
+  tags                = local.tags
 
   ip_configuration {
     name                          = "internal"
@@ -108,19 +165,19 @@ resource "azurerm_network_interface_security_group_association" "main" {
 }
 
 resource "azurerm_linux_virtual_machine" "main" {
-  name                            = var.vm_name
+  name                            = local.vm_name
   resource_group_name             = local.rg_name
   location                        = local.location
-  size                            = var.vm_size
-  admin_username                  = var.admin_username
+  size                            = local.vm_size
+  admin_username                  = local.admin_username
   disable_password_authentication = true
-  tags                            = var.tags
+  tags                            = local.tags
 
   network_interface_ids = [azurerm_network_interface.main.id]
 
   admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.admin_ssh_key
+    username   = local.admin_username
+    public_key = local.admin_ssh_key
   }
 
   os_disk {
@@ -134,4 +191,21 @@ resource "azurerm_linux_virtual_machine" "main" {
     sku       = "24_04-lts-gen2"
     version   = "latest"
   }
+}
+
+# ==============================================================================
+# OUTPUTS
+# ==============================================================================
+
+output "public_ip" {
+  value       = azurerm_public_ip.main.ip_address
+  description = "Point <domain> A-record here"
+}
+
+output "resource_group" {
+  value = local.rg_name
+}
+
+output "nsg_id" {
+  value = azurerm_network_security_group.main.id
 }

@@ -5,9 +5,9 @@ and the Ubuntu 24.04 VM. This root is the former `tofu/` root; state is local
 and gitignored.
 
 ```bash
-cp envs/prod.tfvars.example envs/prod.tfvars   # fill subscription/RG/key
+# Credentials from environment (ARM_SUBSCRIPTION_ID, etc.) or configured in locals of main.tf
 tofu init
-tofu plan -var-file=envs/prod.tfvars
+tofu plan
 ```
 
 The VM is the public website origin only. Caddy on it serves static files;

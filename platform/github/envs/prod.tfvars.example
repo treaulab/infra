@@ -1,5 +1,0 @@
-# empty: all pilot values are defaulted in variables.tf — copy to
-# prod.tfvars (gitignored) only to override, e.g.:
-# owner              = "treaulab"
-# repository         = "infra"
-# enforce_admins     = true

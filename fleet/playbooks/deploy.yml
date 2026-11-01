@@ -45,11 +45,16 @@
       notify: Reload Caddy
 
     - name: Render Caddy environment file
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/templates/public-caddy.env.j2"
+      ansible.builtin.copy:
         dest: "{{ public_caddy_root }}/.env"
         owner: "{{ deploy_user }}"
         mode: "0600"
+        content: |
+          # Managed by Ansible (fleet/playbooks/deploy.yml). Do not edit on the host.
+          DOMAIN={{ domain }}
+          ACME_EMAIL={{ acme_email }}
+          CADDY_VERSION={{ caddy_version | default('2.11') }}
+          SITE_IP={{ public_site_ip }}
       notify: Reload Caddy
 
     - name: Synchronize static website source
