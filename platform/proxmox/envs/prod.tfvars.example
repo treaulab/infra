@@ -29,3 +29,9 @@ vm_ipv4_address   = "dhcp"
 
 admin_username = "treau"
 admin_ssh_key  = "ssh-ed25519 AAAA... you@machine"
+
+# Dedicated K3s Host VM (node-01)
+k3s_vm_enabled      = true
+k3s_vm_id           = 101
+k3s_vm_name         = "node-01"
+k3s_vm_ipv4_address = "192.168.1.51/24"

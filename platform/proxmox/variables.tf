@@ -141,3 +141,29 @@ variable "admin_ssh_key" {
   type        = string
   default     = ""
 }
+
+# --- K3s Dedicated VM (Second VM) ---
+
+variable "k3s_vm_enabled" {
+  description = "Enable provisioning of the dedicated K3s host VM"
+  type        = bool
+  default     = true
+}
+
+variable "k3s_vm_id" {
+  description = "Explicit VM ID for the K3s host VM"
+  type        = number
+  default     = 101
+}
+
+variable "k3s_vm_name" {
+  description = "Hostname and display name for the K3s host VM"
+  type        = string
+  default     = "node-01"
+}
+
+variable "k3s_vm_ipv4_address" {
+  description = "IPv4 address for the K3s host VM in CIDR notation"
+  type        = string
+  default     = "192.168.10.51/24"
+}
