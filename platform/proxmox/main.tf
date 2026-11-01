@@ -28,8 +28,8 @@ locals {
   network_bridge    = "vmbr0"
 
   # Guest Network Defaults
-  ipv4_gateway = "192.168.10.1"
-  dns_servers  = ["192.168.10.5", "1.1.1.1"]
+  ipv4_gateway = "192.168.10.254"
+  dns_servers  = ["192.168.10.254", "1.1.1.1"]
 
   # Guest Admin User
   admin_username = "treau"

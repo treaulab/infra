@@ -82,31 +82,13 @@
         groups: docker
         append: true
 
-    # --- K3s Engine & DPI Circumvention (Runs before Tailscale) ---
+    # --- K3s Engine (Runs before Tailscale) ---
     - name: Ensure /etc/rancher/k3s directory exists
       ansible.builtin.file:
         path: /etc/rancher/k3s
         state: directory
         mode: "0755"
       when: enable_k3s | default(false) | bool
-
-    - name: Ensure K3s server manifests auto-deploy directory exists
-      ansible.builtin.file:
-        path: /var/lib/rancher/k3s/server/manifests
-        state: directory
-        mode: "0755"
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Auto-deploy zapret2 DaemonSet manifest to K3s server
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../k3s/manifests/zapret2.yaml"
-        dest: /var/lib/rancher/k3s/server/manifests/zapret2.yaml
-        mode: "0644"
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
 
     - name: Deploy K3s server configuration
       ansible.builtin.copy:

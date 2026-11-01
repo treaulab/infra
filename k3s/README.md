@@ -4,8 +4,8 @@ Declarative Kubernetes state for the homelab cluster.
 
 ## Structure
 
-- `manifests/` — Declarative Kubernetes manifests (e.g. `zapret2.yaml` for DPI circumvention).
-- `images/` — Container image source definitions (e.g. `images/zapret2/` built and pushed to GHCR by `.github/workflows/zapret2-image.yml`).
+- `manifests/` — Declarative Kubernetes manifests for cluster workloads.
+- `images/` — Container image source definitions for custom cluster containers.
 - Host convergence and the K3s engine lifecycle are managed via Ansible at `fleet/playbooks/host.yml` (`enable_k3s: true`).
 
 ## Quick Start
