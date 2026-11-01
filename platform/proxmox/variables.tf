@@ -34,34 +34,12 @@ variable "cloud_image_checksum" {
   default     = "6c083e6bea1573aab619c1dfa8d17bb7e3a8618fbd6cb57fa39d517b20062aa4"
 }
 
-variable "vm_id" {
-  description = "Explicit VM ID (optional; Proxmox assigns the next free ID if null)"
-  type        = number
-  default     = null
-}
-
-variable "vm_name" {
-  description = "Hostname and display name for the VM"
-  type        = string
-  default     = "node-01"
-}
+# --- Shared VM Defaults ---
 
 variable "vm_on_boot" {
-  description = "Automatically start the VM when the Proxmox host boots"
+  description = "Automatically start VMs when the Proxmox host boots"
   type        = bool
   default     = true
-}
-
-variable "vm_startup_order" {
-  description = "Startup priority sequence for the VM on host boot"
-  type        = number
-  default     = 1
-}
-
-variable "vm_cores" {
-  description = "Number of CPU cores"
-  type        = number
-  default     = 2
 }
 
 variable "vm_cpu_type" {
@@ -71,27 +49,9 @@ variable "vm_cpu_type" {
 }
 
 variable "vm_cpu_numa" {
-  description = "Enable NUMA architecture inside the guest VM for multi-core memory performance"
+  description = "Enable NUMA architecture inside guest VMs for multi-core memory performance"
   type        = bool
   default     = true
-}
-
-variable "vm_memory_mb" {
-  description = "Maximum dedicated RAM in megabytes"
-  type        = number
-  default     = 4096
-}
-
-variable "vm_memory_min_mb" {
-  description = "Minimum floating RAM in megabytes for VirtIO dynamic ballooning"
-  type        = number
-  default     = 2048
-}
-
-variable "vm_disk_size_gb" {
-  description = "Root disk size in gigabytes"
-  type        = number
-  default     = 32
 }
 
 variable "vm_network_bridge" {
@@ -101,19 +61,13 @@ variable "vm_network_bridge" {
 }
 
 variable "vm_vlan_tag" {
-  description = "Optional 802.1Q VLAN tag for the VM network interface"
+  description = "Optional 802.1Q VLAN tag for VM network interfaces"
   type        = number
   default     = null
 }
 
-variable "vm_ipv4_address" {
-  description = "IPv4 address in CIDR notation (e.g. 192.168.1.50/24) or 'dhcp'"
-  type        = string
-  default     = "dhcp"
-}
-
 variable "vm_ipv4_gateway" {
-  description = "IPv4 default gateway (required if static IPv4 is used)"
+  description = "Default IPv4 gateway for guest VMs"
   type        = string
   default     = null
 }
@@ -142,28 +96,25 @@ variable "admin_ssh_key" {
   default     = ""
 }
 
-# --- K3s Dedicated VM (Second VM) ---
+# --- Declarative VM Fleet Map ---
 
-variable "k3s_vm_enabled" {
-  description = "Enable provisioning of the dedicated K3s host VM"
-  type        = bool
-  default     = true
-}
-
-variable "k3s_vm_id" {
-  description = "Explicit VM ID for the K3s host VM"
-  type        = number
-  default     = 101
-}
-
-variable "k3s_vm_name" {
-  description = "Hostname and display name for the K3s host VM"
-  type        = string
-  default     = "node-01"
-}
-
-variable "k3s_vm_ipv4_address" {
-  description = "IPv4 address for the K3s host VM in CIDR notation"
-  type        = string
-  default     = "192.168.10.51/24"
+variable "vms" {
+  description = "Map of Proxmox VMs to provision"
+  type = map(object({
+    vm_id         = number
+    cores         = optional(number, 2)
+    memory_mb     = optional(number, 4096)
+    memory_min_mb = optional(number, 2048)
+    disk_size_gb  = optional(number, 32)
+    ipv4_address  = string
+    description   = optional(string)
+    tags          = optional(list(string))
+    startup_order = optional(number, 1)
+  }))
+  default = {
+    mercury = {
+      vm_id        = 100
+      ipv4_address = "192.168.10.50/24"
+    }
+  }
 }

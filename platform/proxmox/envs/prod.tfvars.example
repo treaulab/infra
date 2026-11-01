@@ -14,24 +14,19 @@ cloud_image_url       = "https://cloud-images.ubuntu.com/minimal/releases/resolu
 cloud_image_file_name = "ubuntu-26.04-minimal-cloudimg-amd64.qcow2"
 cloud_image_checksum  = "6c083e6bea1573aab619c1dfa8d17bb7e3a8618fbd6cb57fa39d517b20062aa4"
 
-vm_name          = "node-01"
-vm_cores         = 2
-vm_memory_mb     = 4096
-vm_memory_min_mb = 2048 # Dynamic ballooning threshold
-vm_disk_size_gb  = 32
-
 vm_network_bridge = "vmbr0"
-vm_ipv4_address   = "dhcp"
-# For static IP instead of dhcp:
-# vm_ipv4_address = "192.168.1.50/24"
-# vm_ipv4_gateway = "192.168.1.1"
-# vm_dns_servers  = ["1.1.1.1", "1.0.0.1"]
+vm_ipv4_gateway   = "192.168.1.1"
+vm_dns_servers    = ["1.1.1.1", "1.0.0.1"]
 
 admin_username = "treau"
 admin_ssh_key  = "ssh-ed25519 AAAA... you@machine"
 
-# Dedicated K3s Host VM (node-01)
-k3s_vm_enabled      = true
-k3s_vm_id           = 101
-k3s_vm_name         = "node-01"
-k3s_vm_ipv4_address = "192.168.1.51/24"
+# Declarative VM Fleet Map
+vms = {
+  node-01 = {
+    vm_id        = 100
+    ipv4_address = "192.168.1.50/24"
+    tags         = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+    description  = "Managed by OpenTofu (platform/proxmox) - Dedicated K3s Host"
+  }
+}
