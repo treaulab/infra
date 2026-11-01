@@ -26,6 +26,9 @@ all:
           ansible_host: 192.168.1.50    # Proxmox VM LAN IP until Tailscale is up
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_tls_san:                  # Extra SANs for k3s API server certificate
+            - "100.x.y.z"               # Tailscale IP
+            - "node-01"
     untrusted:
       vars:
         base_ufw_ports: ["22"]

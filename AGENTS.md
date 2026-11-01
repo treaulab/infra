@@ -13,7 +13,7 @@ them.
 
 **Map** — `platform/` (OpenTofu: azure, cloudflare, github, proxmox, tailscale),
 `fleet/` (Ansible: host OS baseline + public compose stack convergence), `stacks/` (public Azure
-Caddy/site), `edge/` (Cloudflare Worker), `tools/`
+Caddy/site), `k3s/` (Kubernetes cluster manifests), `edge/` (Cloudflare Worker), `tools/`
 (operator helpers), `docs/runbooks.md` (ops manual), `Justfile` (operator
 interface), `.github/workflows/` (CI/CD).
 

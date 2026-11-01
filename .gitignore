@@ -29,6 +29,11 @@ fleet/vault.*.yml
 *.vault.pass
 fleet/collections/
 
+# kubernetes / k3s local configs
+.kube/
+*.kubeconfig
+k3s-*.yaml
+
 # runtime / secrets — never commit live secrets or DBs.
 # Plaintext .env files are a deliberate temporary tradeoff: keep them local
 # (or on the host, mode 0600) and commit only .env.example.

@@ -94,6 +94,38 @@ bootstrap node="all":
 docker node="all":
     @just converge "{{node}}"
 
+# Converge minimal K3s on target node (default: node-01).
+k3s node="node-01":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd fleet
+    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "{{node}}"
+    cd ..
+    mkdir -p .kube
+    kube_file=".kube/k3s-{{node}}.yaml"
+    if [ -f "$kube_file" ]; then
+      host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "{{node}}" 2>/dev/null | jq -r '.ansible_host // empty')
+      if [ -n "$host_ip" ]; then
+        sed -i "s/127.0.0.1/$host_ip/g" "$kube_file"
+      fi
+      echo "Kubeconfig ready: KUBECONFIG=$kube_file kubectl get nodes"
+    fi
+
+# Run kubectl against the homelab cluster.
+k *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=".kube/k3s-node-01.yaml"
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: $cfg not found. Run 'just k3s node-01' first." >&2
+      exit 1
+    fi
+    KUBECONFIG="$cfg" kubectl {{args}}
+
+# Apply manifests from k3s/manifests.
+k-apply path="k3s/manifests":
+    @just k apply -f {{path}}
+
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":
     #!/usr/bin/env bash
