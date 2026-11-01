@@ -68,6 +68,9 @@ _actions_work/
 _runner/
 _work/
 
+# local cache
+.cache/
+
 # python
 __pycache__/
 *.py[cod]

@@ -154,6 +154,33 @@
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'agent'
 
+    - name: Ensure local cache directory exists # noqa: run-once[task]
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../.cache"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: enable_k3s | default(false) | bool
+
+    - name: Download K3s binary on controller (bypasses ISP DPI blocks) # noqa: run-once[task]
+      ansible.builtin.get_url:
+        url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | default('v1.31.2+k3s1') }}/k3s"
+        dest: "{{ playbook_dir }}/../../.cache/k3s-amd64"
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: enable_k3s | default(false) | bool
+
+    - name: Copy K3s binary to target node
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../.cache/k3s-amd64"
+        dest: /usr/local/bin/k3s
+        mode: "0755"
+      when: enable_k3s | default(false) | bool
+
     - name: Download K3s installer script
       ansible.builtin.get_url:
         url: https://get.k3s.io
@@ -164,8 +191,10 @@
     - name: Execute K3s server installation
       ansible.builtin.command:
         cmd: /tmp/k3s-install.sh
-        creates: /usr/local/bin/k3s
-      environment: "{{ {'INSTALL_K3S_VERSION': k3s_version} if k3s_version | default('') else {} }}"
+        creates: /etc/systemd/system/k3s.service
+      environment:
+        INSTALL_K3S_SKIP_DOWNLOAD: "true"
+        INSTALL_K3S_EXEC: "server"
       register: k3s_server_install
       when:
         - enable_k3s | default(false) | bool
@@ -174,9 +203,10 @@
     - name: Execute K3s agent installation
       ansible.builtin.command:
         cmd: /tmp/k3s-install.sh
-        creates: /usr/local/bin/k3s-agent
+        creates: /etc/systemd/system/k3s-agent.service
       environment:
-        INSTALL_K3S_EXEC: agent
+        INSTALL_K3S_SKIP_DOWNLOAD: "true"
+        INSTALL_K3S_EXEC: "agent"
         K3S_URL: "{{ k3s_server_url }}"
         K3S_TOKEN: "{{ k3s_node_token }}"
       register: k3s_agent_install
