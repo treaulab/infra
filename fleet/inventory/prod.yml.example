@@ -22,6 +22,8 @@ all:
         base_ufw_ports: ["22"]
         enable_k3s: true              # Converge K3s on internal cluster nodes
         k3s_server_url: "https://192.168.10.11:6443"
+        internal_gateway: "192.168.10.254" # Transparent proxy gateway for homelab
+        # k3s_token: "pre-shared-token-here" # Optional static token; auto-generated if omitted
       hosts:
         mercury:
           ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
@@ -31,6 +33,8 @@ all:
           k3s_tls_san:                  # Extra SANs for k3s API server certificate
             - "192.168.10.11"
             - "mercury"
+            - "100.x.y.z"
+            - "mercury-1"
         venus:
           ansible_host: 192.168.10.12   # Proxmox VM 501 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox

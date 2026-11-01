@@ -13,6 +13,46 @@
       changed_when: false
       failed_when: false
 
+    # --- Network Gateway & DNS Persistence (Internal Nodes) ---
+    - name: Check if Netplan configuration exists
+      ansible.builtin.stat:
+        path: /etc/netplan/50-cloud-init.yaml
+      register: netplan_cloud_init
+      when:
+        - "'internal' in group_names"
+        - internal_gateway is defined
+
+    - name: Persist default gateway to transparent proxy in Netplan
+      ansible.builtin.replace:
+        path: /etc/netplan/50-cloud-init.yaml
+        regexp: 'via:\s+"?192\.168\.10\.[0-9]+"?'
+        replace: 'via: "{{ internal_gateway }}"'
+      when:
+        - "'internal' in group_names"
+        - internal_gateway is defined
+        - netplan_cloud_init.stat.exists
+      register: netplan_gw_update
+
+    - name: Persist primary DNS to transparent proxy in Netplan
+      ansible.builtin.replace:
+        path: /etc/netplan/50-cloud-init.yaml
+        regexp: '-\s+192\.168\.10\.[0-9]+'
+        replace: '- {{ internal_gateway }}'
+      when:
+        - "'internal' in group_names"
+        - internal_gateway is defined
+        - netplan_cloud_init.stat.exists
+      register: netplan_dns_update
+
+    - name: Apply persistent Netplan configuration
+      ansible.builtin.command:
+        cmd: netplan apply
+      when:
+        - "'internal' in group_names"
+        - internal_gateway is defined
+        - (netplan_gw_update.changed | default(false)) or (netplan_dns_update.changed | default(false))
+      changed_when: true
+
     - name: Install base security & utility packages
       ansible.builtin.apt:
         name:
@@ -83,7 +123,18 @@
         groups: docker
         append: true
 
-    # --- K3s Engine (Runs before Tailscale) ---
+    # --- K3s Engine ---
+    - name: Resolve K3s cluster token
+      ansible.builtin.set_fact:
+        k3s_node_token: >-
+          {{
+            k3s_token | default(
+              lookup('file', playbook_dir + '/../../.kube/k3s-node-token', errors='ignore') | trim,
+              true
+            )
+          }}
+      when: enable_k3s | default(false) | bool
+
     - name: Ensure /etc/rancher/k3s directory exists
       ansible.builtin.file:
         path: /etc/rancher/k3s
@@ -96,30 +147,17 @@
         dest: /etc/rancher/k3s/config.yaml
         content: >-
           {{
-            k3s_server_config | default({
+            (k3s_server_config | default({
               'write-kubeconfig-mode': '0644',
               'disable': ['traefik', 'servicelb'],
               'tls-san': k3s_tls_san | default([ansible_host, inventory_hostname])
-            }) | to_nice_yaml
+            })) | combine({'token': k3s_node_token} if k3s_node_token | default('') | length > 0 else {}) | to_nice_yaml
           }}
         mode: "0644"
       register: k3s_server_config_result
       when:
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'server'
-
-    - name: Read K3s node token for agent
-      ansible.builtin.set_fact:
-        k3s_node_token: >-
-          {{
-            k3s_token | default(
-              lookup('file', playbook_dir + '/../../.kube/k3s-node-token', errors='ignore') | trim,
-              true
-            )
-          }}
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'agent'
 
     - name: Deploy K3s agent configuration
       ansible.builtin.copy:
@@ -137,33 +175,6 @@
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'agent'
 
-    - name: Ensure local cache directory exists # noqa: run-once[task]
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/../../.cache"
-        state: directory
-        mode: "0755"
-      delegate_to: localhost
-      become: false
-      run_once: true
-      when: enable_k3s | default(false) | bool
-
-    - name: Download K3s binary on controller (bypasses ISP DPI blocks) # noqa: run-once[task]
-      ansible.builtin.get_url:
-        url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | default('v1.31.2+k3s1') }}/k3s"
-        dest: "{{ playbook_dir }}/../../.cache/k3s-amd64"
-        mode: "0755"
-      delegate_to: localhost
-      become: false
-      run_once: true
-      when: enable_k3s | default(false) | bool
-
-    - name: Copy K3s binary to target node
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../.cache/k3s-amd64"
-        dest: /usr/local/bin/k3s
-        mode: "0755"
-      when: enable_k3s | default(false) | bool
-
     - name: Download K3s installer script
       ansible.builtin.get_url:
         url: https://get.k3s.io
@@ -176,7 +187,7 @@
         cmd: /tmp/k3s-install.sh
         creates: /etc/systemd/system/k3s.service
       environment:
-        INSTALL_K3S_SKIP_DOWNLOAD: "true"
+        INSTALL_K3S_VERSION: "{{ k3s_version | default('v1.31.2+k3s1') }}"
         INSTALL_K3S_EXEC: "server"
       register: k3s_server_install
       when:
@@ -188,7 +199,7 @@
         cmd: /tmp/k3s-install.sh
         creates: /etc/systemd/system/k3s-agent.service
       environment:
-        INSTALL_K3S_SKIP_DOWNLOAD: "true"
+        INSTALL_K3S_VERSION: "{{ k3s_version | default('v1.31.2+k3s1') }}"
         INSTALL_K3S_EXEC: "agent"
         K3S_URL: "{{ k3s_server_url }}"
         K3S_TOKEN: "{{ k3s_node_token }}"
@@ -212,6 +223,16 @@
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'server'
 
+    - name: Restart K3s server on config change
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+        - k3s_server_config_result.changed
+        - not (k3s_server_install.changed | default(false))
+
     - name: Ensure K3s agent service is enabled and running
       ansible.builtin.systemd:
         name: k3s-agent
@@ -220,6 +241,16 @@
       when:
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'agent'
+
+    - name: Restart K3s agent on config change
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: restarted
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'agent'
+        - k3s_agent_config_result.changed
+        - not (k3s_agent_install.changed | default(false))
 
     - name: Slurp K3s node token from server
       ansible.builtin.slurp:
@@ -271,7 +302,7 @@
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'server'
 
-    # --- Tailscale (Runs AFTER K3s so zapret2 unblocks DPI first) ---
+    # --- Tailscale (Node baseline) ---
     - name: Download Tailscale apt repository key
       ansible.builtin.get_url:
         url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"

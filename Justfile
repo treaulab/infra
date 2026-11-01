@@ -119,16 +119,11 @@ k *args:
         break
       fi
     done
-    if command -v kubectl >/dev/null 2>&1; then
-      if [ -z "$cfg" ]; then
-        echo "ERROR: no kubeconfig found in .kube/. Run 'just converge mercury' first." >&2
-        exit 1
-      fi
-      KUBECONFIG="$cfg" kubectl {{args}}
-    else
-      # Seamless fallback to mercury control plane if local kubectl is not installed
-      ssh -o LogLevel=ERROR treau@192.168.10.11 "sudo k3s kubectl {{args}}"
+    if [ -z "$cfg" ]; then
+      echo "ERROR: no kubeconfig found in .kube/. Run 'just converge mercury' first." >&2
+      exit 1
     fi
+    KUBECONFIG="$cfg" kubectl {{args}}
 
 # Apply manifests from k3s/manifests.
 k-apply path="k3s/manifests":
