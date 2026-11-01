@@ -85,7 +85,12 @@ check:
 
 # Converge OS baseline (UFW + Tailscale + Docker) on one host (or all).
 converge node="all":
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target="{{node}}"
+    target="${target#node=}"
+    cd fleet
+    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
 
 # Backwards-compatible aliases for host convergence.
 bootstrap node="all":
@@ -98,13 +103,15 @@ docker node="all":
 k3s node="venus":
     #!/usr/bin/env bash
     set -euo pipefail
+    target="{{node}}"
+    target="${target#node=}"
     cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "{{node}}"
+    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "$target"
     cd ..
     mkdir -p .kube
-    kube_file=".kube/k3s-{{node}}.yaml"
+    kube_file=".kube/k3s-$target.yaml"
     if [ -f "$kube_file" ]; then
-      host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "{{node}}" 2>/dev/null | jq -r '.ansible_host // empty')
+      host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "$target" 2>/dev/null | jq -r '.ansible_host // empty')
       if [ -n "$host_ip" ]; then
         sed -i "s/127.0.0.1/$host_ip/g" "$kube_file"
       fi
