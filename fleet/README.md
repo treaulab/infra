@@ -19,14 +19,12 @@ fleet/
 │   ├── prod.yml             # Live inventory (gitignored)
 │   └── prod.yml.example     # Reference template
 └── playbooks/
-    ├── host.yml             # OS baseline: UFW hardening, Tailscale, Docker Engine
-    ├── deploy.yml           # Compose stack deployer (defaults to public Caddy stack)
-    └── templates/
-        └── public-caddy.env.j2 # Rendered .env for Caddy
+    ├── host.yml             # OS baseline: UFW hardening, Tailscale, Docker Engine, K3s
+    └── deploy.yml           # Compose stack deployer (defaults to public Caddy stack)
 ```
 
 ## Playbooks
 
-- `playbooks/host.yml`: Sets up base packages, firewall (UFW), Tailscale, and Docker.
+- `playbooks/host.yml`: Sets up base packages, firewall (UFW), Tailscale, Docker, and K3s (when `enable_k3s: true`).
   Export `TAILSCALE_AUTHKEY` for non-interactive tailnet join.
 - `playbooks/deploy.yml`: Deploys Caddy + static website to the Azure VPS (targets `edge` group).

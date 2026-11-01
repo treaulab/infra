@@ -1,6 +1,0 @@
-# empty: all pilot values are defaulted in variables.tf — copy to
-# prod.tfvars (gitignored) only to override, e.g.:
-# spoke_owner        = "andrewwang2161"
-# spoke_repo         = "dotfiles"
-# key_tag            = "tag:ci-ephemeral"
-# key_expiry_seconds = 2592000
