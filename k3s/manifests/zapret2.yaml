@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zapret2
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zapret2-config
+  namespace: zapret2
+data:
+  config: |
+    # zapret2 container configuration
+    FWTYPE=nftables
+    POSTNAT=1
+    IFACE_WAN=auto
+    MODE_FILTER=none
+    DISABLE_IPV6=1
+    NFQWS2_ENABLE=1
+    NFQWS2_PORTS_TCP=443
+    NFQWS2_PORTS_UDP=
+    NFQWS2_TCP_PKT_OUT=20
+    NFQWS2_TCP_PKT_IN=10
+    NFQWS2_UDP_PKT_OUT=0
+    NFQWS2_UDP_PKT_IN=0
+    NFQWS2_OPT="--filter-tcp=443 --in-range=-s1 --lua-desync=oob:urp=midsld:char=a"
+    WS_USER=tpws
+    QNUM=300
+    DESYNC_MARK=0x40000000
+    FLOWOFFLOAD=donttouch
+
+  zapret-ip-exclude.txt: |
+    192.168.10.0/24
+    10.42.0.0/16
+    10.43.0.0/16
+    100.64.0.0/10
+
+  zapret-hosts-user-exclude.txt: |
+    192.168.10.0/24
+    10.42.0.0/16
+    10.43.0.0/16
+    100.64.0.0/10
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zapret2
+  namespace: zapret2
+  labels:
+    app.kubernetes.io/name: zapret2
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zapret2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zapret2
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 15
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: zapret2
+          image: ghcr.io/treaulab/infra/zapret2:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /opt/zapret2/config
+              subPath: config
+            - name: config
+              mountPath: /opt/zapret2/ipset/zapret-ip-exclude.txt
+              subPath: zapret-ip-exclude.txt
+            - name: config
+              mountPath: /opt/zapret2/ipset/zapret-hosts-user-exclude.txt
+              subPath: zapret-hosts-user-exclude.txt
+      volumes:
+        - name: config
+          configMap:
+            name: zapret2-config
