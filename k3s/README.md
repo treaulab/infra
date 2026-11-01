@@ -10,9 +10,10 @@ Declarative Kubernetes state for the homelab cluster.
 
 ## Quick Start
 
-1. Install/converge K3s on the target node (`venus` by default):
+1. Install/converge K3s on both nodes (`mercury` server, `venus` agent):
    ```bash
-   just k3s node=venus
+   just converge mercury
+   just converge venus
    ```
 
 2. Run `kubectl` commands against the cluster over Tailscale:

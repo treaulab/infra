@@ -1,5 +1,5 @@
 ---
-# Converge host OS baseline: packages, UFW hardening, Tailscale, Docker, and optional K3s.
+# Converge host OS baseline: packages, UFW hardening, Docker, K3s, and Tailscale.
 - name: Host OS baseline
   hosts: all
   become: true
@@ -43,6 +43,12 @@
         cmd: "ufw allow in on tailscale0"
       changed_when: false
 
+    - name: Allow LAN subnet traffic for internal cluster nodes
+      ansible.builtin.command:
+        cmd: "ufw allow from 192.168.10.0/24"
+      when: "'internal' in group_names"
+      changed_when: false
+
     - name: Enable UFW firewall (default deny incoming)
       ansible.builtin.command:
         cmd: "ufw --force enable"
@@ -56,7 +62,192 @@
           APT::Periodic::Unattended-Upgrade "1";
         mode: "0644"
 
-    # --- Tailscale ---
+    # --- Docker Engine ---
+    - name: Install Docker via official script # noqa: command-instead-of-module
+      ansible.builtin.shell:
+        cmd: set -o pipefail && curl -fsSL https://get.docker.com | sh
+        executable: /bin/bash
+      args:
+        creates: /usr/bin/docker
+
+    - name: Enable and start Docker service
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add deploy user to docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    # --- K3s Engine & DPI Circumvention (Runs before Tailscale) ---
+    - name: Ensure /etc/rancher/k3s directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+      when: enable_k3s | default(false) | bool
+
+    - name: Ensure K3s server manifests auto-deploy directory exists
+      ansible.builtin.file:
+        path: /var/lib/rancher/k3s/server/manifests
+        state: directory
+        mode: "0755"
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Auto-deploy zapret2 DaemonSet manifest to K3s server
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../k3s/manifests/zapret2.yaml"
+        dest: /var/lib/rancher/k3s/server/manifests/zapret2.yaml
+        mode: "0644"
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Deploy K3s server configuration
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        content: >-
+          {{
+            k3s_server_config | default({
+              'write-kubeconfig-mode': '0644',
+              'disable': ['traefik', 'servicelb'],
+              'tls-san': k3s_tls_san | default([ansible_host, inventory_hostname])
+            }) | to_nice_yaml
+          }}
+        mode: "0644"
+      register: k3s_server_config_result
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Read K3s node token for agent
+      ansible.builtin.set_fact:
+        k3s_node_token: >-
+          {{
+            k3s_token | default(
+              lookup('file', playbook_dir + '/../../.kube/k3s-node-token', errors='ignore') | trim,
+              true
+            )
+          }}
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'agent'
+
+    - name: Deploy K3s agent configuration
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        content: >-
+          {{
+            {
+              'server': k3s_server_url,
+              'token': k3s_node_token
+            } | to_nice_yaml
+          }}
+        mode: "0644"
+      register: k3s_agent_config_result
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'agent'
+
+    - name: Download K3s installer script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/k3s-install.sh
+        mode: "0700"
+      when: enable_k3s | default(false) | bool
+
+    - name: Execute K3s server installation
+      ansible.builtin.command:
+        cmd: /tmp/k3s-install.sh
+        creates: /usr/local/bin/k3s
+      environment: "{{ {'INSTALL_K3S_VERSION': k3s_version} if k3s_version | default('') else {} }}"
+      register: k3s_server_install
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Execute K3s agent installation
+      ansible.builtin.command:
+        cmd: /tmp/k3s-install.sh
+        creates: /usr/local/bin/k3s-agent
+      environment:
+        INSTALL_K3S_EXEC: agent
+        K3S_URL: "{{ k3s_server_url }}"
+        K3S_TOKEN: "{{ k3s_node_token }}"
+      register: k3s_agent_install
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'agent'
+
+    - name: Clean up K3s installer script
+      ansible.builtin.file:
+        path: /tmp/k3s-install.sh
+        state: absent
+      when: enable_k3s | default(false) | bool
+
+    - name: Ensure K3s server service is enabled and running
+      ansible.builtin.systemd:
+        name: k3s
+        enabled: true
+        state: started
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Ensure K3s agent service is enabled and running
+      ansible.builtin.systemd:
+        name: k3s-agent
+        enabled: true
+        state: started
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'agent'
+
+    - name: Slurp K3s node token from server
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_server_token_b64
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Save K3s node token locally for agents
+      ansible.builtin.copy:
+        content: "{{ k3s_server_token_b64.content | b64decode | trim }}"
+        dest: "{{ playbook_dir }}/../../.kube/k3s-node-token"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Fetch kubeconfig to local repository
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
+        flat: true
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    - name: Copy cluster kubeconfig as default .kube/k3s.yaml
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
+        dest: "{{ playbook_dir }}/../../.kube/k3s.yaml"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
+    # --- Tailscale (Runs AFTER K3s so zapret2 unblocks DPI first) ---
     - name: Download Tailscale apt repository key
       ansible.builtin.get_url:
         url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
@@ -100,90 +291,3 @@
         - tailscale_status.stdout | length == 0 or ((tailscale_status.stdout | default('{}', true)) | from_json).BackendState | default('') != 'Running'
       no_log: true
       changed_when: true
-
-    # --- Docker ---
-    - name: Install Docker via official script # noqa: command-instead-of-module
-      ansible.builtin.shell:
-        cmd: set -o pipefail && curl -fsSL https://get.docker.com | sh
-        executable: /bin/bash
-      args:
-        creates: /usr/bin/docker
-
-    - name: Enable and start Docker service
-      ansible.builtin.systemd:
-        name: docker
-        enabled: true
-        state: started
-
-    - name: Add deploy user to docker group
-      ansible.builtin.user:
-        name: "{{ ansible_user }}"
-        groups: docker
-        append: true
-
-    # --- K3s (Optional Node Role) ---
-    - name: Ensure /etc/rancher/k3s directory exists
-      ansible.builtin.file:
-        path: /etc/rancher/k3s
-        state: directory
-        mode: "0755"
-      when: enable_k3s | default(false) | bool
-
-    - name: Deploy k3s configuration
-      ansible.builtin.copy:
-        dest: /etc/rancher/k3s/config.yaml
-        content: >-
-          {{
-            k3s_server_config | default({
-              'write-kubeconfig-mode': '0644',
-              'disable': ['traefik', 'servicelb'],
-              'tls-san': k3s_tls_san | default([ansible_host, inventory_hostname])
-            }) | to_nice_yaml
-          }}
-        mode: "0644"
-      register: k3s_config
-      when: enable_k3s | default(false) | bool
-
-    - name: Download K3s installer script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: /tmp/k3s-install.sh
-        mode: "0700"
-      when: enable_k3s | default(false) | bool
-
-    - name: Execute K3s installation
-      ansible.builtin.command:
-        cmd: /tmp/k3s-install.sh
-        creates: /usr/local/bin/k3s
-      environment: "{{ {'INSTALL_K3S_VERSION': k3s_version} if k3s_version | default('') else {} }}"
-      register: k3s_install
-      when: enable_k3s | default(false) | bool
-
-    - name: Clean up K3s installer script
-      ansible.builtin.file:
-        path: /tmp/k3s-install.sh
-        state: absent
-      when: enable_k3s | default(false) | bool
-
-    - name: Restart k3s service if configuration changed
-      ansible.builtin.systemd:
-        name: k3s
-        state: restarted
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_config.changed
-        - not k3s_install.changed
-
-    - name: Ensure k3s service is enabled and running
-      ansible.builtin.systemd:
-        name: k3s
-        enabled: true
-        state: started
-      when: enable_k3s | default(false) | bool
-
-    - name: Fetch kubeconfig to local repository
-      ansible.builtin.fetch:
-        src: /etc/rancher/k3s/k3s.yaml
-        dest: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
-        flat: true
-      when: enable_k3s | default(false) | bool

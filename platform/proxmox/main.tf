@@ -52,8 +52,8 @@ locals {
       memory_min_mb = 2048
       disk_size_gb  = 32
       startup_order = 1
-      tags          = ["internal", "docker", "tofu", "ubuntu-26.04"]
-      description   = "Managed by OpenTofu (platform/proxmox) - Internal Docker Host"
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Control Plane"
     }
     venus = {
       vm_id         = 501
@@ -64,7 +64,7 @@ locals {
       disk_size_gb  = 32
       startup_order = 2
       tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
-      description   = "Managed by OpenTofu (platform/proxmox) - Dedicated K3s Host"
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
     }
   }
 }

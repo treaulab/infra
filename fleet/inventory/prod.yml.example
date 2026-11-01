@@ -20,19 +20,22 @@ all:
     internal:
       vars:
         base_ufw_ports: ["22"]
+        enable_k3s: true              # Converge K3s on internal cluster nodes
+        k3s_server_url: "https://192.168.10.11:6443"
       hosts:
         mercury:
           ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: server              # K3s Control Plane Server
+          k3s_tls_san:                  # Extra SANs for k3s API server certificate
+            - "192.168.10.11"
+            - "mercury"
         venus:
           ansible_host: 192.168.10.12   # Proxmox VM 501 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-          enable_k3s: true              # Automatically converges K3s control plane
-          k3s_tls_san:                  # Extra SANs for k3s API server certificate
-            - "100.x.y.z"               # Tailscale IP
-            - "venus"
+          k3s_role: agent               # K3s Worker Agent (joins mercury)
     untrusted:
       vars:
         base_ufw_ports: ["22"]

@@ -87,14 +87,15 @@ converge node="all":
     ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
     cd ..
     mkdir -p .kube
-    kube_file=".kube/k3s-$target.yaml"
-    if [ -f "$kube_file" ]; then
-      host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "$target" 2>/dev/null | jq -r '.ansible_host // empty')
-      if [ -n "$host_ip" ]; then
-        sed -i "s/127.0.0.1/$host_ip/g" "$kube_file"
+    for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
+      if [ -f "$kf" ]; then
+        host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "mercury" 2>/dev/null | jq -r '.ansible_host // empty')
+        if [ -n "$host_ip" ]; then
+          sed -i "s/127.0.0.1/$host_ip/g" "$kf"
+        fi
+        echo "Kubeconfig ready: KUBECONFIG=$kf kubectl get nodes"
       fi
-      echo "Kubeconfig ready: KUBECONFIG=$kube_file kubectl get nodes"
-    fi
+    done
 
 # Backwards-compatible aliases for host convergence.
 bootstrap node="all":
@@ -103,8 +104,8 @@ bootstrap node="all":
 docker node="all":
     @just converge "{{node}}"
 
-# Alias for converging a K3s node (default: venus).
-k3s node="venus":
+# Alias for converging a K3s node (default: mercury).
+k3s node="mercury":
     @just converge "{{node}}"
 
 # Run kubectl against the homelab cluster.
@@ -112,7 +113,7 @@ k *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cfg=""
-    for candidate in .kube/k3s-venus.yaml .kube/k3s-node-01.yaml .kube/k3s-*.yaml; do
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
       if [ -f "$candidate" ]; then
         cfg="$candidate"
         break
