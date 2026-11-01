@@ -102,12 +102,6 @@ resource "proxmox_virtual_environment_file" "cloud_init_vendor_data" {
   }
 }
 
-# State migration from old single-VM resource
-moved {
-  from = proxmox_virtual_environment_vm.docker_host
-  to   = proxmox_virtual_environment_vm.vms["mercury"]
-}
-
 resource "proxmox_virtual_environment_vm" "vms" {
   for_each = local.vms
 
