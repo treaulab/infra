@@ -29,6 +29,7 @@
           - netcat-openbsd
           - qemu-guest-agent
           - git
+          - python3-debian
         state: present
         update_cache: true
 
