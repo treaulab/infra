@@ -228,6 +228,17 @@
         - enable_k3s | default(false) | bool
         - k3s_role | default('server') == 'server'
 
+    - name: Ensure local .kube directory exists
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../.kube"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      when:
+        - enable_k3s | default(false) | bool
+        - k3s_role | default('server') == 'server'
+
     - name: Save K3s node token locally for agents
       ansible.builtin.copy:
         content: "{{ k3s_server_token_b64.content | b64decode | trim }}"
