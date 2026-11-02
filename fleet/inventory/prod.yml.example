@@ -53,7 +53,7 @@ all:
           ansible_user: beefyboy
         scrawnyboi:
           ansible_host: 192.168.10.141  # Workstation LAN IP (reachable via Tailscale route)
-          ansible_user: beefyboy
+          ansible_user: scrawnyboi
         nucboi:
           ansible_host: 192.168.10.67   # Intel NUC LAN IP (reachable via Tailscale route)
           ansible_user: nucboi
