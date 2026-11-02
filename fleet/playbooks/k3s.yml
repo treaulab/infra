@@ -1,0 +1,9 @@
+---
+# Converge K3s cluster on internal nodes (mercury server, venus agent).
+- name: K3s cluster convergence
+  hosts: internal
+  become: true
+  tasks:
+    - name: Converge K3s cluster components
+      ansible.builtin.include_tasks: tasks/k3s.yml
+      when: enable_k3s | default(false) | bool

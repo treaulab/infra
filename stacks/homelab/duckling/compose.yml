@@ -1,0 +1,186 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: duckling-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - /opt/duckling/admin-ui:/opt/duckling/admin-ui:ro
+    depends_on:
+      - open-webui
+      - cloudbeaver
+      - grafana
+      - ldap-auth
+      - prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Core AI Chat Portal
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: duckling-webui
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - OPENAI_API_BASE_URLS=http://192.168.10.69:8080/v1;http://192.168.10.141:8080/v1
+      - OPENAI_API_KEYS=${LLAMA_KEY_BEEFYBOI};${LLAMA_KEY_SCRAWNYBOI}
+      - ENABLE_OLLAMA_API=True
+      - OLLAMA_BASE_URLS=http://192.168.10.141:11434
+      - WEBUI_NAME=Duckling AI 🦆
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - DEFAULT_USER_ROLE=user
+      - ENABLE_SIGNUP=False
+      - ENABLE_PERSISTENT_CONFIG=True
+      - DEFAULT_MODELS=qwen3.8-flash-next
+      - DEFAULT_PINNED_MODELS=qwen3.8-flash-next,muse-glimmer-30b
+      - 'MODEL_ORDER_LIST=["qwen3.8-flash-next","muse-glimmer-30b"]'
+      - 'WEBUI_BANNERS=[{"id":"duck-welcome-banner-v2","type":"info","title":"🦆 Welcome to Duckling AI • Room CV 26","content":"100% Private Local AI Cluster • <a href=\"/console/\" style=\"color:#facc15;text-decoration:underline;font-weight:600;margin-left:8px;\">Cluster Ops & Terminal Console ↗</a>","dismissible":true,"timestamp":1728345700}]'
+      - 'DEFAULT_PROMPT_SUGGESTIONS=[{"title":["🦆 Quick Help","Ask Duckling Assistant"],"content":"Hello Duckling! What can you help me with in Room CV 26 today?"},{"title":["🧠 Step-by-Step Reasoner","Deep Problem Solving"],"content":"Solve this logic and math problem step-by-step: Which number is greater, 9.11 or 9.9?"},{"title":["✉️ SITS Email & Outreach","Donation & Tech Inquiries"],"content":"Help me draft a formal donation request email to a local company for surplus laptops and workstations."},{"title":["🦆 Code & Scripting","Python & Automation"],"content":"Help me write a Python script for SITS automation."}]'
+      - ENABLE_LDAP=True
+      - LDAP_SERVER_LABEL=MamaDuck AD
+      - LDAP_SERVER_HOST=192.168.10.5
+      - LDAP_SERVER_PORT=389
+      - LDAP_USE_TLS=False
+      - LDAP_APP_DN=CN=ai-ldap-svc,CN=Users,DC=duckling,DC=local
+      - LDAP_APP_PASSWORD=${LDAP_APP_PASSWORD}
+      - LDAP_SEARCH_BASE=DC=duckling,DC=local
+      - LDAP_SEARCH_FILTER=
+      - LDAP_ATTRIBUTE_FOR_USERNAME=sAMAccountName
+      - LDAP_ATTRIBUTE_FOR_MAIL=mail
+      - ENABLE_LDAP_GROUP_MANAGEMENT=True
+      - ENABLE_LDAP_GROUP_CREATION=True
+      - LDAP_ATTRIBUTE_FOR_GROUPS=memberOf
+      - RAG_EMBEDDING_ENGINE=ollama
+      - RAG_OLLAMA_BASE_URL=http://192.168.10.69:11435
+      - RAG_EMBEDDING_MODEL=nomic-embed-text
+      - ENABLE_WEB_SEARCH=True
+      - WEB_SEARCH_ENGINE=duckduckgo
+      - WEB_SEARCH_RESULT_COUNT=3
+      - WEB_SEARCH_CONCURRENT_REQUESTS=10
+      - ENABLE_SEARCH_QUERY_GENERATION=True
+      - BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL=True
+      - BYPASS_WEB_SEARCH_WEB_LOADER=True
+    volumes:
+      - duckling_data:/app/backend/data
+      - ./access_control_init.py.patched:/app/backend/open_webui/utils/access_control/__init__.py:ro
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: duckling-cloudbeaver
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8978:8978"
+    environment:
+      - CB_SERVER_NAME=Duckling AI Database Studio
+      - CB_SERVER_URL=https://ai.duckling.local/webdb/
+      - CB_ADMIN_NAME=administrator
+      - CB_ADMIN_PASSWORD=${CB_ADMIN_PASSWORD}
+      - CLOUDBEAVER_ROOT_URI=/webdb/
+      - CLOUDBEAVER_APP_SUPPORTS_CUSTOM_CONNECTIONS=true
+      - CLOUDBEAVER_APP_ANONYMOUS_ACCESS_ENABLED=true
+      - CLOUDBEAVER_APP_GRANT_CONNECTIONS_ACCESS_TO_ANONYMOUS_TEAM=true
+    volumes:
+      - ./cloudbeaver.conf:/opt/cloudbeaver/conf/cloudbeaver.conf:ro
+      - ./cloudbeaver.auto.conf:/opt/cloudbeaver/conf/.cloudbeaver.auto.conf:ro
+      - ./cloudbeaver-datasources/initial-data-sources.conf:/opt/cloudbeaver/conf/initial-data-sources.conf:ro
+      - duckling_data:/var/webui_data
+      - duckling_cloudbeaver_data:/opt/cloudbeaver/workspace
+
+  ldap-auth:
+    image: linuxserver/ldap-auth:latest
+    container_name: duckling-ldap-auth
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8888:8888"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: duckling-blackbox
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/blackbox/blackbox.yml'
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+      - ./secrets/llama_beefyboi.key:/etc/blackbox/secrets/llama_beefyboi.key:ro
+      - ./secrets/llama_scrawnyboi.key:/etc/blackbox/secrets/llama_scrawnyboi.key:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: duckling-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml:ro
+      - ./secrets/llama_beefyboi.key:/etc/prometheus/secrets/llama_beefyboi.key:ro
+      - ./secrets/llama_scrawnyboi.key:/etc/prometheus/secrets/llama_scrawnyboi.key:ro
+      - duckling_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: duckling-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SERVER_ROOT_URL=https://ai.duckling.local/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_AUTH_LDAP_ENABLED=true
+      - GF_AUTH_LDAP_CONFIG_FILE=/etc/grafana/ldap.toml
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
+    volumes:
+      - duckling_grafana_data:/var/lib/grafana
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./ldap.toml:/etc/grafana/ldap.toml:ro
+      - duckling_data:/data/sqlite:ro
+
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: duckling-jellyfin
+    restart: unless-stopped
+    user: 1000:1000
+    group_add:
+      - "44"
+      - "992"
+    ports:
+      - "8096:8096"
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - ./data/jellyfin/config:/config
+      - ./data/jellyfin/cache:/cache
+      - /mnt/storage:/media
+
+volumes:
+  duckling_data:
+    name: duckling_duckling_data
+    external: true
+  duckling_cloudbeaver_data:
+    name: duckling_duckling_cloudbeaver_data
+    external: true
+  duckling_prometheus_data:
+    name: duckling_duckling_prometheus_data
+    external: true
+  duckling_grafana_data:
+    name: duckling_duckling_grafana_data
+    external: true

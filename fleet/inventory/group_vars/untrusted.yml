@@ -1,0 +1,5 @@
+---
+base_ufw_ports:
+  - "22"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+ansible_become: false
