@@ -43,8 +43,17 @@ all:
     untrusted:
       vars:
         base_ufw_ports: ["22"]
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
       hosts:
         i:
           ansible_host: 100.x.y.z       # Machine i's Tailscale IP
           ansible_user: treau           # User on machine i
-          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+        beefyboi:
+          ansible_host: 192.168.10.69   # Workstation LAN IP (reachable via Tailscale route)
+          ansible_user: beefyboy
+        scrawnyboi:
+          ansible_host: 192.168.10.141  # Workstation LAN IP (reachable via Tailscale route)
+          ansible_user: beefyboy
+        nucboi:
+          ansible_host: 192.168.10.67   # Intel NUC LAN IP (reachable via Tailscale route)
+          ansible_user: nucboi
