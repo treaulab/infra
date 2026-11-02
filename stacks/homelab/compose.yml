@@ -1,4 +1,53 @@
+# Homelab Docker workloads (nucboi: 192.168.10.67)
 services:
+  # --- Edge & Remote Access Gateway ---
+  guacd:
+    image: guacamole/guacd:latest
+    restart: unless-stopped
+    networks:
+      - default
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - default
+
+  guacamole:
+    image: guacamole/guacamole:latest
+    restart: unless-stopped
+    depends_on:
+      - guacd
+      - postgres
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_HOSTNAME: postgres
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USER: guacamole_user
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      TOTP_ENABLED: "true"
+      WEBAPP_CONTEXT: ROOT
+      REMOTE_IP_VALVE_ENABLED: "true"
+    networks:
+      - default
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - default
+
+  # --- Reverse Proxy & Core Portal ---
   nginx:
     image: nginx:alpine
     container_name: duckling-nginx
@@ -19,7 +68,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # Core AI Chat Portal
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: duckling-webui
@@ -69,6 +117,7 @@ services:
       - duckling_data:/app/backend/data
       - ./access_control_init.py.patched:/app/backend/open_webui/utils/access_control/__init__.py:ro
 
+  # --- Internal Services & Telemetry ---
   cloudbeaver:
     image: dbeaver/cloudbeaver:latest
     container_name: duckling-cloudbeaver
@@ -172,6 +221,7 @@ services:
       - /mnt/storage:/media
 
 volumes:
+  pgdata:
   duckling_data:
     name: duckling_duckling_data
     external: true

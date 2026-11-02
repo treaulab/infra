@@ -1,6 +1,12 @@
 # Copy to fleet/inventory/prod.yml (gitignored) and fill.
-# Tier/group configurations are modularized under fleet/inventory/group_vars/.
 all:
+  vars:
+    domain: example.com
+    acme_email: admin@example.com
+    caddy_version: "2.11"
+    deploy_root: /opt/stacks
+    site_ip: 1.2.3.4
+    base_ufw_ports: ["22", "80", "443"]
   children:
     edge:
       hosts:
@@ -9,9 +15,12 @@ all:
           ansible_user: azureuser
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
     internal:
-      # Optional: set k3s_token here or leave it to be auto-generated into .kube/k3s-node-token
-      # vars:
-      #   k3s_token: "pre-shared-token-here"
+      vars:
+        base_ufw_ports: ["22"]
+        enable_k3s: true
+        k3s_server_url: "https://192.168.10.11:6443"
+        internal_gateway: "192.168.10.254"
+        # k3s_token: "pre-shared-token-here"
       hosts:
         mercury:
           ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
@@ -29,6 +38,10 @@ all:
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
           k3s_role: agent               # K3s Worker Agent (joins mercury)
     untrusted:
+      vars:
+        base_ufw_ports: ["22"]
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+        ansible_become: false
       hosts:
         i:
           ansible_host: 100.x.y.z       # Machine i's Tailscale IP

@@ -1,9 +1,0 @@
----
-domain: treau.me
-acme_email: zeuitt@gmail.com
-caddy_version: "2.11"
-deploy_root: /opt/stacks
-base_ufw_ports:
-  - "22"
-  - "80"
-  - "443"

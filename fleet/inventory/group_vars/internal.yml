@@ -1,6 +1,0 @@
----
-base_ufw_ports:
-  - "22"
-enable_k3s: true
-k3s_server_url: "https://192.168.10.11:6443"
-internal_gateway: "192.168.10.254"

@@ -104,25 +104,9 @@ bootstrap node="all":
 docker node="all":
     @just converge "{{node}}"
 
-# Converge K3s cluster components on one host (or mercury).
+# Alias for converging a K3s node (default: mercury).
 k3s node="mercury":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target="{{node}}"
-    target="${target#node=}"
-    cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "$target"
-    cd ..
-    mkdir -p .kube
-    for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
-      if [ -f "$kf" ]; then
-        host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "mercury" 2>/dev/null | jq -r '.ansible_host // empty')
-        if [ -n "$host_ip" ]; then
-          sed -i "s/127.0.0.1/$host_ip/g" "$kf"
-        fi
-        echo "Kubeconfig ready: KUBECONFIG=$kf kubectl get nodes"
-      fi
-    done
+    @just converge "{{node}}"
 
 # Ping hosts across any inventory group (default: untrusted).
 ping group="untrusted":
