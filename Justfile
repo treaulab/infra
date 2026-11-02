@@ -112,6 +112,14 @@ k3s node="mercury":
 ping group="untrusted":
     cd fleet && ansible "{{group}}" -i inventory/prod.yml -m ping
 
+# Converge only UFW firewall rules on one host (or all).
+ufw node="all":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags firewall
+
+# Converge only Tailscale on one host (or all).
+ts node="all":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags tailscale
+
 # Run kubectl against the homelab cluster.
 k *args:
     #!/usr/bin/env bash
