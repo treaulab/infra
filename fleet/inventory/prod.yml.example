@@ -17,15 +17,15 @@ all:
     internal:
       vars:
         base_ufw_ports: ["22"]
-        enable_k3s: true
-        k3s_server_url: "https://192.168.10.11:6443"
         internal_gateway: "192.168.10.254"
+        k3s_server_url: "https://192.168.10.11:6443"
         # k3s_token: "pre-shared-token-here"
       hosts:
         mercury:
           ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          enable_k3s: true
           k3s_role: server              # K3s Control Plane Server
           k3s_tls_san:                  # Extra SANs for k3s API server certificate
             - "192.168.10.11"
@@ -36,16 +36,19 @@ all:
           ansible_host: 192.168.10.12   # Proxmox VM 501 LAN IP
           ansible_user: treau           # Matches admin_username in platform/proxmox
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          enable_k3s: true
           k3s_role: agent               # K3s Worker Agent (joins mercury)
+        i:
+          ansible_host: 100.x.y.z       # Raspberry Pi Tailscale IP / subnet router
+          ansible_user: treau           # User on machine i
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          enable_k3s: false
     untrusted:
       vars:
         base_ufw_ports: ["22"]
         ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
         ansible_become: false
       hosts:
-        i:
-          ansible_host: 100.x.y.z       # Machine i's Tailscale IP
-          ansible_user: treau           # User on machine i
         beefyboi:
           ansible_host: 192.168.10.69   # Workstation LAN IP
           ansible_user: beefyboy
