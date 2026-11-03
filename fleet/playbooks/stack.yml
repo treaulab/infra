@@ -1,0 +1,9 @@
+---
+# Deploy any Docker Compose stack to a target host under /opt/stacks/<stack_name>.
+- name: Deploy Docker Compose Stack
+  hosts: "{{ target_host }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Converge stack via universal compose task
+      ansible.builtin.include_tasks: tasks/compose_stack.yml

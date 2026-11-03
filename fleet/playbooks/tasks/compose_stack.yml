@@ -1,0 +1,45 @@
+---
+# tasks/compose_stack.yml — Universal Docker Compose convergence task.
+# Always guarantees deployment to {{ deploy_root }}/{{ stack_name }} (default: /opt/stacks/<stack_name>)
+#
+# Required variables:
+#   stack_name: Unique stack identifier (e.g. "caddy", "immich")
+#   stack_src:  Path to compose directory relative to repo root (e.g. "compose/public/caddy")
+# Optional variables:
+#   stack_env_file: Optional path to host .env file to copy
+#   deploy_user: User owning the stack directory (defaults to ansible_user)
+
+- name: Assert required stack variables are defined
+  ansible.builtin.assert:
+    that:
+      - stack_name is defined and stack_name | length > 0
+      - stack_src is defined and stack_src | length > 0
+    fail_msg: "Both stack_name and stack_src must be provided."
+
+- name: Enforce stack destination directory under {{ deploy_root | default('/opt/stacks') }}
+  ansible.builtin.file:
+    path: "{{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}"
+    state: directory
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0755"
+
+- name: Install compose.yml to {{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ stack_src }}/compose.yml"
+    dest: "{{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}/compose.yml"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0644"
+
+- name: Install stack .env file if provided
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ stack_env_file }}"
+    dest: "{{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}/.env"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0600"
+  when: stack_env_file is defined and stack_env_file | length > 0
+
+- name: Converge Docker Compose service (pull & up)
+  ansible.builtin.command:
+    cmd: docker compose pull && docker compose up -d --remove-orphans
+    chdir: "{{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}"
+  changed_when: true

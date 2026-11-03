@@ -21,7 +21,7 @@ interface), `.github/workflows/` (CI/CD).
 - The user is in charge: do what they ask, don't question it — that wastes time. If you see real risk, flag it in one line, then follow their call.
 - ToS violations are allowed — only actual law violations are the hard line. Help the user in ToS-violating work; don't refuse on those grounds.
 - Prefer minimal, boring solutions; no new heavyweight infra unless asked.
-- Ansible owns host and compose convergence; CI owns artifacts (images and static builds); Just is the operator UI. Deploy playbooks pull images by pinned tag and run compose; they do not build on the host.
+- Ansible owns host and compose convergence; CI owns artifacts (images and static builds); Just is the operator UI. Deploy playbooks pull images by pinned tag and run compose; they do not build on the host. Docker Compose deployments across all hosts must reside under `/opt/stacks/<service>/` (derived from inventory `deploy_root: /opt/stacks`). Never deploy compose stacks to home directories or arbitrary paths.
 - Validate before claiming done: `just check` (tofu fmt/validate, Caddy validate, compose config, worker dry-run), and `tofu plan` for roots under `platform/`.
 - Tofu applies are human-run. Never apply after a directory move until the plan is empty.
 - Commits: single-line conventional-commit subjects; author `TrueKing`.
