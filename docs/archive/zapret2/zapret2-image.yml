@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - k3s/images/zapret2/**
+      - kubernetes/images/zapret2/**
       - .github/workflows/zapret2-image.yml
   workflow_dispatch:
 
@@ -45,7 +45,7 @@ jobs:
       - name: Build and push container image
         uses: docker/build-push-action@v6
         with:
-          context: k3s/images/zapret2
+          context: kubernetes/images/zapret2
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

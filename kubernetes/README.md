@@ -1,4 +1,4 @@
-# k3s
+# kubernetes
 
 Declarative Kubernetes state for the homelab cluster.
 
@@ -23,5 +23,5 @@ Declarative Kubernetes state for the homelab cluster.
 
 3. Apply manifests:
    ```bash
-   just k-apply k3s/manifests
+   just k-apply kubernetes/manifests
    ```

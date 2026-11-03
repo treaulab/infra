@@ -154,8 +154,8 @@ k *args:
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
 
-# Apply manifests from k3s/manifests.
-k-apply path="k3s/manifests":
+# Apply manifests from kubernetes/manifests.
+k-apply path="kubernetes/manifests":
     @just k apply -f {{path}}
 
 # Deploy Caddy + static website to the Azure VPS.
