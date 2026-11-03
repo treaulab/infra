@@ -1,4 +1,4 @@
-# stacks/public
+# compose/public
 
 Public Azure VPS workload. Caddy serves the static site only.
 

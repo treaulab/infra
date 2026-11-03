@@ -53,8 +53,8 @@ secrets/
 *.publishsettings
 
 # caddy data (if ever bind-mounted instead of named volumes)
-stacks/public/caddy/data/
-stacks/public/caddy/config/
+compose/public/caddy/data/
+compose/public/caddy/config/
 
 # docker compose local overrides
 compose.override.yml

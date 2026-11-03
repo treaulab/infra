@@ -32,13 +32,13 @@
 - Version bump: update `caddy_version` in `fleet/inventory/prod.yml`, then
   `just deploy-public`. For a one-off, run the playbook with
   `-e caddy_version=...` (or use the compatibility wrapper, which still maps
-  `CADDY_VERSION`). The playbook templates `stacks/public/caddy/.env` on the
+  `CADDY_VERSION`). The playbook templates `compose/public/caddy/.env` on the
   host from inventory variables.
 - Check logs: `ssh <vps> 'docker logs caddy --tail 50'`.
 - The `deploy-public` playbook also waits for `https://<domain>/` to return
   `200`; CI uses the same external check.
 
-Caddy serves `/srv/website` from `stacks/public/website/src`. It has no
+Caddy serves `/srv/website` from `compose/public/website/src`. It has no
 `reverse_proxy` blocks; homelab traffic does not transit the VPS.
 
 ## Backups

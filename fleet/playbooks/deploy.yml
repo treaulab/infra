@@ -31,14 +31,14 @@
 
     - name: Install Caddy compose file
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../stacks/public/caddy/compose.yml"
+        src: "{{ playbook_dir }}/../../compose/public/caddy/compose.yml"
         dest: "{{ public_caddy_root }}/compose.yml"
         owner: "{{ deploy_user }}"
         mode: "0644"
 
     - name: Install Caddyfile
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../stacks/public/caddy/Caddyfile"
+        src: "{{ playbook_dir }}/../../compose/public/caddy/Caddyfile"
         dest: "{{ public_caddy_root }}/Caddyfile"
         owner: "{{ deploy_user }}"
         mode: "0644"
@@ -59,7 +59,7 @@
 
     - name: Synchronize static website source
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../stacks/public/website/src/"
+        src: "{{ playbook_dir }}/../../compose/public/website/src/"
         dest: "{{ public_website_root }}/"
         owner: "{{ deploy_user }}"
         mode: "0644"

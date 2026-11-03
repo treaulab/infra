@@ -27,7 +27,7 @@ platform/          OpenTofu roots
 └── tailscale/     tailnet ACL + CI keys/secrets
 
 fleet/             Ansible: host OS baseline, Docker Compose stack convergence
-stacks/
+compose/
 └── public/        Azure VPS: caddy/ + website/src
 
 edge/
@@ -61,7 +61,7 @@ Keep port 22 until Tailscale access is proven.
 
 | Change | Command | Destination |
 |---|---|---|
-| `stacks/public/**` | `just deploy-public` | Azure VPS |
+| `compose/public/**` | `just deploy-public` | Azure VPS |
 | `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
 | `fleet/playbooks/host.yml` | `just converge <node>` | Host OS baseline |
