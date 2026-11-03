@@ -7,8 +7,7 @@ on:
     paths:
       - compose/public/**
       - fleet/playbooks/deploy.yml
-      - fleet/playbooks/templates/**
-      - tools/deploy-public.sh
+      - fleet/playbooks/tasks/**
       - .github/workflows/deploy.yml
   workflow_dispatch:
 
