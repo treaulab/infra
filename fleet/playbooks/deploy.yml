@@ -6,9 +6,6 @@
   become: true
   gather_facts: false
   vars:
-    public_deploy_root: "{{ deploy_root | default('/opt/stacks') }}"
-    public_caddy_root: "{{ public_deploy_root }}/caddy"
-    public_website_root: "{{ public_deploy_root }}/website/src"
     public_site_ip: "{{ site_ip | default(ansible_host, true) | default('20.98.16.138', true) }}"
     deploy_user: "{{ ansible_user | default('root') }}"
   tasks:
@@ -19,59 +16,34 @@
           - acme_email | default('') | length > 0
         fail_msg: "Set domain and acme_email in inventory."
 
-    - name: Ensure stack destination directories exist
+    - name: Ensure website root directory exists
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ deploy_root | default('/opt/stacks') }}/website/src"
         state: directory
         owner: "{{ deploy_user }}"
         mode: "0755"
-      loop:
-        - "{{ public_caddy_root }}"
-        - "{{ public_website_root }}"
 
-    - name: Install Caddy compose file
+    - name: Synchronize static website source
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../compose/public/caddy/compose.yml"
-        dest: "{{ public_caddy_root }}/compose.yml"
+        src: "{{ playbook_dir }}/../../compose/public/website/src/"
+        dest: "{{ deploy_root | default('/opt/stacks') }}/website/src/"
         owner: "{{ deploy_user }}"
         mode: "0644"
 
-    - name: Install Caddyfile
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../compose/public/caddy/Caddyfile"
-        dest: "{{ public_caddy_root }}/Caddyfile"
-        owner: "{{ deploy_user }}"
-        mode: "0644"
-      notify: Reload Caddy
-
-    - name: Render Caddy environment file
-      ansible.builtin.copy:
-        dest: "{{ public_caddy_root }}/.env"
-        owner: "{{ deploy_user }}"
-        mode: "0600"
-        content: |
+    - name: Converge Caddy compose stack via universal task
+      ansible.builtin.include_tasks: tasks/compose_stack.yml
+      vars:
+        stack_name: caddy
+        stack_src: compose/public/caddy
+        deploy_user: "{{ deploy_user }}"
+        stack_files:
+          - src: compose/public/caddy/Caddyfile
+        stack_env_content: |
           # Managed by Ansible (fleet/playbooks/deploy.yml). Do not edit on the host.
           DOMAIN={{ domain }}
           ACME_EMAIL={{ acme_email }}
           CADDY_VERSION={{ caddy_version | default('2.11') }}
           SITE_IP={{ public_site_ip }}
-      notify: Reload Caddy
-
-    - name: Synchronize static website source
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../compose/public/website/src/"
-        dest: "{{ public_website_root }}/"
-        owner: "{{ deploy_user }}"
-        mode: "0644"
-
-    - name: Pull and converge Caddy compose service
-      ansible.builtin.command:
-        cmd: docker compose pull && docker compose up -d --remove-orphans
-        chdir: "{{ public_caddy_root }}"
-      changed_when: true
-
-    - name: Apply configuration reloads
-      ansible.builtin.meta: flush_handlers
 
     - name: Verify public site availability
       ansible.builtin.uri:
@@ -84,11 +56,3 @@
       delay: 5
       delegate_to: localhost
       become: false
-
-  handlers:
-    - name: Reload Caddy
-      ansible.builtin.command:
-        cmd: docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
-        chdir: "{{ public_caddy_root }}"
-      changed_when: true
-      failed_when: false

@@ -170,10 +170,17 @@ deploy-public env="prod":
     ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
       ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy.yml
 
-# Deploy any Docker Compose stack to any host under /opt/stacks/<stack>.
-deploy-stack host stack src:
-    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/stack.yml \
-      -e "target_host={{host}} stack_name={{stack}} stack_src={{src}}"
+# Deploy Docker Compose stack(s) to a host under /opt/stacks/<stack>.
+# Runs inventory-declared compose_stacks for the host by default.
+# Pass stack= and src= for an ad-hoc one-off deployment.
+deploy-compose host stack="" src="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    extra=""
+    [[ -n "{{stack}}" ]] && extra="$extra -e adhoc_stack_name={{stack}}"
+    [[ -n "{{src}}" ]]   && extra="$extra -e adhoc_stack_src={{src}}"
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/compose.yml \
+      -e "target={{host}}" $extra
 
 # Pin a tailnet-runner spoke to a hub SHA.
 bump-spoke repo sha:
