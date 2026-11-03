@@ -57,12 +57,23 @@ locals {
     }
     venus = {
       vm_id         = 501
-      ipv4_address  = "192.168.10.12/24"
+      ipv4_address  = "192.168.10.13/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
       disk_size_gb  = 32
       startup_order = 2
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    earth = {
+      vm_id         = 502
+      ipv4_address  = "192.168.10.14/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 3
       tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
       description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
     }

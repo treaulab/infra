@@ -1,0 +1,140 @@
+---
+# tasks/byedpi.yml — Converges ByeDPI transparent & SOCKS5 proxy on workstations
+
+- name: Ensure conflicting zapret2 service is stopped and disabled
+  ansible.builtin.systemd:
+    name: zapret2
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Ensure byedpi system group exists
+  ansible.builtin.group:
+    name: byedpi
+    system: true
+    state: present
+
+- name: Ensure byedpi system user exists
+  ansible.builtin.user:
+    name: byedpi
+    group: byedpi
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Install ciadpi binary from GitLab mirror
+  vars:
+    byedpi_arch: "{{ 'x86_64' if ansible_architecture == 'x86_64' else ansible_architecture }}"
+  ansible.builtin.get_url:
+    url: "https://gitlab.com/samuellance73/byedpi/-/raw/main/bin/ciadpi-{{ byedpi_arch }}"
+    dest: /usr/local/bin/ciadpi
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Deploy byedpi NAT redirection script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/byedpi-nat.sh
+    mode: "0755"
+    owner: root
+    group: root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      T=1081
+      U=byedpi
+      # Clean existing redirect rules
+      iptables -t nat -D OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports $T 2>/dev/null || true
+      iptables -t nat -D OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports $T 2>/dev/null || true
+      # Exclude local and private IP ranges
+      for c in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 224.0.0.0/4; do
+        iptables -t nat -C OUTPUT -d "$c" -j RETURN 2>/dev/null || iptables -t nat -I OUTPUT -d "$c" -j RETURN
+      done
+      # Exclude proxy user to avoid loops
+      iptables -t nat -C OUTPUT -m owner --uid-owner "$U" -j RETURN 2>/dev/null || iptables -t nat -I OUTPUT -m owner --uid-owner "$U" -j RETURN
+      # Redirect HTTP and HTTPS to transparent proxy
+      iptables -t nat -C OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports "$T" 2>/dev/null \
+        || iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports "$T"
+      iptables -t nat -C OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports "$T" 2>/dev/null \
+        || iptables -t nat -A OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports "$T"
+  notify: Restart byedpi-nat
+
+- name: Deploy byedpi-transparent systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/byedpi-transparent.service
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=byedpi transparent proxy
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      ExecStart=/usr/local/bin/ciadpi -i 127.0.0.1 -p 1081 -E --oob 1+s --auto=torst
+      Restart=always
+      RestartSec=3
+      User=byedpi
+      NoNewPrivileges=true
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart byedpi-transparent
+
+- name: Deploy byedpi-socks systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/byedpi-socks.service
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=byedpi SOCKS proxy
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      ExecStart=/usr/local/bin/ciadpi -i 127.0.0.1 -p 1080 --oob 1+s --auto=torst
+      Restart=always
+      RestartSec=3
+      User=byedpi
+      NoNewPrivileges=true
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart byedpi-socks
+
+- name: Deploy byedpi-nat systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/byedpi-nat.service
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=byedpi NAT redirect
+      After=byedpi-transparent.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/byedpi-nat.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart byedpi-nat
+
+- name: Ensure byedpi services are enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - byedpi-transparent
+    - byedpi-nat
+    - byedpi-socks

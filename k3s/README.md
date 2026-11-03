@@ -6,14 +6,13 @@ Declarative Kubernetes state for the homelab cluster.
 
 - `manifests/` — Declarative Kubernetes manifests for cluster workloads.
 - `images/` — Container image source definitions for custom cluster containers.
-- Host convergence and the K3s engine lifecycle are managed via Ansible at `fleet/playbooks/host.yml` (`enable_k3s: true`).
+- Host OS baseline is managed via `fleet/playbooks/host.yml`; K3s engine lifecycle is managed via `fleet/playbooks/k3s.yml` (`just k3s`).
 
 ## Quick Start
 
-1. Install/converge K3s on both nodes (`mercury` server, `venus` agent):
+1. Install/converge K3s on the cluster (`mercury` server, `venus` and `earth` agents):
    ```bash
-   just converge mercury
-   just converge venus
+   just k3s
    ```
 
 2. Run `kubectl` commands against the cluster over Tailscale:

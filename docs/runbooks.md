@@ -19,8 +19,8 @@
    just deploy-public         # Caddy + static site
    ```
 5. Verify: `curl -sI https://<domain>/` (200), `docker logs caddy --tail 20`.
-6. Add the homelab host to `fleet/inventory/prod.yml` using its MagicDNS name
-   or `100.x` address, then `just converge homelab`.
+6. Add cluster nodes to `fleet/inventory/prod.yml` using their MagicDNS names
+   or `100.x` addresses, then `just converge cluster` and `just k3s`.
 
 ## Deploy / upgrade Caddy
 
@@ -142,3 +142,31 @@ Every root under `platform/` uses local state, which is gitignored:
   as the required credentials are available. Stop if the plan is not empty.
 - A remote encrypted backend can come later; migrate `tailscale` first with
   `tofu init -migrate-state`.
+
+## DPI Circumvention (ByeDPI vs Zapret2)
+
+Russian ISP TSPU (Roskomnadzor) resets TLS connections during SNI Client Hello inspection on services like Tailscale (`pkgs.tailscale.com`), Cloudflare (`pkg.cloudflareclient.com`), Docker Registry, and GitHub raw blobs.
+
+The infrastructure uses a two-tier circumvention model:
+
+1. **Router / Gateway Level (`192.168.10.254` OpenWrt)**:
+   - Runs **`zapret2`** (`nfqws2`) at the network boundary.
+   - Handles network-wide NFQUEUE desync for all devices routing via `.254` (Proxmox VMs `mercury`, `venus`, phones, IoT) without client software.
+   - Documented in `~/Safe/documented/router-192.168.10.254/`.
+
+2. **Workstation Fleet (`untrusted`: beefyboi, scrawnyboi, nucboi)**:
+   - Workstations use direct ISP router gateway `192.168.10.1` (avoids dependence on PVE router VM).
+   - Runs **`byedpi`** (`ciadpi` v0.17.3) locally via Ansible:
+     - `byedpi-transparent.service`: Transparent proxy on `127.0.0.1:1081` (`--oob 1+s --auto=torst`).
+     - `byedpi-nat.service`: Iptables redirect for outbound ports 80 & 443 with private LAN exclusions.
+     - `byedpi-socks.service`: SOCKS5 proxy on `127.0.0.1:1080`.
+   - **Why `--oob 1+s --auto=torst` is optimal**:
+     - `--oob 1+s`: Splits TLS Client Hello 1 byte after the SNI offset and marks it with TCP Urgent flag. TSPU DPI fails stream reassembly, while legitimate servers process it cleanly.
+     - `--auto=torst`: Zero overhead on unblocked connections; only activates desync when TSPU sends a TCP RST, then caches it per destination IP.
+     - **No build tools or hostlists**: Avoids compilation from source, Lua scripts, or stale hostlists that cause silent failures.
+
+### Operations
+- Enabled per-group via `enable_byedpi: true` in `fleet/inventory/prod.yml`.
+- Runs automatically before apt/docker/tailscale in `just untrusted` or `just converge <host>`.
+- Converge or restart standalone: `just byedpi [node]`.
+- Health check: `ssh <node> "curl -Iv https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"`.

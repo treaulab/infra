@@ -77,8 +77,8 @@ check:
     git diff --check
     echo "OK"
 
-# Converge OS baseline (UFW + Tailscale + Docker) on one host (or all).
-converge node="all":
+# Converge OS baseline (UFW + Tailscale + Docker) on one host (or trusted fleet).
+converge node="trusted":
     #!/usr/bin/env bash
     set -euo pipefail
     target="{{node}}"
@@ -97,28 +97,45 @@ converge node="all":
       fi
     done
 
-# Backwards-compatible aliases for host convergence.
-bootstrap node="all":
-    @just converge "{{node}}"
-
-docker node="all":
-    @just converge "{{node}}"
-
-# Alias for converging a K3s node (default: mercury).
-k3s node="mercury":
-    @just converge "{{node}}"
+# Converge K3s cluster control plane & worker agents (default: cluster).
+k3s node="cluster":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target="{{node}}"
+    target="${target#node=}"
+    cd fleet
+    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "$target"
+    cd ..
+    mkdir -p .kube
+    for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
+      if [ -f "$kf" ]; then
+        host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "mercury" 2>/dev/null | jq -r '.ansible_host // empty')
+        if [ -n "$host_ip" ]; then
+          sed -i "s/127.0.0.1/$host_ip/g" "$kf"
+        fi
+        echo "Kubeconfig ready: KUBECONFIG=$kf kubectl get nodes"
+      fi
+    done
 
 # Ping hosts across any inventory group (default: untrusted).
 ping group="untrusted":
-    cd fleet && ansible "{{group}}" -i inventory/prod.yml -m ping
+    cd fleet && ansible "{{group}}" -i inventory/prod.yml -m ping -e ansible_become=false
 
-# Converge only UFW firewall rules on one host (or all).
-ufw node="all":
+# Converge untrusted compute workstations (Docker, packages, Tailscale; UFW disabled).
+untrusted *args="":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit untrusted {{args}}
+
+# Converge only UFW firewall rules on one host (or trusted fleet).
+ufw node="trusted":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags firewall
 
-# Converge only Tailscale on one host (or all).
-ts node="all":
+# Converge only Tailscale on one host (or trusted fleet).
+ts node="trusted":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags tailscale
+
+# Converge ByeDPI transparent & SOCKS5 proxy on a host (default: untrusted).
+byedpi node="untrusted":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags byedpi
 
 # Run kubectl against the homelab cluster.
 k *args:
@@ -149,10 +166,6 @@ deploy-public env="prod":
     cd fleet
     ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
       ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy.yml
-
-# Backwards-compatible alias for deploy-public.
-deploy-edge env="prod":
-    @just deploy-public "{{env}}"
 
 # Pin a tailnet-runner spoke to a hub SHA.
 bump-spoke repo sha:

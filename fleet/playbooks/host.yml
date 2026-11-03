@@ -1,5 +1,6 @@
 ---
-# Converge host OS baseline: packages, UFW hardening, Docker, K3s, and Tailscale.
+# Converge host OS baseline across all fleet machines:
+# packages, Docker Engine, unattended upgrades, UFW (servers only), and Tailscale.
 - name: Host OS baseline
   hosts: all
   become: true
@@ -13,55 +14,27 @@
       changed_when: false
       failed_when: false
 
-    # --- Network Gateway & DNS Persistence (Internal Nodes) ---
-    - name: Check if Netplan configuration exists
-      ansible.builtin.stat:
-        path: /etc/netplan/50-cloud-init.yaml
-      register: netplan_cloud_init
-      tags: [network]
-      when:
-        - "'internal' in group_names"
-        - internal_gateway is defined
+    - name: Configure passwordless sudo for admin user
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/ansible-{{ ansible_user }}"
+        content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: "0440"
+        validate: "/usr/sbin/visudo -cf %s"
+      tags: [sudoers]
 
-    - name: Persist default gateway to transparent proxy in Netplan
-      ansible.builtin.replace:
-        path: /etc/netplan/50-cloud-init.yaml
-        regexp: 'via:\s+"?192\.168\.10\.[0-9]+"?'
-        replace: 'via: "{{ internal_gateway }}"'
-      tags: [network]
-      when:
-        - "'internal' in group_names"
-        - internal_gateway is defined
-        - netplan_cloud_init.stat.exists
-      register: netplan_gw_update
-
-    - name: Persist primary DNS to transparent proxy in Netplan
-      ansible.builtin.replace:
-        path: /etc/netplan/50-cloud-init.yaml
-        regexp: '-\s+192\.168\.10\.[0-9]+'
-        replace: '- {{ internal_gateway }}'
-      tags: [network]
-      when:
-        - "'internal' in group_names"
-        - internal_gateway is defined
-        - netplan_cloud_init.stat.exists
-      register: netplan_dns_update
-
-    - name: Apply persistent Netplan configuration
-      ansible.builtin.command:
-        cmd: netplan apply
-      tags: [network]
-      when:
-        - "'internal' in group_names"
-        - internal_gateway is defined
-        - (netplan_gw_update.changed | default(false)) or (netplan_dns_update.changed | default(false))
-      changed_when: true
+    # --- DPI Circumvention (Workstations) ---
+    - name: Converge ByeDPI transparent & SOCKS5 proxy
+      ansible.builtin.include_tasks:
+        file: tasks/byedpi.yml
+        apply:
+          tags: [byedpi]
+      when: enable_byedpi | default(false) | bool
+      tags: [byedpi]
 
     - name: Install base security & utility packages
       ansible.builtin.apt:
         name:
           - ufw
-          - fail2ban
           - unattended-upgrades
           - curl
           - ca-certificates
@@ -71,37 +44,47 @@
           - jq
           - tmux
           - netcat-openbsd
-          - qemu-guest-agent
           - git
           - python3-debian
+          - python3-apt
+          - dnsutils
+          - lsof
         state: present
         update_cache: true
       tags: [packages]
 
-    - name: Configure UFW open ports
-      ansible.builtin.command:
-        cmd: "ufw allow {{ item }}/tcp"
-      loop: "{{ base_ufw_ports | default(['22']) }}"
+    # --- Firewall Management ---
+    - name: Configure and enable UFW on servers
+      when: enable_ufw | default(true) | bool
       tags: [firewall]
-      changed_when: false
+      block:
+        - name: Configure UFW open ports
+          ansible.builtin.command:
+            cmd: "ufw allow {{ item }}/tcp"
+          loop: "{{ base_ufw_ports | default(['22']) }}"
+          changed_when: false
 
-    - name: Allow traffic on Tailscale interface
-      ansible.builtin.command:
-        cmd: "ufw allow in on tailscale0"
-      tags: [firewall]
-      changed_when: false
+        - name: Allow traffic on Tailscale interface
+          ansible.builtin.command:
+            cmd: "ufw allow in on tailscale0"
+          changed_when: false
 
-    - name: Allow LAN subnet traffic for internal cluster nodes
-      ansible.builtin.command:
-        cmd: "ufw allow from 192.168.10.0/24"
-      tags: [firewall]
-      when: "'internal' in group_names"
-      changed_when: false
+        - name: Allow LAN subnet traffic for internal servers
+          ansible.builtin.command:
+            cmd: "ufw allow from 192.168.10.0/24"
+          when: "'internal' in group_names"
+          changed_when: false
 
-    - name: Enable UFW firewall (default deny incoming)
+        - name: Enable UFW firewall (default deny incoming)
+          ansible.builtin.command:
+            cmd: "ufw --force enable"
+          changed_when: false
+
+    - name: Ensure UFW is disabled on workstations
       ansible.builtin.command:
-        cmd: "ufw --force enable"
+        cmd: "ufw disable"
       tags: [firewall]
+      when: not (enable_ufw | default(true) | bool)
       changed_when: false
 
     - name: Configure unattended security upgrades
@@ -135,202 +118,6 @@
         groups: docker
         append: true
       tags: [docker]
-
-    # --- K3s Engine ---
-    - name: Resolve K3s cluster token
-      ansible.builtin.set_fact:
-        k3s_node_token: >-
-          {{
-            k3s_token | default(
-              lookup('file', playbook_dir + '/../../.kube/k3s-node-token', errors='ignore') | trim,
-              true
-            )
-          }}
-      tags: [k3s]
-      when: enable_k3s | default(false) | bool
-
-    - name: Ensure /etc/rancher/k3s directory exists
-      ansible.builtin.file:
-        path: /etc/rancher/k3s
-        state: directory
-        mode: "0755"
-      tags: [k3s]
-      when: enable_k3s | default(false) | bool
-
-    - name: Deploy K3s server configuration
-      ansible.builtin.copy:
-        dest: /etc/rancher/k3s/config.yaml
-        content: >-
-          {{
-            (k3s_server_config | default({
-              'write-kubeconfig-mode': '0644',
-              'disable': ['traefik', 'servicelb'],
-              'tls-san': k3s_tls_san | default([ansible_host, inventory_hostname])
-            })) | combine({'token': k3s_node_token} if k3s_node_token | default('') | length > 0 else {}) | to_nice_yaml
-          }}
-        mode: "0644"
-      register: k3s_server_config_result
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Deploy K3s agent configuration
-      ansible.builtin.copy:
-        dest: /etc/rancher/k3s/config.yaml
-        content: >-
-          {{
-            {
-              'server': k3s_server_url,
-              'token': k3s_node_token
-            } | to_nice_yaml
-          }}
-        mode: "0644"
-      register: k3s_agent_config_result
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'agent'
-
-    - name: Download K3s installer script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: /tmp/k3s-install.sh
-        mode: "0700"
-      tags: [k3s]
-      when: enable_k3s | default(false) | bool
-
-    - name: Execute K3s server installation
-      ansible.builtin.command:
-        cmd: /tmp/k3s-install.sh
-        creates: /etc/systemd/system/k3s.service
-      environment:
-        INSTALL_K3S_VERSION: "{{ k3s_version | default('v1.31.2+k3s1') }}"
-        INSTALL_K3S_EXEC: "server"
-      register: k3s_server_install
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Execute K3s agent installation
-      ansible.builtin.command:
-        cmd: /tmp/k3s-install.sh
-        creates: /etc/systemd/system/k3s-agent.service
-      environment:
-        INSTALL_K3S_VERSION: "{{ k3s_version | default('v1.31.2+k3s1') }}"
-        INSTALL_K3S_EXEC: "agent"
-        K3S_URL: "{{ k3s_server_url }}"
-        K3S_TOKEN: "{{ k3s_node_token }}"
-      register: k3s_agent_install
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'agent'
-
-    - name: Clean up K3s installer script
-      ansible.builtin.file:
-        path: /tmp/k3s-install.sh
-        state: absent
-      tags: [k3s]
-      when: enable_k3s | default(false) | bool
-
-    - name: Ensure K3s server service is enabled and running
-      ansible.builtin.systemd:
-        name: k3s
-        enabled: true
-        state: started
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Restart K3s server on config change
-      ansible.builtin.systemd:
-        name: k3s
-        state: restarted
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-        - k3s_server_config_result.changed
-        - not (k3s_server_install.changed | default(false))
-
-    - name: Ensure K3s agent service is enabled and running
-      ansible.builtin.systemd:
-        name: k3s-agent
-        enabled: true
-        state: started
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'agent'
-
-    - name: Restart K3s agent on config change
-      ansible.builtin.systemd:
-        name: k3s-agent
-        state: restarted
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'agent'
-        - k3s_agent_config_result.changed
-        - not (k3s_agent_install.changed | default(false))
-
-    - name: Slurp K3s node token from server
-      ansible.builtin.slurp:
-        src: /var/lib/rancher/k3s/server/node-token
-      register: k3s_server_token_b64
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Ensure local .kube directory exists
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/../../.kube"
-        state: directory
-        mode: "0700"
-      delegate_to: localhost
-      become: false
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Save K3s node token locally for agents
-      ansible.builtin.copy:
-        content: "{{ k3s_server_token_b64.content | b64decode | trim }}"
-        dest: "{{ playbook_dir }}/../../.kube/k3s-node-token"
-        mode: "0600"
-      delegate_to: localhost
-      become: false
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Fetch kubeconfig to local repository
-      ansible.builtin.fetch:
-        src: /etc/rancher/k3s/k3s.yaml
-        dest: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
-        flat: true
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
-
-    - name: Copy cluster kubeconfig as default .kube/k3s.yaml
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
-        dest: "{{ playbook_dir }}/../../.kube/k3s.yaml"
-        mode: "0600"
-      delegate_to: localhost
-      become: false
-      tags: [k3s]
-      when:
-        - enable_k3s | default(false) | bool
-        - k3s_role | default('server') == 'server'
 
     # --- Tailscale (Node baseline) ---
     - name: Download Tailscale apt repository key
@@ -377,10 +164,35 @@
 
     - name: Join tailnet if auth key provided and not running
       ansible.builtin.command:
-        cmd: "tailscale up --hostname {{ tailscale_hostname }} --authkey {{ tailscale_authkey }} --operator={{ ansible_user }}"
+        cmd: >-
+          tailscale up
+          --hostname {{ tailscale_hostname }}
+          --authkey {{ tailscale_authkey }}
+          --operator={{ ansible_user }}
+          {{ ('--advertise-tags=' + tailscale_tags) if tailscale_tags | default('') | length > 0 else '' }}
+          {{ tailscale_extra_args | default('') }}
       tags: [tailscale]
       when:
         - tailscale_authkey | length > 0
         - tailscale_status.stdout | length == 0 or ((tailscale_status.stdout | default('{}', true)) | from_json).BackendState | default('') != 'Running'
       no_log: true
       changed_when: true
+
+  handlers:
+    - name: Restart byedpi-transparent
+      ansible.builtin.systemd:
+        name: byedpi-transparent
+        state: restarted
+        daemon_reload: true
+
+    - name: Restart byedpi-socks
+      ansible.builtin.systemd:
+        name: byedpi-socks
+        state: restarted
+        daemon_reload: true
+
+    - name: Restart byedpi-nat
+      ansible.builtin.systemd:
+        name: byedpi-nat
+        state: restarted
+        daemon_reload: true

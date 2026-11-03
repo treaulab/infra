@@ -1,7 +1,7 @@
 {
 	"tagOwners": {
-		"tag:ci-ephemeral": ["autogroup:admin"],
-		"tag:untrusted":    ["autogroup:admin"]
+		"tag:ci-ephemeral": ["autogroup:admin", "tag:ci-ephemeral"],
+		"tag:untrusted":    ["autogroup:admin", "tag:untrusted"]
 	},
 	"grants": [
 		{"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]}
