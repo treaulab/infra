@@ -1,0 +1,27 @@
+---
+# compose/homelab/jellyfin/compose.yml
+# Deployed to beefyboi via: just deploy-compose beefyboi stack=jellyfin src=compose/homelab/jellyfin
+services:
+  jellyfin:
+    image: docker.io/jellyfin/jellyfin:10
+    container_name: jellyfin
+    restart: unless-stopped
+    network_mode: host
+    # Nvidia hardware transcoding
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video]
+    environment:
+      - JELLYFIN_PublishedServerUrl=http://${HOST_IP}:8096
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ${MEDIA_PATH}:/media:ro
+
+volumes:
+  jellyfin-config:
+  jellyfin-cache:
