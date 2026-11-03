@@ -60,7 +60,7 @@
   when: stack_env_file is defined and (stack_env_file | length > 0)
 
 - name: Converge Docker Compose service
-  ansible.builtin.command:
+  ansible.builtin.shell:
     cmd: docker compose pull && docker compose up -d --remove-orphans
     chdir: "{{ deploy_root | default('/opt/stacks') }}/{{ stack_name }}"
   changed_when: true
