@@ -12,6 +12,9 @@ setup:
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
+    if command -v pre-commit >/dev/null 2>&1; then
+      pre-commit install
+    fi
     echo "OK. Next: cp fleet/inventory/prod.yml.example fleet/inventory/prod.yml"
     echo "            cp .envrc.example .envrc && chmod 600 .envrc && direnv allow ."
 

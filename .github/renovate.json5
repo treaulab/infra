@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  // Conventional commits matching repo standard (e.g. chore(deps): ...)
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "timezone": "America/New_York",
+
+  // Group related updates to avoid pull-request spam
+  "packageRules": [
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Group OpenTofu/Terraform providers",
+      "matchManagers": ["terraform"],
+      "groupName": "terraform-providers"
+    },
+    {
+      "description": "Group Docker container images",
+      "matchDatasources": ["docker"],
+      "groupName": "docker-images"
+    },
+    {
+      "description": "Group Node/npm dev dependencies",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "npm-dev-dependencies"
+    }
+  ]
+}
