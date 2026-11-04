@@ -1,0 +1,15 @@
+---
+# roles/common/defaults/main.yml
+# SSH Hardening
+enable_ssh_hardening: false
+ssh_password_authentication: "no"
+ssh_permit_root_login: "prohibit-password"
+ssh_x11_forwarding: "no"
+
+# Journald Limits
+journald_system_max_use: "500M"
+journald_system_max_file_size: "100M"
+journald_max_retention_sec: "1month"
+
+# Automated package autoremove
+enable_apt_autoremove_cron: true

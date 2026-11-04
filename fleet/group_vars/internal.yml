@@ -1,0 +1,3 @@
+---
+# fleet/inventory/group_vars/internal.yml — Internal LAN hosts (no public ports).
+base_ufw_ports: ["22"]

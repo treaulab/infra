@@ -4,6 +4,27 @@ set shell := ["bash", "-uc"]
 _default:
     @just --list
 
+# Display fleet inventory hierarchy and capability tiers.
+matrix:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd fleet
+    echo "=== Inventory Hierarchy ==="
+    ansible-inventory -i inventory/prod.yml --graph
+    echo ""
+    echo "=== Fleet Capability Matrix ==="
+    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "Host" "UFW" "Fail2ban" "SSH-Hard" "Docker" "ByeDPI" "K3s"
+    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "------------------" "------" "---------" "---------" "--------" "----------" "------------"
+    for host in $(ansible all -i inventory/prod.yml --list-hosts 2>/dev/null | tail -n +2 | tr -d ' '); do
+      vars=$(ansible-inventory -i inventory/prod.yml --host "$host" 2>/dev/null)
+      ufw=$(echo "$vars" | jq -r 'if .enable_ufw == true then "ON" else "OFF" end')
+      f2b=$(echo "$vars" | jq -r 'if .enable_fail2ban == true then "ON" else "OFF" end')
+      ssh_h=$(echo "$vars" | jq -r 'if .enable_ssh_hardening == true then "ON" else "OFF" end')
+      byedpi=$(echo "$vars" | jq -r 'if .enable_byedpi == true then "ON" else "OFF" end')
+      k3s=$(echo "$vars" | jq -r 'if .enable_k3s == true then (.k3s_role // "ON") else "OFF" end')
+      printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "$host" "$ufw" "$f2b" "$ssh_h" "ON" "$byedpi" "$k3s"
+    done
+
 # Install/verify local tooling and Ansible collections.
 setup:
     #!/usr/bin/env bash
@@ -80,14 +101,15 @@ check:
     git diff --check
     echo "OK"
 
-# Converge OS baseline (UFW + Tailscale + Docker) on one host (or trusted fleet).
-converge node="trusted":
+# Full fleet convergence: OS baseline → compose stacks → k3s (site.yml).
+# Scope to a single host or group with node=<name>.
+converge node="all":
     #!/usr/bin/env bash
     set -euo pipefail
     target="{{node}}"
     target="${target#node=}"
     cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
+    ansible-playbook -i inventory/prod.yml playbooks/site.yml --limit "$target"
     cd ..
     mkdir -p .kube
     for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
@@ -100,14 +122,14 @@ converge node="trusted":
       fi
     done
 
-# Converge K3s cluster control plane & worker agents (default: cluster).
+# Converge K3s cluster nodes (runs host.yml scoped to cluster group).
 k3s node="cluster":
     #!/usr/bin/env bash
     set -euo pipefail
     target="{{node}}"
     target="${target#node=}"
     cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/k3s.yml --limit "$target"
+    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
     cd ..
     mkdir -p .kube
     for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
@@ -168,7 +190,7 @@ deploy-public env="prod":
     mkdir -p logs
     cd fleet
     ANSIBLE_LOG_PATH="../logs/deploy-public-{{env}}-$(date +%Y%m%d-%H%M%S).log" \
-      ansible-playbook -i "inventory/{{env}}.yml" playbooks/deploy.yml
+      ansible-playbook -i "inventory/{{env}}.yml" playbooks/compose.yml --limit edge
 
 # Deploy Docker Compose stack(s) to a host under /opt/stacks/<stack>.
 # Runs inventory-declared compose_stacks for the host by default.

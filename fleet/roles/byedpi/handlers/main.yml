@@ -1,0 +1,20 @@
+---
+# roles/byedpi/handlers/main.yml
+
+- name: Restart byedpi-transparent
+  ansible.builtin.systemd:
+    name: byedpi-transparent
+    state: restarted
+    daemon_reload: true
+
+- name: Restart byedpi-socks
+  ansible.builtin.systemd:
+    name: byedpi-socks
+    state: restarted
+    daemon_reload: true
+
+- name: Restart byedpi-nat
+  ansible.builtin.systemd:
+    name: byedpi-nat
+    state: restarted
+    daemon_reload: true

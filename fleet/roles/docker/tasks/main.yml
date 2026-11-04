@@ -1,0 +1,34 @@
+---
+# roles/docker/tasks/main.yml — Docker Engine installation and pruning.
+
+- name: Install Docker via official script
+  ansible.builtin.shell:
+    cmd: set -o pipefail && curl -fsSL https://get.docker.com | sh
+    executable: /bin/bash
+  args:
+    creates: /usr/bin/docker
+  tags: [docker]
+  # noqa: command-instead-of-module
+
+- name: Enable and start Docker service
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  tags: [docker]
+
+- name: Add deploy user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+  tags: [docker]
+
+# --- Docker Pruning ---
+- name: Schedule weekly Docker system prune
+  ansible.builtin.cron:
+    name: "Docker system and image prune"
+    special_time: weekly
+    job: "/usr/bin/docker system prune -af --filter 'until={{ docker_prune_until }}' >/dev/null 2>&1"
+  when: enable_docker_prune_cron | default(true) | bool
+  tags: [docker, maintenance]

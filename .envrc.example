@@ -13,6 +13,9 @@ export TAILSCALE_OAUTH_CLIENT_SECRET="tskey-client-..."
 # Tailscale device auth key for fleet host enrollment (Ansible converge).
 # export TAILSCALE_AUTHKEY="tskey-auth-..."
 
+# K3s cluster node token (used by Ansible k3s role; never commit the real value).
+# export ANSIBLE_K3S_TOKEN="K103..."
+
 # Fallback instead of the OAuth pair; use one path, not both:
 # export TAILSCALE_API_KEY="tskey-api-..."
 

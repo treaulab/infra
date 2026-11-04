@@ -1,0 +1,118 @@
+---
+# roles/common/tasks/main.yml — Base packages, sudoers, unattended upgrades, SSH hardening, journald limits.
+
+- name: Wait for cloud-init to finish if running
+  ansible.builtin.command:
+    cmd: cloud-init status --wait
+  changed_when: false
+  failed_when: false
+
+- name: Configure passwordless sudo for admin user
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/ansible-{{ ansible_user }}"
+    content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+  tags: [sudoers]
+
+- name: Install base security & utility packages
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - unattended-upgrades
+      - curl
+      - ca-certificates
+      - rsync
+      - gnupg
+      - htop
+      - jq
+      - tmux
+      - netcat-openbsd
+      - git
+      - python3-debian
+      - python3-apt
+      - dnsutils
+      - lsof
+      - cron
+    state: present
+    update_cache: true
+  tags: [packages]
+
+- name: Configure unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/51-unattended-upgrades-treaulab
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+  tags: [packages]
+
+# --- SSH Hardening ---
+- name: Configure SSH security hardening on servers
+  when: enable_ssh_hardening | default(false) | bool
+  tags: [ssh]
+  block:
+    - name: Ensure sshd_config.d directory exists
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure SSH security hardening drop-in
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-hardened.conf
+        content: |
+          # Managed by Ansible (roles/common). Do not edit manually.
+          PasswordAuthentication {{ ssh_password_authentication }}
+          KbdInteractiveAuthentication no
+          PermitRootLogin {{ ssh_permit_root_login }}
+          X11Forwarding {{ ssh_x11_forwarding }}
+        owner: root
+        group: root
+        mode: "0600"
+        validate: "/usr/sbin/sshd -t -f /etc/ssh/sshd_config"
+      notify: Restart sshd
+
+- name: Remove SSH security hardening drop-in on unhardened hosts
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-hardened.conf
+    state: absent
+  when: not (enable_ssh_hardening | default(false) | bool)
+  notify: Restart sshd
+  tags: [ssh]
+
+# --- Journald Retention Limits ---
+- name: Ensure journald.conf.d directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [journald]
+
+- name: Configure journald retention limits drop-in
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/99-retention.conf
+    content: |
+      # Managed by Ansible (roles/common). Do not edit manually.
+      [Journal]
+      SystemMaxUse={{ journald_system_max_use }}
+      SystemMaxFileSize={{ journald_system_max_file_size }}
+      MaxRetentionSec={{ journald_max_retention_sec }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-journald
+  tags: [journald]
+
+# --- Package Pruning ---
+- name: Schedule weekly apt autoremove and clean
+  ansible.builtin.cron:
+    name: "Apt package autoremove and clean"
+    special_time: weekly
+    job: "/usr/bin/apt-get autoremove -y --purge >/dev/null 2>&1 && /usr/bin/apt-get clean >/dev/null 2>&1"
+  when: enable_apt_autoremove_cron | default(true) | bool
+  tags: [maintenance]

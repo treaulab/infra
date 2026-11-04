@@ -1,17 +1,23 @@
 ---
-# fleet/playbooks/compose.yml — Master Docker Compose convergence playbook.
-# Strictly deploys all stacks under {{ deploy_root | default('/opt/stacks') }}/<stack_name>.
+# fleet/playbooks/compose.yml — Converge Docker Compose stacks declared in inventory.
 - name: Converge Docker Compose Stacks
   hosts: "{{ target | default('all') }}"
   become: true
   gather_facts: false
   tasks:
-    - name: Converge declared inventory compose stacks
-      ansible.builtin.include_tasks: tasks/compose_stack.yml
+    - name: Sync static website source (edge hosts only)
+      ansible.builtin.include_role:
+        name: website
+      when: website_src is defined and (website_src | length > 0)
+
+    - name: Converge inventory-declared compose stacks
+      ansible.builtin.include_role:
+        name: compose_stack
       vars:
         stack_name: "{{ item.name }}"
         stack_src: "{{ item.src }}"
-        stack_env_file: "{{ item.env_file | default(omit) }}"
+        stack_env_content: "{{ item.env_content | default('') }}"
+        stack_env_file: "{{ item.env_file | default('') }}"
         stack_files: "{{ item.files | default([]) }}"
         deploy_user: "{{ item.user | default(ansible_user) }}"
       loop: "{{ compose_stacks | default([]) }}"
@@ -20,11 +26,13 @@
       when: compose_stacks is defined and (compose_stacks | length > 0)
 
     - name: Converge ad-hoc specified compose stack
-      ansible.builtin.include_tasks: tasks/compose_stack.yml
+      ansible.builtin.include_role:
+        name: compose_stack
       vars:
         stack_name: "{{ adhoc_stack_name }}"
         stack_src: "{{ adhoc_stack_src }}"
-        stack_env_file: "{{ adhoc_stack_env_file | default(omit) }}"
+        stack_env_content: "{{ adhoc_stack_env_content | default('') }}"
+        stack_env_file: "{{ adhoc_stack_env_file | default('') }}"
         deploy_user: "{{ adhoc_deploy_user | default(ansible_user) }}"
       when:
         - adhoc_stack_name is defined and (adhoc_stack_name | length > 0)

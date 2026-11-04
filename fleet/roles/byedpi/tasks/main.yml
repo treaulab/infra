@@ -1,5 +1,5 @@
 ---
-# tasks/byedpi.yml — Converges ByeDPI transparent & SOCKS5 proxy on workstations
+# roles/byedpi/tasks/main.yml — ByeDPI transparent & SOCKS5 proxy on workstations.
 
 - name: Ensure conflicting zapret2 service is stopped and disabled
   ansible.builtin.systemd:

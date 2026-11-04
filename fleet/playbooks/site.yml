@@ -1,0 +1,5 @@
+---
+# fleet/playbooks/site.yml — Full fleet convergence in one shot.
+# OS baseline (incl. k3s where enabled) → compose stacks.
+- import_playbook: host.yml
+- import_playbook: compose.yml

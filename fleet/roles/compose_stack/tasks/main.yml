@@ -1,0 +1,56 @@
+---
+# roles/compose_stack/tasks/main.yml — Universal Docker Compose convergence.
+# Parameters passed as role vars (stack_name, stack_src, etc.).
+
+- name: Assert required stack variables are defined
+  ansible.builtin.assert:
+    that:
+      - stack_name | length > 0
+      - stack_src | length > 0
+    fail_msg: "Both stack_name and stack_src must be provided."
+
+- name: Enforce stack destination directory
+  ansible.builtin.file:
+    path: "{{ deploy_root }}/{{ stack_name }}"
+    state: directory
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0755"
+
+- name: Install compose.yml for stack
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ stack_src }}/compose.yml"
+    dest: "{{ deploy_root }}/{{ stack_name }}/compose.yml"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0644"
+
+- name: Install additional stack files if configured
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ item.src }}"
+    dest: "{{ deploy_root }}/{{ stack_name }}/{{ item.dest | default(item.src | basename) }}"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop: "{{ stack_files }}"
+  loop_control:
+    label: "{{ item.dest | default(item.src | basename) }}"
+
+- name: Render stack .env content if provided
+  ansible.builtin.copy:
+    dest: "{{ deploy_root }}/{{ stack_name }}/.env"
+    content: "{{ stack_env_content }}"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0600"
+  when: stack_env_content | length > 0
+
+- name: Copy stack .env file if provided
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ stack_env_file }}"
+    dest: "{{ deploy_root }}/{{ stack_name }}/.env"
+    owner: "{{ deploy_user | default(ansible_user) }}"
+    mode: "0600"
+  when: stack_env_file | length > 0
+
+- name: Converge Docker Compose service
+  ansible.builtin.shell:
+    cmd: docker compose pull && docker compose up -d --remove-orphans
+    chdir: "{{ deploy_root }}/{{ stack_name }}"
+  changed_when: true

@@ -1,0 +1,8 @@
+---
+# fleet/inventory/group_vars/all.yml — Variables that apply to every host.
+domain: treau.me
+acme_email: zeuitt@gmail.com
+caddy_version: "2.11"
+deploy_root: /opt/stacks
+site_ip: 20.98.16.138
+base_ufw_ports: ["22", "80", "443"]

@@ -1,0 +1,12 @@
+---
+# roles/fail2ban/defaults/main.yml
+fail2ban_bantime: 1h
+fail2ban_findtime: 10m
+fail2ban_maxretry: 5
+fail2ban_banaction: ufw
+# Whitelist local loopback, LAN subnet, and Tailscale CGNAT range
+fail2ban_ignoreip:
+  - "127.0.0.1/8"
+  - "::1"
+  - "192.168.10.0/24"
+  - "100.64.0.0/10"

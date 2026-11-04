@@ -1,0 +1,8 @@
+---
+# roles/compose_stack/defaults/main.yml
+deploy_root: /opt/stacks
+stack_name: ""
+stack_src: ""
+stack_env_content: ""
+stack_env_file: ""
+stack_files: []

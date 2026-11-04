@@ -1,0 +1,4 @@
+---
+# roles/docker/defaults/main.yml
+enable_docker_prune_cron: true
+docker_prune_until: "168h"

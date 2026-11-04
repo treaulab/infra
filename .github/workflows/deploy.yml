@@ -1,13 +1,16 @@
 name: deploy
-# Production CD for the MAIN server: converge Caddy + static site on the Azure
+# Production CD for the main server: converge Caddy + static site on the Azure
 # VPS with Ansible. The Worker and homelab are not in this path.
 on:
   push:
     branches: [main]
     paths:
       - compose/public/**
-      - fleet/playbooks/deploy.yml
-      - fleet/playbooks/tasks/**
+      - fleet/playbooks/compose.yml
+      - fleet/playbooks/site.yml
+      - fleet/roles/website/**
+      - fleet/roles/compose_stack/**
+      - fleet/group_vars/edge.yml
       - .github/workflows/deploy.yml
   workflow_dispatch:
 
@@ -33,9 +36,9 @@ jobs:
       - name: Prepare example inventory
         working-directory: fleet
         run: cp inventory/prod.yml.example inventory/prod.yml
-      - name: Syntax-check deploy playbook
+      - name: Syntax-check compose playbook
         working-directory: fleet
-        run: ansible-playbook -i inventory/prod.yml playbooks/deploy.yml --syntax-check
+        run: ansible-playbook -i inventory/prod.yml playbooks/compose.yml --syntax-check
       - name: Validate Caddy compose config
         working-directory: compose/public/caddy
         run: |
@@ -74,7 +77,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r fleet/requirements.txt
-      - name: Build inventory + key from secrets (fail fast if missing)
+      - name: Build inventory + SSH key from secrets (fail fast if missing)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -88,7 +91,7 @@ jobs:
             [ -n "${!v:-}" ] || missing="$missing $v"
           done
           if [ -n "$missing" ]; then
-            echo "::error::Deploy secrets not set:$missing — add them in repo Settings → Secrets and variables → Actions. This is the production deploy path for treau.me (Azure VPS)."
+            echo "::error::Deploy secrets not set:$missing — add them in repo Settings → Secrets and variables → Actions."
             exit 1
           fi
           mkdir -p ~/.ssh
@@ -111,7 +114,13 @@ jobs:
                     ansible_host: ${SSH_HOST}
                     ansible_user: ${SSH_USER}
                     ansible_ssh_private_key_file: ${HOME}/.ssh/deploy
+                    compose_stacks:
+                      - name: caddy
+                        src: compose/public/caddy
+                        env_content: "{{ caddy_env_content }}"
+                        files:
+                          - src: compose/public/caddy/Caddyfile
           EOF
       - name: Deploy over SSH
         working-directory: fleet
-        run: ansible-playbook -i inventory/ci.yml playbooks/deploy.yml
+        run: ansible-playbook -i inventory/ci.yml playbooks/compose.yml --limit edge
