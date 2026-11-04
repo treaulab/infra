@@ -25,7 +25,7 @@ jobs:
         root: [azure, cloudflare, github, tailscale, proxmox]
     steps:
       - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
+      - uses: opentofu/setup-opentofu@v2
       - name: Cache OpenTofu providers
         uses: actions/cache@v4
         with:
