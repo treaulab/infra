@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360 # ceiling binds debug holds only; hourly legs self-exit ~55 min in
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Stagger fan-out (tenant jobs set 180+; 0 = no-op)
         run: sleep ${{ inputs.startup-delay-seconds }}
