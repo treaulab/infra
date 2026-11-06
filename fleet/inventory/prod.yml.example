@@ -1,4 +1,4 @@
-# Copy to fleet/inventory/prod.yml (gitignored) and fill.
+# Reference template for fleet/inventory/prod.yml.
 # Variables and role capabilities are managed in fleet/group_vars/.
 all:
   children:
@@ -7,7 +7,7 @@ all:
         edge:
           hosts:
             vps:
-              ansible_host: 1.2.3.4 # VPS public IP
+              ansible_host: vps             # Tailscale MagicDNS or 100.x IP
               ansible_user: azureuser
               ansible_ssh_private_key_file: ~/.ssh/id_ed25519
               compose_stacks:

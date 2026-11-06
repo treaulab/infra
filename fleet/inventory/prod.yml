@@ -5,7 +5,7 @@ all:
         edge:
           hosts:
             vps:
-              ansible_host: 20.98.16.138
+              ansible_host: vps
               ansible_user: azureuser
               ansible_ssh_private_key_file: ~/.ssh/King_key.pem
               compose_stacks:
