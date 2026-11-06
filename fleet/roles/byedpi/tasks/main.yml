@@ -54,10 +54,12 @@
       # Clean existing redirect rules
       iptables -t nat -D OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports "$T" 2>/dev/null || true
       iptables -t nat -D OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports "$T" 2>/dev/null || true
-      # Exclude local and private IP ranges
-      for c in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 224.0.0.0/4; do
+      # Exclude local, private, and Tailscale (CGNAT) IP ranges
+      for c in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 224.0.0.0/4 100.64.0.0/10; do
         iptables -t nat -C OUTPUT -d "$c" -j RETURN 2>/dev/null || iptables -t nat -I OUTPUT -d "$c" -j RETURN
       done
+      # Exclude Tailscale interface directly
+      iptables -t nat -C OUTPUT -o tailscale0 -j RETURN 2>/dev/null || iptables -t nat -I OUTPUT -o tailscale0 -j RETURN
       # Exclude proxy user to avoid loops
       iptables -t nat -C OUTPUT -m owner --uid-owner "$U" -j RETURN 2>/dev/null || iptables -t nat -I OUTPUT -m owner --uid-owner "$U" -j RETURN
       # Redirect HTTP and HTTPS to transparent proxy

@@ -158,7 +158,7 @@ The infrastructure uses a two-tier circumvention model:
    - Workstations use direct ISP router gateway `192.168.10.1` (avoids dependence on PVE router VM).
    - Runs **`byedpi`** (`ciadpi` v0.17.3) locally via Ansible:
      - `byedpi-transparent.service`: Transparent proxy on `127.0.0.1:1081` (`--oob 1+s --auto=torst`).
-     - `byedpi-nat.service`: Iptables redirect for outbound ports 80 & 443 with private LAN exclusions.
+     - `byedpi-nat.service`: Iptables redirect for outbound ports 80 & 443 with private LAN and Tailscale (100.64.0.0/10, tailscale0) exclusions.
      - `byedpi-socks.service`: SOCKS5 proxy on `127.0.0.1:1080`.
    - **Why `--oob 1+s --auto=torst` is optimal**:
      - `--oob 1+s`: Splits TLS Client Hello 1 byte after the SNI offset and marks it with TCP Urgent flag. TSPU DPI fails stream reassembly, while legitimate servers process it cleanly.
