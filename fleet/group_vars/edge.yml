@@ -1,7 +1,7 @@
 ---
 # fleet/group_vars/edge.yml — Azure VPS (Caddy + static site).
 
-base_ufw_ports: ["80", "443"]
+base_ufw_ports: ["22", "80", "443"]
 tailscale_tags: "tag:server"
 tailscale_extra_args: "--ssh"
 
