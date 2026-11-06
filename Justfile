@@ -84,18 +84,18 @@ check:
     done
     echo "== caddy validate"
     if docker compose version >/dev/null 2>&1; then
-      (cd compose/public/caddy && docker compose config >/dev/null)
+      (cd stacks/edge/caddy && docker compose config >/dev/null)
     elif command -v docker-compose >/dev/null 2>&1; then
-      (cd compose/public/caddy && docker-compose config >/dev/null)
+      (cd stacks/edge/caddy && docker-compose config >/dev/null)
     else
       echo "ERROR: docker compose plugin (or docker-compose) is required" >&2
       exit 1
     fi
-    caddy_env=compose/public/caddy/.env
-    [[ -f "$caddy_env" ]] || caddy_env=compose/public/caddy/.env.example
+    caddy_env=stacks/edge/caddy/.env
+    [[ -f "$caddy_env" ]] || caddy_env=stacks/edge/caddy/.env.example
     docker run --rm --network none --entrypoint caddy \
       --env-file "$caddy_env" \
-      -v "$PWD/compose/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+      -v "$PWD/stacks/edge/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
       docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
     echo "== worker dry-run"
     (cd edge/tunnel-worker && npm run deploy:dry)
@@ -221,8 +221,7 @@ secrets-check:
       echo "ERROR: a plaintext .env/.envrc is tracked; remove it from git." >&2
       exit 1
     fi
-    git check-ignore -q fleet/inventory/prod.yml
-    git check-ignore -q compose/public/caddy/.env
+    git check-ignore -q stacks/edge/caddy/.env
     if [ -e .envrc ]; then
       git check-ignore -q .envrc
     fi

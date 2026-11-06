@@ -8,7 +8,7 @@ const APEX_HOST = "treau.me";
 const WWW_HOST = "www.treau.me";
 const TUNNEL_HOST = "go.treau.me";
 
-// Mirror of compose/public/caddy/Caddyfile security posture, enforced at the
+// Mirror of stacks/edge/caddy/Caddyfile security posture, enforced at the
 // worker. The worker serves go.treau.me only; the apex is the Azure VPS.
 // Apex treau.me is static-only (reputation protection): no /t/* or /p/*
 // proxying there. Tunnels/pipes live on go.treau.me.
@@ -36,7 +36,7 @@ function withSecurityHeaders(res) {
 	out.headers.set("Cross-Origin-Resource-Policy", "same-origin");
 	out.headers.delete("Server");
 	out.headers.delete("X-Powered-By");
-	// Error-response cache policy mirrors compose/public/caddy/Caddyfile:
+	// Error-response cache policy mirrors stacks/edge/caddy/Caddyfile:
 	// there are no hashed asset names, so nothing here may promise year-long
 	// immutable caching. One short TTL for everything; an existing
 	// Cache-Control (e.g. no-store on status pages) is preserved.

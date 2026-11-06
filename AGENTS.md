@@ -6,14 +6,14 @@ them.
 
 **Production surfaces**
 - Azure VPS (Ubuntu 24.04) — treau.me's **main website server**: Caddy serves
-  static files only (`compose/public/website/src` is the source of truth);
+  static files only (`stacks/edge/caddy/site` is the source of truth);
   `deploy.yml` auto-deploys on main. It does not proxy homelab services.
 - Cloudflare Worker (`edge/tunnel-worker`) — serves `go.treau.me` only:
   `/t/*` HTTP tunnels + `/p/*` SSH pipes (Durable Objects); no website assets.
 
 **Map** — `platform/` (OpenTofu: azure, cloudflare, github, proxmox, tailscale),
-`fleet/` (Ansible: host OS baseline + public compose stack convergence), `compose/` (public Azure
-Caddy/site), `kubernetes/` (Kubernetes cluster manifests), `edge/` (Cloudflare Worker), `tools/`
+`fleet/` (Ansible: host OS baseline + stack convergence), `stacks/` (edge Azure
+Caddy/site + homelab stacks), `kubernetes/` (Kubernetes cluster manifests), `edge/` (Cloudflare Worker), `tools/`
 (operator helpers), `docs/runbooks.md` (ops manual), `Justfile` (operator
 interface), `.github/workflows/` (CI/CD).
 

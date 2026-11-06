@@ -12,10 +12,8 @@ all:
               ansible_ssh_private_key_file: ~/.ssh/id_ed25519
               compose_stacks:
                 - name: caddy
-                  src: compose/public/caddy
+                  src: stacks/edge/caddy
                   env_content: "{{ caddy_env_content }}"
-                  files:
-                    - src: compose/public/caddy/Caddyfile
         internal:
           children:
             cluster:
@@ -53,8 +51,8 @@ all:
           ansible_user: beefyboy
           compose_stacks:
             - name: jellyfin
-              src: compose/homelab/jellyfin
-              env_file: compose/homelab/jellyfin/.env.example
+              src: stacks/homelab/jellyfin
+              env_file: stacks/homelab/jellyfin/.env.example
         scrawnyboi:
           ansible_host: 192.168.10.67   # Workstation LAN IP
           ansible_user: scrawnyboi

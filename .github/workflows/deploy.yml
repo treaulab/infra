@@ -5,10 +5,9 @@ on:
   push:
     branches: [main]
     paths:
-      - compose/public/**
+      - stacks/edge/**
       - fleet/playbooks/compose.yml
       - fleet/playbooks/site.yml
-      - fleet/roles/website/**
       - fleet/roles/compose_stack/**
       - fleet/group_vars/edge.yml
       - .github/workflows/deploy.yml
@@ -40,18 +39,18 @@ jobs:
         working-directory: fleet
         run: ansible-playbook -i inventory/prod.yml playbooks/compose.yml --syntax-check
       - name: Validate Caddy compose config
-        working-directory: compose/public/caddy
+        working-directory: stacks/edge/caddy
         run: |
           caddy_env=.env
           [[ -f "$caddy_env" ]] || caddy_env=.env.example
           docker compose --env-file "$caddy_env" config --quiet
       - name: Validate Caddyfile syntax
         run: |
-          caddy_env=compose/public/caddy/.env
-          [[ -f "$caddy_env" ]] || caddy_env=compose/public/caddy/.env.example
+          caddy_env=stacks/edge/caddy/.env
+          [[ -f "$caddy_env" ]] || caddy_env=stacks/edge/caddy/.env.example
           docker run --rm --network none --entrypoint caddy \
             --env-file "$caddy_env" \
-            -v "$PWD/compose/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/stacks/edge/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
 
   deploy:
@@ -116,10 +115,8 @@ jobs:
                     ansible_ssh_private_key_file: ${HOME}/.ssh/deploy
                     compose_stacks:
                       - name: caddy
-                        src: compose/public/caddy
+                        src: stacks/edge/caddy
                         env_content: "{{ caddy_env_content }}"
-                        files:
-                          - src: compose/public/caddy/Caddyfile
           EOF
       - name: Deploy over SSH
         working-directory: fleet

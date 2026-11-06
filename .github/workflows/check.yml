@@ -81,18 +81,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Validate Caddy compose config
-        working-directory: compose/public/caddy
+        working-directory: stacks/edge/caddy
         run: |
           caddy_env=.env
           [[ -f "$caddy_env" ]] || caddy_env=.env.example
           docker compose --env-file "$caddy_env" config --quiet
       - name: Validate Caddyfile syntax
         run: |
-          caddy_env=compose/public/caddy/.env
-          [[ -f "$caddy_env" ]] || caddy_env=compose/public/caddy/.env.example
+          caddy_env=stacks/edge/caddy/.env
+          [[ -f "$caddy_env" ]] || caddy_env=stacks/edge/caddy/.env.example
           docker run --rm --network none --entrypoint caddy \
             --env-file "$caddy_env" \
-            -v "$PWD/compose/public/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/stacks/edge/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
 
   worker:

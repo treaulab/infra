@@ -1,6 +1,6 @@
 ---
-# compose/homelab/jellyfin/compose.yml
-# Deployed to beefyboi via: just deploy-compose beefyboi stack=jellyfin src=compose/homelab/jellyfin
+# stacks/homelab/jellyfin/compose.yml
+# Deployed to beefyboi via: just deploy-compose beefyboi stack=jellyfin src=stacks/homelab/jellyfin
 services:
   jellyfin:
     image: docker.io/jellyfin/jellyfin:10

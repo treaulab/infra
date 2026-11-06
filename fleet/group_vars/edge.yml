@@ -1,6 +1,5 @@
 ---
 # fleet/group_vars/edge.yml — Azure VPS (Caddy + static site).
-website_src: compose/public/website/src
 
 caddy_env_content: |
   # Managed by Ansible. Do not edit on the host.

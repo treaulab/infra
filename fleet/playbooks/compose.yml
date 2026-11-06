@@ -5,11 +5,6 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Sync static website source (edge hosts only)
-      ansible.builtin.include_role:
-        name: website
-      when: website_src is defined and (website_src | length > 0)
-
     - name: Converge inventory-declared compose stacks
       ansible.builtin.include_role:
         name: compose_stack

@@ -16,12 +16,12 @@
     owner: "{{ deploy_user | default(ansible_user) }}"
     mode: "0755"
 
-- name: Install compose.yml for stack
+- name: Synchronize stack directory contents
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../{{ stack_src }}/compose.yml"
-    dest: "{{ deploy_root }}/{{ stack_name }}/compose.yml"
+    src: "{{ playbook_dir }}/../../{{ stack_src }}/"
+    dest: "{{ deploy_root }}/{{ stack_name }}/"
     owner: "{{ deploy_user | default(ansible_user) }}"
-    mode: "0644"
+    mode: "preserve"
 
 - name: Install additional stack files if configured
   ansible.builtin.copy:
@@ -29,9 +29,10 @@
     dest: "{{ deploy_root }}/{{ stack_name }}/{{ item.dest | default(item.src | basename) }}"
     owner: "{{ deploy_user | default(ansible_user) }}"
     mode: "{{ item.mode | default('0644') }}"
-  loop: "{{ stack_files }}"
+  loop: "{{ stack_files | default([]) }}"
   loop_control:
     label: "{{ item.dest | default(item.src | basename) }}"
+  when: stack_files is defined and (stack_files | length > 0)
 
 - name: Render stack .env content if provided
   ansible.builtin.copy:

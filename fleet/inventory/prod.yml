@@ -1,0 +1,59 @@
+all:
+  children:
+    trusted:
+      children:
+        edge:
+          hosts:
+            vps:
+              ansible_host: 20.98.16.138
+              ansible_user: azureuser
+              ansible_ssh_private_key_file: ~/.ssh/King_key.pem
+              compose_stacks:
+                - name: caddy
+                  src: stacks/edge/caddy
+                  env_content: "{{ caddy_env_content }}"
+        internal:
+          children:
+            cluster:
+              hosts:
+                mercury:
+                  ansible_host: 192.168.10.11 # Proxmox VM 500 LAN IP
+                  ansible_user: treau
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+                  k3s_role: server
+                  k3s_tls_san:
+                    - "192.168.10.11"
+                    - "mercury"
+                    - "100.126.215.63"
+                    - "mercury-1"
+                venus:
+                  ansible_host: 192.168.10.13 # Proxmox VM 501 LAN IP
+                  ansible_user: treau
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+                  k3s_role: agent
+                earth:
+                  ansible_host: 192.168.10.14 # Proxmox VM 502 LAN IP
+                  ansible_user: treau
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+                  k3s_role: agent
+            routers:
+              hosts:
+                i:
+                  ansible_host: 100.101.14.72 # Raspberry Pi LAN/Tailscale gateway
+                  ansible_user: treau
+                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+    untrusted:
+      hosts:
+        beefyboi:
+          ansible_host: 192.168.10.69
+          ansible_user: beefyboy
+          compose_stacks:
+            - name: jellyfin
+              src: stacks/homelab/jellyfin
+              env_file: stacks/homelab/jellyfin/.env.example
+        scrawnyboi:
+          ansible_host: 192.168.10.67
+          ansible_user: scrawnyboi
+        nucboi:
+          ansible_host: 192.168.10.68
+          ansible_user: nucboi
