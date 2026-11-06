@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: production
-      url: https://${{ secrets.SITE_DOMAIN || 'treau.me' }}
+      url: https://treau.me
     # Serialize deploys; queue instead of cancelling a mid-flight release.
     concurrency:
       group: deploy-vps
@@ -99,8 +99,14 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
+          extra_args=()
+          if [ -n "${SSH_HOST:-}" ]; then
+            extra_args+=(-e "ansible_host=$SSH_HOST")
+          fi
+          if [ -n "${SSH_USER:-}" ]; then
+            extra_args+=(-e "ansible_user=$SSH_USER")
+          fi
           ansible-playbook -i inventory/prod.yml playbooks/compose.yml \
             --limit vps \
-            ${SSH_HOST:+-e ansible_host="$SSH_HOST"} \
-            ${SSH_USER:+-e ansible_user="$SSH_USER"} \
-            -e ansible_ssh_private_key_file="$HOME/.ssh/deploy"
+            -e ansible_ssh_private_key_file="$HOME/.ssh/deploy" \
+            "${extra_args[@]}"
