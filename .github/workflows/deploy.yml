@@ -76,48 +76,31 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r fleet/requirements.txt
-      - name: Build inventory + SSH key from secrets (fail fast if missing)
+      - name: Configure SSH credentials
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          DOMAIN: ${{ secrets.SITE_DOMAIN }}
-          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           set -euo pipefail
-          missing=""
-          for v in SSH_HOST SSH_USER SSH_PRIVATE_KEY DOMAIN ACME_EMAIL; do
-            [ -n "${!v:-}" ] || missing="$missing $v"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Deploy secrets not set:$missing — add them in repo Settings → Secrets and variables → Actions."
+          if [ -z "${SSH_PRIVATE_KEY:-}" ]; then
+            echo "::error::SSH_PRIVATE_KEY is not set — add it in repo Settings → Secrets and variables → Actions."
             exit 1
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          cat > fleet/inventory/ci.yml <<EOF
-          all:
-            vars:
-              domain: ${DOMAIN}
-              acme_email: ${ACME_EMAIL}
-              caddy_version: "2.11"
-              deploy_root: /opt/stacks
-              site_ip: ${SSH_HOST}
-            children:
-              edge:
-                hosts:
-                  vps:
-                    ansible_host: ${SSH_HOST}
-                    ansible_user: ${SSH_USER}
-                    ansible_ssh_private_key_file: ${HOME}/.ssh/deploy
-                    compose_stacks:
-                      - name: caddy
-                        src: stacks/edge/caddy
-                        env_content: "{{ caddy_env_content }}"
-          EOF
-      - name: Deploy over SSH
+          if [ -n "${SSH_HOST:-}" ]; then
+            ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+            chmod 600 ~/.ssh/known_hosts
+          fi
+      - name: Deploy with Ansible
         working-directory: fleet
-        run: ansible-playbook -i inventory/ci.yml playbooks/compose.yml --limit edge
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ansible-playbook -i inventory/prod.yml playbooks/compose.yml \
+            --limit vps \
+            ${SSH_HOST:+-e ansible_host="$SSH_HOST"} \
+            ${SSH_USER:+-e ansible_user="$SSH_USER"} \
+            -e ansible_ssh_private_key_file="$HOME/.ssh/deploy"
