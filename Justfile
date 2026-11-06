@@ -22,7 +22,8 @@ matrix:
       ssh_h=$(echo "$vars" | jq -r 'if .enable_ssh_hardening == true then "ON" else "OFF" end')
       byedpi=$(echo "$vars" | jq -r 'if .enable_byedpi == true then "ON" else "OFF" end')
       k3s=$(echo "$vars" | jq -r 'if .enable_k3s == true then (.k3s_role // "ON") else "OFF" end')
-      printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "$host" "$ufw" "$f2b" "$ssh_h" "ON" "$byedpi" "$k3s"
+      docker=$(echo "$vars" | jq -r 'if .enable_docker == false then "OFF" else "ON" end')
+      printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "$host" "$ufw" "$f2b" "$ssh_h" "$docker" "$byedpi" "$k3s"
     done
 
 # Install/verify local tooling and Ansible collections.

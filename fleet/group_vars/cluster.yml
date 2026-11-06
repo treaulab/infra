@@ -1,6 +1,7 @@
 ---
 # fleet/inventory/group_vars/cluster.yml — K3s cluster nodes (mercury, venus, earth).
 enable_k3s: true
+enable_docker: false
 internal_gateway: "192.168.10.254"
 k3s_server_url: "https://192.168.10.11:6443"
 # k3s_token is loaded from ANSIBLE_K3S_TOKEN env var — never commit the real value.

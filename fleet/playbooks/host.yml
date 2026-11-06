@@ -14,7 +14,9 @@
     - role: fail2ban
       when: enable_fail2ban | default(false) | bool
       tags: [fail2ban]
-    - docker
+    - role: docker
+      when: enable_docker | default(true) | bool
+      tags: [docker]
     - tailscale
     - role: k3s
       when: enable_k3s | default(false) | bool

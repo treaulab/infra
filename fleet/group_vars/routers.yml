@@ -1,0 +1,3 @@
+---
+# fleet/group_vars/routers.yml — Gateway routers (i).
+enable_docker: false

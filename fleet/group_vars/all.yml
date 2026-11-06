@@ -6,3 +6,4 @@ caddy_version: "2.11"
 deploy_root: /opt/stacks
 site_ip: 20.98.16.138
 base_ufw_ports: ["22", "80", "443"]
+enable_docker: true
