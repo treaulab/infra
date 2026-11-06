@@ -11,7 +11,7 @@ Read the token silently so it is not in shell history or `.env`:
 printf 'Cloudflare API token: '
 read -s CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
 echo
-# scoped to treau.me: Zone→DNS:Edit + Zone→Zone:Read
+# scoped to treau.me: Zone→DNS:Edit + Zone→Zone:Read + Zone→Zone Rulesets:Edit + Zone→Zone Settings:Edit + Zone→Zone WAF:Edit
 cd platform/cloudflare
 tofu init
 tofu plan                           # reads the zone only; 0 changes (needs token)
