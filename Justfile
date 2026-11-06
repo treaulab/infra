@@ -34,6 +34,7 @@ setup:
       command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }
     done
     command -v ansible-playbook >/dev/null || { echo "missing: ansible-playbook (NixOS: nix-shell -p ansible)" >&2; exit 1; }
+    ansible-galaxy collection install -r fleet/requirements.yml
     if command -v pre-commit >/dev/null 2>&1; then
       pre-commit install
     fi

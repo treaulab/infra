@@ -17,11 +17,14 @@
     mode: "0755"
 
 - name: Synchronize stack directory contents
-  ansible.builtin.copy:
+  ansible.posix.synchronize:
     src: "{{ playbook_dir }}/../../{{ stack_src }}/"
     dest: "{{ deploy_root }}/{{ stack_name }}/"
-    owner: "{{ deploy_user | default(ansible_user) }}"
-    mode: "preserve"
+    delete: true
+    recursive: true
+    rsync_opts:
+      - "--exclude=.env"
+      - "--exclude=.git*"
 
 - name: Install additional stack files if configured
   ansible.builtin.copy:
