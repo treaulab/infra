@@ -1,6 +1,5 @@
 ---
-# fleet/inventory/group_vars/untrusted.yml — Workstations: no UFW, DPI bypass enabled.
-base_ufw_ports: ["22"]
+# fleet/group_vars/untrusted.yml — Workstations: no UFW, DPI bypass enabled.
 ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
 enable_ufw: false
 enable_fail2ban: false

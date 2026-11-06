@@ -1,6 +1,8 @@
 ---
 # fleet/group_vars/edge.yml — Azure VPS (Caddy + static site).
 
+base_ufw_ports: ["80", "443"]
+
 caddy_env_content: |
   # Managed by Ansible. Do not edit on the host.
   DOMAIN={{ domain }}

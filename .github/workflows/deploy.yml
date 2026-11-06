@@ -32,9 +32,9 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r fleet/requirements.txt
-      - name: Prepare example inventory
+      - name: Ensure inventory exists
         working-directory: fleet
-        run: cp inventory/prod.yml.example inventory/prod.yml
+        run: "[[ -f inventory/prod.yml ]] || cp inventory/prod.yml.example inventory/prod.yml"
       - name: Syntax-check compose playbook
         working-directory: fleet
         run: ansible-playbook -i inventory/prod.yml playbooks/compose.yml --syntax-check

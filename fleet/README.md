@@ -18,17 +18,17 @@ fleet/
 ├── group_vars/              # Group-scoped capability flags & configs
 │   ├── all.yml              # Global vars (domain, site_ip, deploy_root, base_ufw_ports)
 │   ├── trusted.yml          # Servers: UFW on, fail2ban on, SSH hardened, byedpi off
-│   ├── internal.yml         # LAN servers: UFW restricted to 22
+│   ├── internal.yml         # LAN servers: no public ports (LAN + Tailscale allowed)
 │   ├── cluster.yml          # K3s nodes: enable_k3s=true, token, SANs
-│   ├── edge.yml             # VPS: website_src, caddy_env_content
+│   ├── edge.yml             # VPS: base_ufw_ports, caddy_env_content
 │   └── untrusted.yml        # Workstations: UFW off, fail2ban off, SSH relaxed, byedpi on
 ├── inventory/
-│   ├── prod.yml             # Live inventory — hosts + connection vars only (gitignored)
+│   ├── prod.yml             # Live inventory — hosts + connection vars only
 │   └── prod.yml.example     # Reference template
 ├── playbooks/
 │   ├── site.yml             # Full convergence: host.yml → compose.yml
 │   ├── host.yml             # OS baseline — common, ufw, fail2ban, docker, tailscale, byedpi, k3s
-│   └── compose.yml          # Converge inventory-declared compose stacks (+ website sync)
+│   └── compose.yml          # Converge inventory-declared compose stacks
 └── roles/
     ├── common/              # Packages, sudoers, unattended-upgrades, journald, apt prune
     ├── ufw/                 # Host firewall (servers only)
