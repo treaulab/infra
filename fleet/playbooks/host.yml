@@ -6,6 +6,9 @@
   vars:
     tailscale_authkey: "{{ lookup('env', 'TAILSCALE_AUTHKEY') | default('', true) }}"
   roles:
+    - role: byedpi
+      when: enable_byedpi | default(false) | bool
+      tags: [byedpi]
     - common
     - ufw
     - role: fail2ban
@@ -13,8 +16,5 @@
       tags: [fail2ban]
     - docker
     - tailscale
-    - role: byedpi
-      when: enable_byedpi | default(false) | bool
-      tags: [byedpi]
     - role: k3s
       when: enable_k3s | default(false) | bool
