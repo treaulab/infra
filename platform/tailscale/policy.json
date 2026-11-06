@@ -1,12 +1,26 @@
 {
 	"tagOwners": {
 		"tag:ci-ephemeral": ["autogroup:admin", "tag:ci-ephemeral"],
-		"tag:untrusted":    ["autogroup:admin", "tag:untrusted"]
+		"tag:untrusted":    ["autogroup:admin", "tag:untrusted"],
+		"tag:server":       ["autogroup:admin"]
 	},
 	"grants": [
-		{"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]}
+		{"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]},
+		{"src": ["tag:ci-ephemeral"], "dst": ["tag:server"], "ip": ["tcp:22"]}
 	],
 	"ssh": [
+		{
+			"action": "accept",
+			"src":    ["autogroup:admin"],
+			"dst":    ["tag:server"],
+			"users":  ["autogroup:nonroot", "root"]
+		},
+		{
+			"action": "accept",
+			"src":    ["tag:ci-ephemeral"],
+			"dst":    ["tag:server"],
+			"users":  ["azureuser", "root"]
+		},
 		{
 			"action": "accept",
 			"src":    ["autogroup:admin"],
