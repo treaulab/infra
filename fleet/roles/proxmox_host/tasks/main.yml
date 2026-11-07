@@ -1,19 +1,20 @@
 ---
 # fleet/roles/proxmox_host/tasks/main.yml — Proxmox VE hypervisor host convergence.
 
-- name: Disable PVE enterprise repository
-  ansible.builtin.apt_repository:
-    repo: "deb https://enterprise.proxmox.com/debian/pve bookworm pve-enterprise"
-    state: absent
-    filename: pve-enterprise
+- name: Comment out PVE enterprise repository
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/pve-enterprise.list
+    regexp: '^deb\s+(https?://enterprise\.proxmox\.com/.*)$'
+    replace: '# deb \1'
+  failed_when: false
   when: proxmox_host_disable_enterprise_repo | bool
   tags: [proxmox]
 
-- name: Disable Ceph enterprise repository
-  ansible.builtin.apt_repository:
-    repo: "deb https://enterprise.proxmox.com/debian/ceph-quincy bookworm enterprise"
-    state: absent
-    filename: ceph
+- name: Comment out Ceph enterprise repository
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/ceph.list
+    regexp: '^deb\s+(https?://enterprise\.proxmox\.com/.*)$'
+    replace: '# deb \1'
   failed_when: false
   when: proxmox_host_disable_enterprise_repo | bool
   tags: [proxmox]
@@ -45,13 +46,36 @@
   when: proxmox_host_tune_ksm | bool
   tags: [proxmox]
 
-- name: Set CPU scaling governor
-  ansible.builtin.shell:
-    cmd: |
-      for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-        [ -f "$gov" ] && echo "{{ proxmox_host_cpu_governor }}" > "$gov" || true
-      done
-  changed_when: false
+- name: Configure persistent CPU scaling governor service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/cpu-governor.service
+    content: |
+      [Unit]
+      Description=Set CPU Scaling Governor
+      After=sysinit.target local-fs.target
+      DefaultDependencies=no
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c '\
+        for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do \
+          [ -f "$g" ] && echo {{ proxmox_host_cpu_governor }} > "$g" || true; \
+        done'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=sysinit.target
+    mode: "0644"
+  when: proxmox_host_cpu_governor | length > 0
+  tags: [proxmox]
+
+- name: Enable and start CPU scaling governor service
+  ansible.builtin.systemd:
+    name: cpu-governor
+    enabled: true
+    state: started
+    daemon_reload: true
+  failed_when: false
   when: proxmox_host_cpu_governor | length > 0
   tags: [proxmox]
 

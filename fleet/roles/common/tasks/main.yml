@@ -13,12 +13,12 @@
     content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
     mode: "0440"
     validate: "/usr/sbin/visudo -cf %s"
+  when: ansible_user != 'root'
   tags: [sudoers]
 
 - name: Install base security & utility packages
   ansible.builtin.apt:
     name:
-      - ufw
       - unattended-upgrades
       - curl
       - ca-certificates

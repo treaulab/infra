@@ -5,6 +5,11 @@
   when: enable_ufw | default(true) | bool
   tags: [firewall]
   block:
+    - name: Ensure UFW package is installed
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+
     - name: Configure UFW open ports
       ansible.builtin.command:
         cmd: "ufw allow {{ item }}/tcp"
@@ -27,9 +32,10 @@
         cmd: "ufw --force enable"
       changed_when: false
 
-- name: Ensure UFW is disabled on workstations
+- name: Ensure UFW is disabled
   ansible.builtin.command:
     cmd: "ufw disable"
   tags: [firewall]
   when: not (enable_ufw | default(true) | bool)
   changed_when: false
+  failed_when: false
