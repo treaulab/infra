@@ -88,13 +88,13 @@
       pveum role add Terraform -privs
       "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit
       VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network
-      VM.Config.Options VM.Monitor VM.Audit VM.PowerMgmt Datastore.Allocate
+      VM.Config.Options VM.Console VM.Audit VM.PowerMgmt Datastore.Allocate
       Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit SDN.Use
       Sys.Audit Sys.Modify Sys.Console Pool.Allocate" 2>/dev/null ||
       pveum role modify Terraform -privs
       "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit
       VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network
-      VM.Config.Options VM.Monitor VM.Audit VM.PowerMgmt Datastore.Allocate
+      VM.Config.Options VM.Console VM.Audit VM.PowerMgmt Datastore.Allocate
       Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit SDN.Use
       Sys.Audit Sys.Modify Sys.Console Pool.Allocate"
   changed_when: false
