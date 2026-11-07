@@ -6,6 +6,9 @@
   vars:
     tailscale_authkey: "{{ lookup('env', 'TAILSCALE_AUTHKEY') | default('', true) }}"
   roles:
+    - role: proxmox_host
+      when: enable_proxmox_host | default(false) | bool
+      tags: [proxmox]
     - role: byedpi
       when: enable_byedpi | default(false) | bool
       tags: [byedpi]
@@ -20,6 +23,3 @@
     - tailscale
     - role: k3s
       when: enable_k3s | default(false) | bool
-    - role: proxmox_host
-      when: enable_proxmox_host | default(false) | bool
-      tags: [proxmox]

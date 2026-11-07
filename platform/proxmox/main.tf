@@ -22,7 +22,7 @@ provider "proxmox" {
 # ==============================================================================
 locals {
   # Proxmox Host Settings
-  proxmox_node_name = "atlas"
+  proxmox_node_name = "pve"
   datastore_iso     = "local"
   datastore_vm      = "local-lvm"
   network_bridge    = "vmbr0"
