@@ -13,8 +13,8 @@ matrix:
     ansible-inventory -i inventory/prod.yml --graph
     echo ""
     echo "=== Fleet Capability Matrix ==="
-    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "Host" "UFW" "Fail2ban" "SSH-Hard" "Docker" "ByeDPI" "K3s"
-    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "------------------" "------" "---------" "---------" "--------" "----------" "------------"
+    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s %-6s\n" "Host" "UFW" "Fail2ban" "SSH-Hard" "Docker" "ByeDPI" "K3s" "PVE"
+    printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s %-6s\n" "------------------" "------" "---------" "---------" "--------" "----------" "------------" "------"
     for host in $(ansible all -i inventory/prod.yml --list-hosts 2>/dev/null | tail -n +2 | tr -d ' '); do
       vars=$(ansible-inventory -i inventory/prod.yml --host "$host" 2>/dev/null)
       ufw=$(echo "$vars" | jq -r 'if .enable_ufw == true then "ON" else "OFF" end')
@@ -23,7 +23,8 @@ matrix:
       byedpi=$(echo "$vars" | jq -r 'if .enable_byedpi == true then "ON" else "OFF" end')
       k3s=$(echo "$vars" | jq -r 'if .enable_k3s == true then (.k3s_role // "ON") else "OFF" end')
       docker=$(echo "$vars" | jq -r 'if .enable_docker == false then "OFF" else "ON" end')
-      printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s\n" "$host" "$ufw" "$f2b" "$ssh_h" "$docker" "$byedpi" "$k3s"
+      pve=$(echo "$vars" | jq -r 'if .enable_proxmox_host == true then "ON" else "OFF" end')
+      printf "%-18s %-6s %-9s %-9s %-8s %-10s %-12s %-6s\n" "$host" "$ufw" "$f2b" "$ssh_h" "$docker" "$byedpi" "$k3s" "$pve"
     done
 
 # Install/verify local tooling and Ansible collections.
@@ -123,6 +124,13 @@ converge node="all":
         echo "Kubeconfig ready: KUBECONFIG=$kf kubectl get nodes"
       fi
     done
+
+# Converge Proxmox VE hypervisor host (runs host.yml scoped to hypervisors group).
+converge-pve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd fleet
+    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit hypervisors
 
 # Converge K3s cluster nodes (runs host.yml scoped to cluster group).
 k3s node="cluster":

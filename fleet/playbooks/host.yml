@@ -20,3 +20,6 @@
     - tailscale
     - role: k3s
       when: enable_k3s | default(false) | bool
+    - role: proxmox_host
+      when: enable_proxmox_host | default(false) | bool
+      tags: [proxmox]

@@ -1,0 +1,92 @@
+---
+# fleet/roles/proxmox_host/tasks/main.yml — Proxmox VE hypervisor host convergence.
+
+- name: Disable PVE enterprise repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://enterprise.proxmox.com/debian/pve bookworm pve-enterprise"
+    state: absent
+    filename: pve-enterprise
+  when: proxmox_host_disable_enterprise_repo | bool
+  tags: [proxmox]
+
+- name: Disable Ceph enterprise repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://enterprise.proxmox.com/debian/ceph-quincy bookworm enterprise"
+    state: absent
+    filename: ceph
+  failed_when: false
+  when: proxmox_host_disable_enterprise_repo | bool
+  tags: [proxmox]
+
+- name: Enable PVE no-subscription repository
+  ansible.builtin.apt_repository:
+    repo: "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
+    state: present
+    filename: pve-no-subscription
+  when: proxmox_host_no_subscription_repo | bool
+  tags: [proxmox]
+
+- name: Enable snippets and import content types on local storage
+  ansible.builtin.command:
+    cmd: pvesm set local --content iso,vztmpl,backup,snippets,import
+  changed_when: false
+  when: proxmox_host_enable_snippets | bool
+  tags: [proxmox]
+
+- name: Enable and start Kernel Samepage Merging (KSM)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - ksm
+    - ksmtuned
+  failed_when: false
+  when: proxmox_host_tune_ksm | bool
+  tags: [proxmox]
+
+- name: Set CPU scaling governor
+  ansible.builtin.shell:
+    cmd: |
+      for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        [ -f "$gov" ] && echo "{{ proxmox_host_cpu_governor }}" > "$gov" || true
+      done
+  changed_when: false
+  when: proxmox_host_cpu_governor | length > 0
+  tags: [proxmox]
+
+- name: Remove Proxmox VE web GUI subscription nag dialog
+  ansible.builtin.replace:
+    path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+    regexp: 'res\.data\.status\.toLowerCase\(\) !== .active.'
+    replace: 'false'
+  failed_when: false
+  when: proxmox_host_remove_nag | bool
+  tags: [proxmox]
+
+- name: Create PVE Terraform role for OpenTofu
+  ansible.builtin.command:
+    cmd: >-
+      pveum role add Terraform -privs
+      "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit
+      VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network
+      VM.Config.Options VM.Monitor VM.Audit VM.PowerMgmt Datastore.AllocateSpace
+      Datastore.Audit SDN.Use"
+  register: pve_role
+  failed_when: pve_role.rc != 0 and 'already exists' not in pve_role.stderr
+  changed_when: pve_role.rc == 0
+  tags: [proxmox]
+
+- name: Create PVE terraform user for OpenTofu
+  ansible.builtin.command:
+    cmd: pveum user add terraform@pve --comment "OpenTofu Automation"
+  register: pve_user
+  failed_when: pve_user.rc != 0 and 'already exists' not in pve_user.stderr
+  changed_when: pve_user.rc == 0
+  tags: [proxmox]
+
+- name: Grant Terraform role on / to terraform@pve
+  ansible.builtin.command:
+    cmd: pveum aclmod / -user terraform@pve -role Terraform
+  changed_when: false
+  tags: [proxmox]

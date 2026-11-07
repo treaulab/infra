@@ -21,6 +21,7 @@ fleet/
 │   ├── internal.yml         # LAN servers: no public ports (LAN + Tailscale allowed)
 │   ├── cluster.yml          # K3s nodes: enable_k3s=true, token, SANs
 │   ├── edge.yml             # VPS: base_ufw_ports, caddy_env_content
+│   ├── hypervisors.yml      # Hypervisor: pve-no-subscription, snippets, KSM, no UFW/Docker
 │   └── untrusted.yml        # Workstations: UFW off, fail2ban off, SSH relaxed, byedpi on
 ├── inventory/
 │   ├── prod.yml             # Live inventory — hosts + connection vars only
@@ -37,7 +38,7 @@ fleet/
     ├── tailscale/           # Tailscale install + tailnet join
     ├── byedpi/              # DPI circumvention proxy (untrusted workstations)
     ├── k3s/                 # K3s server + agent convergence
-    ├── website/             # Static site file sync (edge hosts)
+    ├── proxmox_host/        # Proxmox VE hypervisor baseline (repos, storage, KSM)
     └── compose_stack/       # Universal Docker Compose stack convergence
 ```
 
