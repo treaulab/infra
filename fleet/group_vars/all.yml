@@ -1,11 +1,18 @@
 ---
-# fleet/inventory/group_vars/all.yml — Variables that apply to every host.
+# fleet/inventory/group_vars/all.yml — Global constants & zero-assumption capability baseline.
 domain: treau.me
 acme_email: zeuitt@gmail.com
 caddy_version: "2.11"
 deploy_root: /opt/stacks
 site_ip: 20.98.16.138
 base_ufw_ports: ["22"]
-enable_docker: true
-enable_tailscale: true
+
+# All capabilities default to OFF (scenarios opt-in explicitly)
+enable_ufw: false
+enable_fail2ban: false
+enable_ssh_hardening: false
+enable_docker: false
+enable_tailscale: false
+enable_byedpi: false
+enable_k3s: false
 enable_proxmox_host: false

@@ -1,41 +1,34 @@
 ---
 # roles/ufw/tasks/main.yml — Firewall management.
 
-- name: Configure and enable UFW on servers
-  when: enable_ufw | default(true) | bool
+- name: Ensure UFW package is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
   tags: [firewall]
-  block:
-    - name: Ensure UFW package is installed
-      ansible.builtin.apt:
-        name: ufw
-        state: present
 
-    - name: Configure UFW open ports
-      ansible.builtin.command:
-        cmd: "ufw allow {{ item }}/tcp"
-      loop: "{{ base_ufw_ports | default(['22']) }}"
-      changed_when: false
-
-    - name: Allow traffic on Tailscale interface
-      ansible.builtin.command:
-        cmd: "ufw allow in on tailscale0"
-      changed_when: false
-
-    - name: Allow LAN subnet traffic for internal servers
-      ansible.builtin.command:
-        cmd: "ufw allow from 192.168.10.0/24"
-      when: "'internal' in group_names"
-      changed_when: false
-
-    - name: Enable UFW firewall (default deny incoming)
-      ansible.builtin.command:
-        cmd: "ufw --force enable"
-      changed_when: false
-
-- name: Ensure UFW is disabled
+- name: Configure UFW open ports
   ansible.builtin.command:
-    cmd: "ufw disable"
-  tags: [firewall]
-  when: not (enable_ufw | default(true) | bool)
+    cmd: "ufw allow {{ item }}/tcp"
+  loop: "{{ base_ufw_ports | default(['22']) }}"
   changed_when: false
-  failed_when: false
+  tags: [firewall]
+
+- name: Allow traffic on Tailscale interface
+  ansible.builtin.command:
+    cmd: "ufw allow in on tailscale0"
+  changed_when: false
+  tags: [firewall]
+
+- name: Allow LAN subnet traffic
+  ansible.builtin.command:
+    cmd: "ufw allow from 192.168.10.0/24"
+  when: ufw_allow_lan | default(false) | bool
+  changed_when: false
+  tags: [firewall]
+
+- name: Enable UFW firewall (default deny incoming)
+  ansible.builtin.command:
+    cmd: "ufw --force enable"
+  changed_when: false
+  tags: [firewall]

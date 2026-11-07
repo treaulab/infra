@@ -160,12 +160,12 @@ ping group="untrusted":
 untrusted *args="":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit untrusted {{args}}
 
-# Converge only UFW firewall rules on one host (or trusted fleet).
-ufw node="trusted":
+# Converge only UFW firewall rules on one host or group (default: all).
+ufw node="all":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags firewall
 
-# Converge only Tailscale on one host (or trusted fleet).
-ts node="trusted":
+# Converge only Tailscale on one host or group (default: all).
+ts node="all":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags tailscale
 
 # Converge ByeDPI transparent & SOCKS5 proxy on a host (default: untrusted).

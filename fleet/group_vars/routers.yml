@@ -1,3 +1,11 @@
 ---
 # fleet/group_vars/routers.yml — Gateway routers (i).
-enable_docker: false
+
+enable_ufw: true
+enable_fail2ban: true
+enable_ssh_hardening: true
+enable_tailscale: true
+ufw_allow_lan: true
+
+tailscale_tags: "tag:server"
+tailscale_extra_args: "--ssh"

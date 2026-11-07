@@ -1,9 +1,0 @@
----
-# fleet/inventory/group_vars/trusted.yml — Servers with UFW enabled, no DPI bypass.
-enable_ufw: true
-enable_fail2ban: true
-enable_ssh_hardening: true
-enable_byedpi: false
-enable_k3s: false
-tailscale_tags: ""
-tailscale_extra_args: ""

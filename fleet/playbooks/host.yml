@@ -13,15 +13,17 @@
       when: enable_byedpi | default(false) | bool
       tags: [byedpi]
     - common
-    - ufw
+    - role: ufw
+      when: enable_ufw | default(false) | bool
+      tags: [firewall]
     - role: fail2ban
       when: enable_fail2ban | default(false) | bool
       tags: [fail2ban]
     - role: docker
-      when: enable_docker | default(true) | bool
+      when: enable_docker | default(false) | bool
       tags: [docker]
     - role: tailscale
-      when: enable_tailscale | default(true) | bool
+      when: enable_tailscale | default(false) | bool
       tags: [tailscale]
     - role: k3s
       when: enable_k3s | default(false) | bool

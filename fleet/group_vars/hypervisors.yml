@@ -1,15 +1,3 @@
 ---
 # fleet/group_vars/hypervisors.yml — Proxmox VE hypervisor tier.
-
-# Proxmox host manages its own firewall (pve-firewall) and virtualization (KVM/LXC)
-enable_ufw: false
-enable_fail2ban: false
-enable_docker: false
-enable_k3s: false
-enable_byedpi: false
-enable_ssh_hardening: false
-enable_tailscale: false
 enable_proxmox_host: true
-
-tailscale_tags: "tag:server"
-tailscale_extra_args: "--ssh"

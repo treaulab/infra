@@ -15,48 +15,48 @@ just deploy-public         # Converge Caddy + static website on VPS (edge group)
 ```
 fleet/
 ├── ansible.cfg              # Default inventory, pipelining, sudo settings
-├── group_vars/              # Group-scoped capability flags & configs
-│   ├── all.yml              # Global vars (domain, site_ip, deploy_root, base_ufw_ports)
-│   ├── trusted.yml          # Servers: UFW on, fail2ban on, SSH hardened, byedpi off
-│   ├── internal.yml         # LAN servers: no public ports (LAN + Tailscale allowed)
-│   ├── cluster.yml          # K3s nodes: enable_k3s=true, token, SANs
-│   ├── edge.yml             # VPS: base_ufw_ports, caddy_env_content
-│   ├── hypervisors.yml      # Hypervisor: pve-no-subscription, snippets, KSM, no UFW/Docker
-│   └── untrusted.yml        # Workstations: UFW off, fail2ban off, SSH relaxed, byedpi on
+├── group_vars/              # Scenario-scoped capability opt-ins & configs
+│   ├── all.yml              # Global vars & zero-assumption baseline (all capabilities false)
+│   ├── edge.yml             # VPS: ufw, fail2ban, ssh_hardening, docker, tailscale
+│   ├── hypervisors.yml      # Hypervisor: enable_proxmox_host=true (pve repos, storage snippets, tofu role)
+│   ├── cluster.yml          # K3s nodes: ufw, fail2ban, ssh_hardening, tailscale, k3s, lan_allow
+│   ├── routers.yml          # Gateway router: ufw, fail2ban, ssh_hardening, tailscale, lan_allow
+│   └── untrusted.yml        # Shared workstations: byedpi, docker, tailscale (tag:untrusted)
 ├── inventory/
-│   ├── prod.yml             # Live inventory — hosts + connection vars only
+│   ├── prod.yml             # Live inventory — flat scenario groups + host connection vars
 │   └── prod.yml.example     # Reference template
 ├── playbooks/
 │   ├── site.yml             # Full convergence: host.yml → compose.yml
-│   ├── host.yml             # OS baseline — common, ufw, fail2ban, docker, tailscale, byedpi, k3s
+│   ├── host.yml             # OS baseline — opt-in roles gated by capability flags
 │   └── compose.yml          # Converge inventory-declared compose stacks
 └── roles/
     ├── common/              # Packages, sudoers, unattended-upgrades, journald, apt prune
-    ├── ufw/                 # Host firewall (servers only)
+    ├── ufw/                 # Host firewall (opt-in)
     ├── fail2ban/            # Brute-force protection for exposed ports
     ├── docker/              # Docker Engine + weekly prune cron
     ├── tailscale/           # Tailscale install + tailnet join
     ├── byedpi/              # DPI circumvention proxy (untrusted workstations)
     ├── k3s/                 # K3s server + agent convergence
-    ├── proxmox_host/        # Proxmox VE hypervisor baseline (repos, storage, KSM)
+    ├── proxmox_host/        # Proxmox VE hypervisor baseline (repos, storage, OpenTofu role/token)
     └── compose_stack/       # Universal Docker Compose stack convergence
 ```
 
 ## Fleet Capability Matrix
 
-The fleet is partitioned into capability tiers defined entirely in `fleet/group_vars/`. `prod.yml` only declares host connection details and specific workloads.
+The fleet is partitioned into capability tiers defined entirely in `fleet/group_vars/` as an **opt-in capability matrix**. `all.yml` defaults all capabilities to `false`; each scenario group explicitly opts into the capabilities it needs.
 
-| Capability / Role | `edge` (`vps`) | `internal.cluster` (`mercury`, `venus`, `earth`) | `internal.routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Common Baseline** (`roles/common`) | ✅ | ✅ | ✅ | ✅ |
-| **Docker Engine & Prune** (`roles/docker`) | ✅ | ✅ | ✅ | ✅ |
-| **Tailscale Node** (`roles/tailscale`) | ✅ (unshared) | ✅ | ✅ (gateway) | ✅ (`tag:untrusted`) |
-| **UFW Firewall** (`roles/ufw`) | ✅ (22, 80, 443) | ✅ (22 + LAN) | ✅ (22 + LAN) | ❌ (disabled) |
-| **Fail2ban** (`roles/fail2ban`) | ✅ | ✅ | ✅ | ❌ (disabled) |
-| **SSH Hardening** (Keys only, no X11) | ✅ | ✅ | ✅ | ❌ (workstation defaults) |
-| **ByeDPI Desync Proxy** (`roles/byedpi`) | ❌ | ❌ (uses router zapret2) | ❌ | ✅ (ISP bypass) |
-| **K3s Engine** (`roles/k3s`) | ❌ | ✅ (`mercury`=server, workers) | ❌ | ❌ |
-| **Workload Convergence** | Caddy / Public Site | K3s Cluster Manifests | Subnet Router | Docker Compose (`jellyfin`, ...) |
+| Capability / Role | `edge` (`vps`) | `hypervisors` (`entia`) | `cluster` (`mercury`, `venus`, `earth`) | `routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Common Baseline** (`roles/common`) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **PVE Hypervisor** (`roles/proxmox_host`) | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **UFW Firewall** (`roles/ufw`) | ✅ (22, 80, 443) | ❌ | ✅ (22 + LAN) | ✅ (22 + LAN) | ❌ |
+| **Fail2ban** (`roles/fail2ban`) | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **SSH Hardening** (Keys only, no X11) | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Docker Engine** (`roles/docker`) | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **Tailscale Node** (`roles/tailscale`) | ✅ (unshared) | ❌ | ✅ | ✅ (gateway) | ✅ (`tag:untrusted`) |
+| **ByeDPI Desync Proxy** (`roles/byedpi`) | ❌ | ❌ | ❌ | ❌ | ✅ (ISP bypass) |
+| **K3s Engine** (`roles/k3s`) | ❌ | ❌ | ✅ (`mercury`=server, workers) | ❌ | ❌ |
+| **Workload Convergence** | Caddy / Public Site | Proxmox VMs | K3s Cluster Manifests | Subnet Router | Docker Compose (`jellyfin`, ...) |
 
 ## Playbooks
 

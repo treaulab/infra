@@ -1,2 +1,0 @@
----
-# fleet/group_vars/internal.yml — Internal LAN hosts (no public ports; LAN + Tailscale allowed by roles/ufw).

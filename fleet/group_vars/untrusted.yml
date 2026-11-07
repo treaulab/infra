@@ -1,10 +1,13 @@
 ---
-# fleet/group_vars/untrusted.yml — Workstations: no UFW, DPI bypass enabled.
-ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-enable_ufw: false
-enable_fail2ban: false
-enable_ssh_hardening: false
+# fleet/group_vars/untrusted.yml — Shared workstations.
+
+enable_docker: true
 enable_byedpi: true
-enable_k3s: false
+enable_tailscale: true
+
+enable_docker_prune_cron: false
+enable_apt_autoremove_cron: false
+
+ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
 tailscale_tags: "tag:untrusted"
 tailscale_extra_args: "--ssh"

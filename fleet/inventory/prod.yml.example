@@ -1,67 +1,59 @@
-# Reference template for fleet/inventory/prod.yml.
-# Variables and role capabilities are managed in fleet/group_vars/.
 all:
   children:
-    trusted:
-      children:
-        edge:
-          hosts:
-            vps:
-              ansible_host: vps             # Tailscale MagicDNS or 100.x IP
-              ansible_user: azureuser
-              ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-              compose_stacks:
-                - name: caddy
-                  src: stacks/edge/caddy
-                  env_content: "{{ caddy_env_content }}"
-        hypervisors:
-          hosts:
-            entia:
-              ansible_host: 192.168.10.10   # Proxmox VE hypervisor host
-              ansible_user: root
-              ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-        internal:
-          children:
-            cluster:
-              hosts:
-                mercury:
-                  ansible_host: 192.168.10.11   # Proxmox VM 500 LAN IP
-                  ansible_user: treau           # Matches admin_username in platform/proxmox
-                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-                  k3s_role: server              # K3s Control Plane Server
-                  k3s_tls_san:                  # Extra SANs for k3s API server certificate
-                    - "192.168.10.11"
-                    - "mercury"
-                    - "100.x.y.z"
-                    - "mercury-1"
-                venus:
-                  ansible_host: 192.168.10.13   # Proxmox VM 501 LAN IP
-                  ansible_user: treau           # Matches admin_username in platform/proxmox
-                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-                  k3s_role: agent               # K3s Worker Agent (joins mercury)
-                earth:
-                  ansible_host: 192.168.10.14   # Proxmox VM 502 LAN IP
-                  ansible_user: treau           # Matches admin_username in platform/proxmox
-                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
-                  k3s_role: agent               # K3s Worker Agent (joins mercury)
-            routers:
-              hosts:
-                i:
-                  ansible_host: 100.x.y.z       # Raspberry Pi Tailscale IP / subnet router
-                  ansible_user: treau           # User on machine i
-                  ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+    edge:
+      hosts:
+        vps:
+          ansible_host: 203.0.113.10
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+          compose_stacks:
+            - name: caddy
+              src: stacks/edge/caddy
+              env_content: "{{ caddy_env_content }}"
+    hypervisors:
+      hosts:
+        entia:
+          ansible_host: 192.168.10.10   # Proxmox VE hypervisor host
+          ansible_user: root
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+    cluster:
+      hosts:
+        mercury:
+          ansible_host: 192.168.10.11
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: server
+          k3s_tls_san:
+            - "192.168.10.11"
+            - "mercury"
+        venus:
+          ansible_host: 192.168.10.13
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        earth:
+          ansible_host: 192.168.10.14
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+    routers:
+      hosts:
+        i:
+          ansible_host: 192.168.10.254
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
     untrusted:
       hosts:
         beefyboi:
-          ansible_host: 192.168.10.69   # Workstation LAN IP
+          ansible_host: 192.168.10.69
           ansible_user: beefyboy
           compose_stacks:
             - name: jellyfin
               src: stacks/homelab/jellyfin
               env_file: stacks/homelab/jellyfin/.env.example
         scrawnyboi:
-          ansible_host: 192.168.10.67   # Workstation LAN IP
+          ansible_host: 192.168.10.67
           ansible_user: scrawnyboi
         nucboi:
-          ansible_host: 192.168.10.68   # Workstation LAN IP
+          ansible_host: 192.168.10.68
           ansible_user: nucboi
