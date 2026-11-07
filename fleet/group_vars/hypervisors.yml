@@ -8,6 +8,7 @@ enable_docker: false
 enable_k3s: false
 enable_byedpi: false
 enable_ssh_hardening: false
+enable_tailscale: false
 enable_proxmox_host: true
 
 tailscale_tags: "tag:server"

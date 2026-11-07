@@ -20,6 +20,8 @@
     - role: docker
       when: enable_docker | default(true) | bool
       tags: [docker]
-    - tailscale
+    - role: tailscale
+      when: enable_tailscale | default(true) | bool
+      tags: [tailscale]
     - role: k3s
       when: enable_k3s | default(false) | bool
