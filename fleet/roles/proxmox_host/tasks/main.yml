@@ -28,58 +28,27 @@
   when: proxmox_host_enable_snippets | bool
   tags: [proxmox]
 
-- name: Enable and start Kernel Samepage Merging (KSM)
-  ansible.builtin.systemd:
-    name: "{{ item }}"
-    enabled: true
-    state: started
-  loop:
-    - ksm
-    - ksmtuned
-  failed_when: false
-  when: proxmox_host_tune_ksm | bool
-  tags: [proxmox]
-
-- name: Configure persistent CPU scaling governor service
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/cpu-governor.service
-    content: |
-      [Unit]
-      Description=Set CPU Scaling Governor
-      After=sysinit.target local-fs.target
-      DefaultDependencies=no
-
-      [Service]
-      Type=oneshot
-      ExecStart=/bin/sh -c '\
-        for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do \
-          [ -f "$g" ] && echo {{ proxmox_host_cpu_governor }} > "$g" || true; \
-        done'
-      RemainAfterExit=yes
-
-      [Install]
-      WantedBy=sysinit.target
-    mode: "0644"
-  when: proxmox_host_cpu_governor | length > 0
-  tags: [proxmox]
-
-- name: Enable and start CPU scaling governor service
+- name: Remove legacy cpu-governor service if present
   ansible.builtin.systemd:
     name: cpu-governor
-    enabled: true
-    state: started
-    daemon_reload: true
+    state: stopped
+    enabled: false
   failed_when: false
-  when: proxmox_host_cpu_governor | length > 0
   tags: [proxmox]
 
-- name: Remove Proxmox VE web GUI subscription nag dialog
+- name: Remove legacy cpu-governor unit file if present
+  ansible.builtin.file:
+    path: /etc/systemd/system/cpu-governor.service
+    state: absent
+  failed_when: false
+  tags: [proxmox]
+
+- name: Restore original subscription check in proxmoxlib.js if previously modified
   ansible.builtin.replace:
     path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-    regexp: 'res\.data\.status\.toLowerCase\(\) !== .active.'
-    replace: 'false'
+    regexp: '(!res \|\| )false(\))'
+    replace: "\\1res.data.status.toLowerCase() !== 'active'\\2"
   failed_when: false
-  when: proxmox_host_remove_nag | bool
   tags: [proxmox]
 
 - name: Create or update PVE Terraform role for OpenTofu

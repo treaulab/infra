@@ -3,6 +3,3 @@
 proxmox_host_no_subscription_repo: true
 proxmox_host_disable_enterprise_repo: true
 proxmox_host_enable_snippets: true
-proxmox_host_tune_ksm: true
-proxmox_host_remove_nag: true
-proxmox_host_cpu_governor: "performance"
