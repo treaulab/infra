@@ -14,7 +14,7 @@ all:
                   env_content: "{{ caddy_env_content }}"
         hypervisors:
           hosts:
-            pve:
+            entia:
               ansible_host: 192.168.10.10
               ansible_user: root
               ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"

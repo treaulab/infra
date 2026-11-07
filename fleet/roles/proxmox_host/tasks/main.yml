@@ -28,29 +28,6 @@
   when: proxmox_host_enable_snippets | bool
   tags: [proxmox]
 
-- name: Remove legacy cpu-governor service if present
-  ansible.builtin.systemd:
-    name: cpu-governor
-    state: stopped
-    enabled: false
-  failed_when: false
-  tags: [proxmox]
-
-- name: Remove legacy cpu-governor unit file if present
-  ansible.builtin.file:
-    path: /etc/systemd/system/cpu-governor.service
-    state: absent
-  failed_when: false
-  tags: [proxmox]
-
-- name: Restore original subscription check in proxmoxlib.js if previously modified
-  ansible.builtin.replace:
-    path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-    regexp: '(!res \|\| )false(\))'
-    replace: "\\1res.data.status.toLowerCase() !== 'active'\\2"
-  failed_when: false
-  tags: [proxmox]
-
 - name: Create or update PVE Terraform role for OpenTofu
   ansible.builtin.shell:
     cmd: >-
