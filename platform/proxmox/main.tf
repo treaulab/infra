@@ -24,7 +24,7 @@ locals {
   # Proxmox Host Settings
   proxmox_node_name = "entia"
   datastore_iso     = "local"
-  datastore_vm      = "local-lvm"
+  datastore_vm      = "local-zfs"
   network_bridge    = "vmbr0"
 
   # Guest Network Defaults
