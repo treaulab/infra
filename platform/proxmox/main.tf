@@ -38,7 +38,7 @@ locals {
   # Cloud Image
   cloud_image_url       = "https://cloud-images.ubuntu.com/minimal/releases/resolute/release/ubuntu-26.04-minimal-cloudimg-amd64.img"
   cloud_image_file_name = "ubuntu-26.04-minimal-cloudimg-amd64.qcow2"
-  cloud_image_checksum  = "6c083e6bea1573aab619c1dfa8d17bb7e3a8618fbd6cb57fa39d517b20062aa4"
+  cloud_image_checksum  = "ee808a4ad9e4bab636cec268e1b6385115e756be45ee30d7b3df84b832908ddc"
 
   # ============================================================================
   # VM FLEET: Add, remove, or edit your virtual machines here
