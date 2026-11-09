@@ -79,7 +79,7 @@ locals {
     }
     mars = {
       vm_id         = 503
-      ipv4_address  = "192.168.10.15/24"
+      ipv4_address  = "192.168.10.22/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
@@ -90,7 +90,7 @@ locals {
     }
     jupiter = {
       vm_id         = 504
-      ipv4_address  = "192.168.10.16/24"
+      ipv4_address  = "192.168.10.23/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
@@ -101,7 +101,7 @@ locals {
     }
     saturn = {
       vm_id         = 505
-      ipv4_address  = "192.168.10.17/24"
+      ipv4_address  = "192.168.10.24/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
@@ -112,7 +112,7 @@ locals {
     }
     uranus = {
       vm_id         = 506
-      ipv4_address  = "192.168.10.18/24"
+      ipv4_address  = "192.168.10.25/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
@@ -123,7 +123,7 @@ locals {
     }
     neptune = {
       vm_id         = 507
-      ipv4_address  = "192.168.10.22/24"
+      ipv4_address  = "192.168.10.26/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
@@ -134,7 +134,7 @@ locals {
     }
     pluto = {
       vm_id         = 508
-      ipv4_address  = "192.168.10.23/24"
+      ipv4_address  = "192.168.10.27/24"
       cores         = 2
       memory_mb     = 4096
       memory_min_mb = 2048
