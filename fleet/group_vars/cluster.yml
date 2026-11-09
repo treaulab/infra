@@ -1,5 +1,5 @@
 ---
-# fleet/inventory/group_vars/cluster.yml — K3s cluster nodes (mercury, venus, earth).
+# fleet/inventory/group_vars/cluster.yml — K3s cluster nodes (mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, pluto).
 
 enable_ufw: true
 enable_fail2ban: true

@@ -10,7 +10,7 @@ Declarative Kubernetes state for the homelab cluster.
 
 ## Quick Start
 
-1. Install/converge K3s on the cluster (`mercury` server, `venus` and `earth` agents):
+1. Install/converge K3s on the cluster (`mercury` server, `venus` through `pluto` agents):
    ```bash
    just k3s
    ```

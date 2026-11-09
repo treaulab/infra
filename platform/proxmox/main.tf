@@ -77,6 +77,72 @@ locals {
       tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
       description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
     }
+    mars = {
+      vm_id         = 503
+      ipv4_address  = "192.168.10.15/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 4
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    jupiter = {
+      vm_id         = 504
+      ipv4_address  = "192.168.10.16/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 5
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    saturn = {
+      vm_id         = 505
+      ipv4_address  = "192.168.10.17/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 6
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    uranus = {
+      vm_id         = 506
+      ipv4_address  = "192.168.10.18/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 7
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    neptune = {
+      vm_id         = 507
+      ipv4_address  = "192.168.10.22/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 8
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
+    pluto = {
+      vm_id         = 508
+      ipv4_address  = "192.168.10.23/24"
+      cores         = 2
+      memory_mb     = 4096
+      memory_min_mb = 2048
+      disk_size_gb  = 32
+      startup_order = 9
+      tags          = ["internal", "k3s", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - K3s Worker Node"
+    }
   }
 }
 

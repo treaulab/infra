@@ -36,6 +36,36 @@ all:
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
           k3s_role: agent
+        mars:
+          ansible_host: 192.168.10.15
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        jupiter:
+          ansible_host: 192.168.10.16
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        saturn:
+          ansible_host: 192.168.10.17
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        uranus:
+          ansible_host: 192.168.10.18
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        neptune:
+          ansible_host: 192.168.10.22
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
+        pluto:
+          ansible_host: 192.168.10.23
+          ansible_user: treau
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
     routers:
       hosts:
         i:
