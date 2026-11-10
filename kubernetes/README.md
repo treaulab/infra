@@ -11,6 +11,12 @@ Virtual machines are provisioned on the Proxmox VE hypervisor (`entia`) via Open
 | **`mercury`** (VM 500) | Server (Control Plane + Etcd/SQLite) | `192.168.10.11` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `control-plane` |
 | **`venus`** (VM 501) | Agent (Worker Node) | `192.168.10.13` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
 | **`earth`** (VM 502) | Agent (Worker Node) | `192.168.10.14` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`mars`** (VM 503) | Agent (Worker Node) | `192.168.10.22` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`jupiter`** (VM 504) | Agent (Worker Node) | `192.168.10.23` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`saturn`** (VM 505) | Agent (Worker Node) | `192.168.10.24` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`uranus`** (VM 506) | Agent (Worker Node) | `192.168.10.25` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`neptune`** (VM 507) | Agent (Worker Node) | `192.168.10.26` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`pluto`** (VM 508) | Agent (Worker Node) | `192.168.10.27` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
 
 ## Storage & Networking Defaults
 

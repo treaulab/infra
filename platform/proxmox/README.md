@@ -16,8 +16,7 @@ Physical Host (Proxmox VE 9.x — entia)
        ├─ Streams cloud-init vendor-data for qemu-guest-agent (proxmox_virtual_environment_file)
        └─ Deploys K3s Cluster VMs on local-zfs (proxmox_virtual_environment_vm)
             ├─ mercury (VM 500, 192.168.10.11/24) — K3s Control Plane Server
-            ├─ venus   (VM 501, 192.168.10.13/24) — K3s Worker Node
-            ├─ earth   (VM 502, 192.168.10.14/24) — K3s Worker Node
+            ├─ venus through pluto (VM 501–508, 192.168.10.13–.27) — K3s Worker Nodes
             │    ├─ Modern Q35 PCIe chipset + virtio-scsi-single + io_uring AIO
             │    ├─ VirtIO multiqueue networking + VirtIO RNG device + NUMA
             │    ├─ Memory ballooning (floating min RAM to reclaim idle host memory)

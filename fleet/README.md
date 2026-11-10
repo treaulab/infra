@@ -45,7 +45,7 @@ fleet/
 
 The fleet is partitioned into capability tiers defined entirely in `fleet/group_vars/` as an **opt-in capability matrix**. `all.yml` defaults all capabilities to `false`; each scenario group explicitly opts into the capabilities it needs.
 
-| Capability / Role | `edge` (`vps`) | `hypervisors` (`entia`) | `cluster` (`mercury`, `venus`, `earth`) | `routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
+| Capability / Role | `edge` (`vps`) | `hypervisors` (`entia`) | `cluster` (`mercury` .. `pluto`) | `routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Common Baseline** (`roles/common`) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **PVE Hypervisor** (`roles/proxmox_host`) | ❌ | ✅ | ❌ | ❌ | ❌ |
