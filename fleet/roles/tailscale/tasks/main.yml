@@ -53,6 +53,7 @@
   ansible.builtin.command:
     cmd: >-
       tailscale up
+      --reset
       --hostname {{ tailscale_hostname }}
       --authkey {{ tailscale_authkey }}
       --operator={{ ansible_user }}
