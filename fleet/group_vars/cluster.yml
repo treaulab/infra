@@ -8,6 +8,7 @@ enable_tailscale: true
 enable_k3s: true
 ufw_allow_lan: true
 
+tailscale_tags: "tag:untrusted"
 tailscale_extra_args: "--ssh"
 
 internal_gateway: "192.168.10.254"
