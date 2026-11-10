@@ -8,7 +8,7 @@ enable_docker: true
 enable_tailscale: true
 
 base_ufw_ports: ["22", "80", "443"]
-tailscale_tags: "tag:server"
+tailscale_tags: "tag:untrusted"
 tailscale_extra_args: "--ssh"
 
 caddy_env_content: |

@@ -65,3 +65,19 @@
     - tailscale_status.stdout | length == 0 or ((tailscale_status.stdout | default('{}', true)) | from_json).BackendState | default('') != 'Running'
   no_log: true
   changed_when: true
+
+- name: Update Tailscale tags on running node if not matching
+  ansible.builtin.command:
+    cmd: >-
+      tailscale up
+      --reset
+      --hostname {{ tailscale_hostname }}
+      --operator={{ ansible_user }}
+      {{ ('--advertise-tags=' + tailscale_tags) if tailscale_tags | default('') | length > 0 else '' }}
+      {{ tailscale_extra_args | default('') }}
+  tags: [tailscale]
+  when:
+    - ((tailscale_status.stdout | default('{}', true)) | from_json).BackendState | default('') == 'Running'
+    - tailscale_tags | default('') | length > 0
+    - tailscale_tags not in (((tailscale_status.stdout | default('{}', true)) | from_json).Self.Tags | default([], true) | default([]))
+  changed_when: true

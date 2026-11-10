@@ -2,5 +2,5 @@
 # roles/tailscale/defaults/main.yml
 tailscale_authkey: ""
 tailscale_hostname: "{{ inventory_hostname }}"
-tailscale_tags: ""
+tailscale_tags: "tag:untrusted"
 tailscale_extra_args: ""

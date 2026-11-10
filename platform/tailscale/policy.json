@@ -6,7 +6,7 @@
 	},
 	"grants": [
 		{"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]},
-		{"src": ["tag:ci-ephemeral"], "dst": ["tag:server"], "ip": ["tcp:22"]}
+		{"src": ["tag:ci-ephemeral"], "dst": ["tag:server", "tag:untrusted"], "ip": ["tcp:22"]}
 	],
 	"ssh": [
 		{
@@ -18,7 +18,7 @@
 		{
 			"action": "accept",
 			"src":    ["tag:ci-ephemeral"],
-			"dst":    ["tag:server"],
+			"dst":    ["tag:server", "tag:untrusted"],
 			"users":  ["azureuser", "root"]
 		},
 		{
