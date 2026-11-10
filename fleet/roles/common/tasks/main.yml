@@ -36,6 +36,11 @@
       - cron
     state: present
     update_cache: true
+    cache_valid_time: 3600
+  register: apt_pkg_install
+  until: apt_pkg_install is success
+  retries: 3
+  delay: 5
   tags: [packages]
 
 - name: Configure unattended security upgrades
