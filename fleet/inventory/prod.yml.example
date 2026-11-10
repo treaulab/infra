@@ -87,3 +87,6 @@ all:
         nucboi:
           ansible_host: 192.168.10.68
           ansible_user: nucboi
+        minecraft:
+          ansible_host: 192.168.10.76
+          ansible_user: admin
