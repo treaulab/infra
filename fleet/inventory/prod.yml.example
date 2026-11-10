@@ -76,7 +76,7 @@ all:
       hosts:
         beefyboi:
           ansible_host: 192.168.10.69
-          ansible_user: beefyboy
+          ansible_user: beefyboi
           compose_stacks:
             - name: jellyfin
               src: stacks/homelab/jellyfin
