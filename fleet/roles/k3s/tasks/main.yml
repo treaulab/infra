@@ -142,6 +142,15 @@
     flat: true
   when: k3s_role | default('server') == 'server'
 
+- name: Substitute server IP in local kubeconfig
+  ansible.builtin.replace:
+    path: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ ansible_host }}:6443"
+  delegate_to: localhost
+  become: false
+  when: k3s_role | default('server') == 'server'
+
 - name: Copy cluster kubeconfig as default .kube/k3s.yaml
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../.kube/k3s-{{ inventory_hostname }}.yaml"

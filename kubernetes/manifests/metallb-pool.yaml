@@ -1,0 +1,23 @@
+---
+# kubernetes/manifests/metallb-pool.yaml
+# MetalLB Layer 2 IPAddressPool & L2Advertisement for 192.168.10.0/24 subnet.
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: lan-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.10.200-192.168.10.220
+  autoAssign: true
+
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: l2-adv
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - lan-pool

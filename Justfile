@@ -189,9 +189,52 @@ k *args:
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
 
+# Run helm against the homelab cluster.
+helm *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=""
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
+      if [ -f "$candidate" ]; then
+        cfg="$candidate"
+        break
+      fi
+    done
+    if [ -z "$cfg" ]; then
+      echo "ERROR: no kubeconfig found in .kube/. Run 'just converge mercury' first." >&2
+      exit 1
+    fi
+    KUBECONFIG="$cfg" helm {{args}}
+
 # Apply manifests from kubernetes/manifests.
 k-apply path="kubernetes/manifests":
     @just k apply -f {{path}}
+
+# Run helmfile against the homelab cluster.
+k-helmfile *args="apply":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=""
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
+      if [ -f "$candidate" ]; then
+        cfg="$candidate"
+        break
+      fi
+    done
+    if [ -z "$cfg" ]; then
+      echo "ERROR: no kubeconfig found in .kube/." >&2
+      exit 1
+    fi
+    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f kubernetes/helmfile.yaml {{args}}
+
+# Preview diff of all Helm releases against live cluster.
+k-diff:
+    @just k-helmfile diff
+
+# Full Kubernetes convergence: apply Helmfile charts → apply custom manifests.
+k-sync:
+    @just k-helmfile apply
+    @just k-apply
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":

@@ -1,0 +1,26 @@
+# kubernetes/helmfile.yaml — Declarative Helm releases for homelab cluster.
+
+repositories:
+  - name: metallb
+    url: https://metallb.github.io/metallb
+  - name: traefik
+    url: https://traefik.github.io/charts
+
+releases:
+  - name: metallb
+    namespace: metallb-system
+    chart: metallb/metallb
+    version: 0.16.2
+    createNamespace: true
+    values:
+      - values/metallb.yaml
+
+  - name: traefik
+    namespace: traefik
+    chart: traefik/traefik
+    version: 42.3.2
+    createNamespace: true
+    needs:
+      - metallb-system/metallb
+    values:
+      - values/traefik.yaml

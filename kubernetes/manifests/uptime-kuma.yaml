@@ -49,7 +49,7 @@ spec:
 ---
 # 3. THE DOORWAY (Service: NodePort)
 # Opens port 30001 directly on your VM's LAN IP.
-# No Ingress, no reverse proxy, no complex DNS needed.
+# Kept alongside Ingress for direct node-level fallback.
 apiVersion: v1
 kind: Service
 metadata:
@@ -61,4 +61,37 @@ spec:
   ports:
     - port: 3001
       targetPort: 3001
-      nodePort: 30001  # Access at http://192.168.10.11:30001
+      nodePort: 30001
+
+---
+# 4. THE INGRESS (Traefik L7 Reverse Proxy)
+# Routes traffic coming to Traefik directly to Uptime Kuma.
+# Matches any host on port 80 or 'kuma.lan'.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uptime-kuma
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: kuma.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: uptime-kuma
+                port:
+                  number: 3001
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: uptime-kuma
+                port:
+                  number: 3001

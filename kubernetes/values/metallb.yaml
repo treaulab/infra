@@ -1,0 +1,9 @@
+# kubernetes/values/metallb.yaml
+# MetalLB Helm chart configuration.
+# Underlying IP pools and L2 advertisements are declared in kubernetes/manifests/metallb-pool.yaml.
+
+controller:
+  logLevel: info
+
+speaker:
+  logLevel: info

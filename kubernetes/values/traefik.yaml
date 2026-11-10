@@ -1,0 +1,16 @@
+# kubernetes/values/traefik.yaml
+# Traefik v3 Ingress Controller configuration.
+
+service:
+  enabled: true
+  spec:
+    # MetalLB will assign an IP from the 192.168.10.200-220 pool
+    type: LoadBalancer
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+global:
+  sendAnonymousUsage: false
+  checkNewVersion: false
