@@ -171,6 +171,22 @@ The infrastructure uses a two-tier circumvention model:
 - Converge or restart standalone: `just byedpi [node]`.
 - Health check: `ssh <node> "curl -Iv https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"`.
 
+### Known Incompatibility: Akamai CDN, Quay.io & TCP OOB Desync
+Both `zapret2` (`--lua-desync=oob:urp=midsld:char=a`) and `byedpi` (`--oob 1+s`) inject an out-of-band byte marked with the TCP Urgent Pointer (`URG`) flag to defeat DPI stream reassembly.
+- **Root Cause**: Akamai CDN edge servers (`23.0.0.0/8`, hosting `cdn01.quay.io`, Apple CDN, GitHub release assets) drop incoming TCP segments carrying the `URG` flag or an active urgent pointer.
+- **Symptom**: TLS handshakes hang for 10 seconds and abort with `net/http: TLS handshake timeout`. In Kubernetes, container image pulls from `quay.io` (such as `quay.io/metallb/controller:v0.16.2`) fail with `ImagePullBackOff`.
+- **Upstream Status**: Akamai CDN and Quay.io are **unblocked** by Russian ISP DPI / TSPU. Desync is unnecessary and destructive for them.
+- **Resolution (Gateway Router `192.168.10.254`)**:
+  - Add `23.0.0.0/8` to `/opt/zapret2/ipset/zapret-ip-exclude.txt`.
+  - Add `quay.io` and `cdn01.quay.io` to `/opt/zapret2/ipset/zapret-hosts-user-exclude.txt`.
+  - Live reload: `nft add element inet zapret2 nozapret { 23.0.0.0/8 }`.
+- **Resolution (Workstations `byedpi`)**:
+  - `/usr/local/sbin/byedpi-nat.sh` explicitly bypasses `23.0.0.0/8` before redirecting ports 80/443:
+    ```bash
+    iptables -t nat -I OUTPUT -d 23.0.0.0/8 -j RETURN
+    ```
+- **Admission Webhook Impact**: If `metallb-controller` is stuck in `ImagePullBackOff` due to the Akamai timeout, applying `IPAddressPool` or `L2Advertisement` manifests will fail with `failed calling webhook ... no endpoints available for service "metallb-webhook-service"`. The controller pod must be healthy before pool CRDs can be applied.
+
 ## Proxmox VE & Homelab K3s Cluster
 
 Proxmox VE runs on bare-metal host `entia` (`192.168.10.10:8006`). Virtualization is automated via OpenTofu; cluster convergence and workload deployment are managed via Ansible and kubectl.

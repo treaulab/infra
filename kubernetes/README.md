@@ -28,10 +28,34 @@ Virtual machines are provisioned on the Proxmox VE hypervisor (`entia`) via Open
 
 ```text
 kubernetes/
+├── helmfile.yaml         # Helmfile orchestrating MetalLB and Traefik releases
+├── values/               # Helm values overrides
+│   ├── metallb.yaml      # Controller & speaker configuration
+│   └── traefik.yaml      # Traefik LoadBalancer service & entrypoints
 ├── manifests/            # Declarative Kubernetes manifests (.yaml)
-│   └── <service>.yaml    # Namespaces, Deployments, PVCs, Services
+│   ├── metallb-pool.yaml # IPAddressPool (192.168.10.200-220) & L2Advertisement
+│   └── uptime-kuma.yaml  # Deployment, PVC, Service, and Ingress (kuma.lan)
 └── images/               # Dockerfiles & build contexts for custom cluster images
 ```
+
+## Ingress & Load Balancing Architecture
+
+The cluster runs a standard bare-metal ingress layer:
+
+1. **MetalLB (v0.16.2)**:
+   - Deployed via Helmfile into `metallb-system`.
+   - Runs `metallb-controller` and `metallb-speaker` DaemonSet across all nodes.
+   - Configured with `lan-pool`: `192.168.10.200 - 192.168.10.220` (unassigned high subnet block) with Layer 2 ARP advertisements (`l2-adv`).
+2. **Traefik (v42.3.2 / App v3.7.17)**:
+   - Deployed via Helmfile into `traefik`.
+   - Exposed as `type: LoadBalancer`, acquiring the first VIP (`192.168.10.200`).
+   - Ingress controller routes traffic by hostname (`Host: kuma.lan`) to backend services.
+
+> [!IMPORTANT]
+> **DPI Note on Quay.io & Akamai CDN**:
+> MetalLB container images (`quay.io/metallb/controller`, `quay.io/metallb/speaker`) download layer blobs from Akamai CDN (`cdn01.quay.io` on `23.0.0.0/8`). Akamai drops TCP segments carrying the TCP Urgent (`URG`) pointer flag used by OOB DPI circumvention (`zapret2` and `byedpi`).
+> Ensure `23.0.0.0/8`, `quay.io`, and `cdn01.quay.io` are bypassed on the gateway router (`192.168.10.254`) and workstations; otherwise image pulls will hang with `net/http: TLS handshake timeout`.
+> Furthermore, `metallb-pool.yaml` relies on `metallb-webhook-service`. The controller pod must be fully pulled and running before applying pool CRDs.
 
 ## Quick Start & Operator Workflow
 
@@ -43,16 +67,34 @@ Deploy or update the K3s cluster across all nodes:
 ```bash
 just k3s
 ```
-*This installs/updates K3s, configures `mercury` as server, connects `venus` and `earth` as agents, and automatically fetches and configures your local kubeconfig at `.kube/k3s.yaml`.*
+*This installs/updates K3s, configures `mercury` as server, connects agent nodes, and automatically fetches and configures your local kubeconfig at `.kube/k3s.yaml`.*
 
-### 2. Inspect Cluster Health
+### 2. Deploy Ingress Infrastructure (Helmfile)
+
+Deploy MetalLB and Traefik:
+```bash
+# Preview helm diff
+just k-diff
+# Sync releases
+just k-sync
+# Or direct helmfile:
+helmfile --file kubernetes/helmfile.yaml apply
+```
+
+Apply MetalLB IP address pool and L2 advertisement:
+```bash
+just k-apply path="kubernetes/manifests/metallb-pool.yaml"
+```
+
+### 3. Inspect Cluster Health
 
 ```bash
 just k get nodes -o wide
 just k get pods -A
+just k get svc -n traefik
 ```
 
-### 3. Deploy Workloads
+### 4. Deploy Workloads
 
 Apply any manifest or directory under `kubernetes/manifests/`:
 ```bash
