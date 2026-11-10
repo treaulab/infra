@@ -1,27 +1,65 @@
 # kubernetes
 
-Declarative Kubernetes state for the homelab cluster.
+Declarative Kubernetes state and workload management for the homelab K3s cluster.
 
-## Structure
+## Cluster Topology
 
-- `manifests/` — Declarative Kubernetes manifests for cluster workloads.
-- `images/` — Container image source definitions for custom cluster containers.
-- Host OS baseline is managed via `fleet/playbooks/host.yml`; K3s engine lifecycle is managed via `fleet/playbooks/k3s.yml` (`just k3s`).
+Virtual machines are provisioned on the Proxmox VE hypervisor (`entia`) via OpenTofu (`platform/proxmox/`) and converged via Ansible (`fleet/roles/k3s`):
 
-## Quick Start
+| Node | Role | IP Address | Specs | Tags |
+| :--- | :--- | :--- | :--- | :--- |
+| **`mercury`** (VM 500) | Server (Control Plane + Etcd/SQLite) | `192.168.10.11` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `control-plane` |
+| **`venus`** (VM 501) | Agent (Worker Node) | `192.168.10.13` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
+| **`earth`** (VM 502) | Agent (Worker Node) | `192.168.10.14` | 2 vCPU, 4GB RAM, 32GB disk | `k3s`, `worker` |
 
-1. Install/converge K3s on the cluster (`mercury` server, `venus` through `pluto` agents):
-   ```bash
-   just k3s
-   ```
+## Storage & Networking Defaults
 
-2. Run `kubectl` commands against the cluster over Tailscale:
-   ```bash
-   just k get nodes
-   just k get pods -A
-   ```
+- **Storage**: Default `local-path` StorageClass (`rancher.io/local-path`) backed by VM local disk storage for `PersistentVolumeClaims`.
+- **Networking**: Flannel CNI (`vxlan`), CoreDNS internal service resolution.
+- **Lightweight Profile**: Traefik and ServiceLB are disabled in favor of minimal overhead, allowing explicit NodePort or lightweight Ingress controllers.
 
-3. Apply manifests:
-   ```bash
-   just k-apply kubernetes/manifests
-   ```
+## Directory Structure
+
+```text
+kubernetes/
+├── manifests/            # Declarative Kubernetes manifests (.yaml)
+│   └── <service>.yaml    # Namespaces, Deployments, PVCs, Services
+└── images/               # Dockerfiles & build contexts for custom cluster images
+```
+
+## Quick Start & Operator Workflow
+
+The root [`Justfile`](file:///home/trueking/Safe/Proj/infra/Justfile) provides the operator interface:
+
+### 1. Converge K3s Engine & Fetch Kubeconfig
+
+Deploy or update the K3s cluster across all nodes:
+```bash
+just k3s
+```
+*This installs/updates K3s, configures `mercury` as server, connects `venus` and `earth` as agents, and automatically fetches and configures your local kubeconfig at `.kube/k3s.yaml`.*
+
+### 2. Inspect Cluster Health
+
+```bash
+just k get nodes -o wide
+just k get pods -A
+```
+
+### 3. Deploy Workloads
+
+Apply any manifest or directory under `kubernetes/manifests/`:
+```bash
+just k-apply path="kubernetes/manifests"
+# or apply a specific manifest:
+just k-apply path="kubernetes/manifests/uptime-kuma.yaml"
+```
+
+### 4. Direct Kubectl Commands
+
+The `just k` helper automatically binds to `.kube/k3s.yaml`:
+```bash
+just k logs -n <namespace> <pod-name> -f
+just k describe node mercury
+just k port-forward -n <namespace> svc/<service-name> 8080:80
+```

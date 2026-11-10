@@ -45,7 +45,7 @@ fleet/
 
 The fleet is partitioned into capability tiers defined entirely in `fleet/group_vars/` as an **opt-in capability matrix**. `all.yml` defaults all capabilities to `false`; each scenario group explicitly opts into the capabilities it needs.
 
-| Capability / Role | `edge` (`vps`) | `hypervisors` (`entia`) | `cluster` (mercury .. pluto) | `routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
+| Capability / Role | `edge` (`vps`) | `hypervisors` (`entia`) | `cluster` (`mercury`, `venus`, `earth`) | `routers` (`i`) | `untrusted` (`beefyboi`, `scrawnyboi`, `nucboi`) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Common Baseline** (`roles/common`) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **PVE Hypervisor** (`roles/proxmox_host`) | ❌ | ✅ | ❌ | ❌ | ❌ |
@@ -62,4 +62,4 @@ The fleet is partitioned into capability tiers defined entirely in `fleet/group_
 
 - `playbooks/site.yml`: Full fleet convergence in one shot. Imports `host.yml` then `compose.yml`.
 - `playbooks/host.yml`: OS baseline for all nodes conditioned on the capability matrix flags (`enable_ufw`, `enable_fail2ban`, `enable_ssh_hardening`, `enable_byedpi`, `enable_k3s`). Export `TAILSCALE_AUTHKEY` for non-interactive tailnet join.
-- `playbooks/compose.yml`: Converges all `compose_stacks` declared in inventory. Syncs static website source on `edge` hosts before stack convergence.
+- `playbooks/compose.yml`: Converges all `compose_stacks` declared in inventory into `/opt/stacks/<service>` using `ansible.posix.synchronize` (`delete: true`). Syncs static website source on `edge` hosts before stack convergence.

@@ -10,5 +10,5 @@ caddy/
   .env.example
 ```
 
-Deploy with `just deploy-edge` or CI auto-deploy. There is deliberately no
+Deploy with `just deploy-public` or CI auto-deploy. There is deliberately no
 homelab reverse proxy here: homelab services are reached over Tailscale.

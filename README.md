@@ -23,13 +23,17 @@ platform/          OpenTofu roots
 ├── azure/         Azure VPS (RG/VNet/NSG/PIP/NIC/VM)
 ├── cloudflare/    zone lookup (DNS records adopted incrementally)
 ├── github/        branch protection
-├── proxmox/       homelab compute: cloud-init base image + Docker VM
+├── proxmox/       homelab compute: cloud-init base image + K3s cluster VMs (entia)
 └── tailscale/     tailnet ACL + CI keys/secrets
 
 fleet/             Ansible: host OS baseline, Docker Compose stack convergence
 stacks/            Declarative workloads -> /opt/stacks/<name>
 ├── edge/          Azure VPS: caddy/ (compose.yml, Caddyfile, site/)
 └── homelab/       jellyfin/
+
+kubernetes/        Declarative Kubernetes state (homelab K3s cluster)
+├── manifests/     Deployments, Services, PVCs, Namespaces
+└── images/        Custom container images
 
 edge/
 └── tunnel-worker/ Cloudflare Worker on go.treau.me (tunnel-only)
@@ -66,7 +70,9 @@ Keep port 22 until Tailscale access is proven.
 | `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
 | `fleet/playbooks/host.yml` | `just converge <node>` | Host OS baseline |
-| `fleet/playbooks/deploy.yml` | `just deploy-public` | Compose stack convergence |
+| `fleet/playbooks/compose.yml` | `just deploy-compose <host>` | Compose stack convergence |
+| `fleet/roles/k3s/**` | `just k3s` | K3s cluster nodes |
+| `kubernetes/manifests/**` | `just k-apply path="<path>"` | K3s cluster workloads |
 
 Website-only changes are synced without restarting Caddy; Caddyfile, compose,
 or `.env` changes recreate the container. `tools/deploy-public.sh`

@@ -170,3 +170,42 @@ The infrastructure uses a two-tier circumvention model:
 - Runs automatically before apt/docker/tailscale in `just untrusted` or `just converge <host>`.
 - Converge or restart standalone: `just byedpi [node]`.
 - Health check: `ssh <node> "curl -Iv https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"`.
+
+## Proxmox VE & Homelab K3s Cluster
+
+Proxmox VE runs on bare-metal host `entia` (`192.168.10.10:8006`). Virtualization is automated via OpenTofu; cluster convergence and workload deployment are managed via Ansible and kubectl.
+
+### 1. Provision VMs (OpenTofu)
+1. Ensure credentials exist in `.envrc` (`direnv allow .`):
+   ```bash
+   export PROXMOX_VE_ENDPOINT="https://192.168.10.10:8006/"
+   export PROXMOX_VE_API_TOKEN="terraform@pve!tofu-token=<token>"
+   export PROXMOX_VE_INSECURE="true"
+   ```
+2. Verify plan:
+   ```bash
+   just plan proxmox
+   ```
+3. Apply to provision the VMs on `local-zfs`:
+   ```bash
+   tofu -chdir=platform/proxmox apply
+   ```
+
+### 2. Converge K3s Cluster (Ansible)
+Deploy K3s on `mercury` (server), `venus` (agent), and `earth` (agent):
+```bash
+just k3s
+```
+*This command executes `playbooks/host.yml --limit cluster`, provisions systemd services, connects agents with the cluster token, and generates `.kube/k3s.yaml`.*
+
+### 3. Deploy Kubernetes Workloads
+1. Place declarative manifests in `kubernetes/manifests/<name>.yaml`.
+2. Apply manifests:
+   ```bash
+   just k-apply path="kubernetes/manifests/<name>.yaml"
+   ```
+3. Check status:
+   ```bash
+   just k get pods -A
+   just k get svc -A
+   ```
