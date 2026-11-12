@@ -8,4 +8,4 @@ enable_tailscale: true
 ufw_allow_lan: true
 
 tailscale_tags: "tag:untrusted"
-tailscale_extra_args: "--ssh"
+tailscale_extra_args: "--ssh --advertise-routes=192.168.10.0/24"

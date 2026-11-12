@@ -8,27 +8,79 @@
   tags: [firewall]
 
 - name: Configure UFW open ports
-  ansible.builtin.command:
-    cmd: "ufw allow {{ item }}/tcp"
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
   loop: "{{ base_ufw_ports | default(['22']) }}"
-  changed_when: false
   tags: [firewall]
 
 - name: Allow traffic on Tailscale interface
-  ansible.builtin.command:
-    cmd: "ufw allow in on tailscale0"
-  changed_when: false
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: tailscale0
   tags: [firewall]
 
 - name: Allow LAN subnet traffic
-  ansible.builtin.command:
-    cmd: "ufw allow from 192.168.10.0/24"
+  community.general.ufw:
+    rule: allow
+    src: 192.168.10.0/24
   when: ufw_allow_lan | default(false) | bool
-  changed_when: false
   tags: [firewall]
 
+# --- K3s Cluster Firewall Rules ---
+- name: Configure K3s firewall rules
+  when: enable_k3s | default(false) | bool
+  tags: [firewall, k3s]
+  block:
+    - name: Allow K3s API port on server nodes
+      community.general.ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
+        comment: 'k3s API'
+      when: k3s_role | default('server') == 'server'
+
+    - name: Allow Kubelet metrics and API port
+      community.general.ufw:
+        rule: allow
+        port: '10250'
+        proto: tcp
+        comment: 'k3s Kubelet'
+
+    - name: Allow Flannel VXLAN overlay traffic
+      community.general.ufw:
+        rule: allow
+        port: '8472'
+        proto: udp
+        comment: 'k3s Flannel VXLAN'
+
+    - name: Allow CNI and Flannel interface traffic
+      community.general.ufw:
+        rule: allow
+        direction: in
+        interface: "{{ item }}"
+      loop:
+        - cni0
+        - flannel.1
+
+    - name: Allow K3s Pod and Service CIDR traffic
+      community.general.ufw:
+        rule: allow
+        src: "{{ item }}"
+      loop:
+        - "10.42.0.0/16"
+        - "10.43.0.0/16"
+
+    - name: Ensure UFW default forward policy is ACCEPT for CNI routing
+      community.general.ufw:
+        default: allow
+        direction: routed
+
 - name: Enable UFW firewall (default deny incoming)
-  ansible.builtin.command:
-    cmd: "ufw --force enable"
-  changed_when: false
+  community.general.ufw:
+    state: enabled
+    default: deny
+    direction: incoming
   tags: [firewall]

@@ -72,6 +72,7 @@ all:
           ansible_host: 192.168.10.254
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          tailscale_extra_args: "--ssh --advertise-routes=192.168.10.0/24"
         openwrt:
           ansible_host: 192.168.10.2
           ansible_user: root
@@ -95,8 +96,4 @@ all:
           ansible_host: 192.168.10.76
           ansible_user: admin
           enable_k3s: true
-          k3s_role: server
-          k3s_tls_san:
-            - "192.168.10.76"
-            - "minecraft"
-            - "100.116.22.71"
+          k3s_role: agent

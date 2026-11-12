@@ -41,6 +41,19 @@
     state: started
   tags: [tailscale]
 
+- name: Enable IPv4 and IPv6 forwarding for subnet routing
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+  when: "'--advertise-routes' in (tailscale_extra_args | default(''))"
+  tags: [tailscale]
+
 - name: Check Tailscale status
   ansible.builtin.command:
     cmd: tailscale status --json

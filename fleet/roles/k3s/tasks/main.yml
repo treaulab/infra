@@ -1,6 +1,63 @@
 ---
 # roles/k3s/tasks/main.yml — K3s server and agent convergence.
 
+# --- Host Firewall Compatibility ---
+- name: Check if UFW is active on the node
+  ansible.builtin.command:
+    cmd: ufw status
+  register: k3s_ufw_status
+  changed_when: false
+  failed_when: false
+
+- name: Configure UFW for K3s if UFW is active
+  when:
+    - k3s_ufw_status.rc == 0
+    - "'Status: active' in (k3s_ufw_status.stdout | default(''))"
+  block:
+    - name: Allow K3s API port on server nodes
+      community.general.ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
+        comment: 'k3s API'
+      when: k3s_role | default('server') == 'server'
+
+    - name: Allow Kubelet metrics and API port
+      community.general.ufw:
+        rule: allow
+        port: '10250'
+        proto: tcp
+        comment: 'k3s Kubelet'
+
+    - name: Allow Flannel VXLAN overlay traffic
+      community.general.ufw:
+        rule: allow
+        port: '8472'
+        proto: udp
+        comment: 'k3s Flannel VXLAN'
+
+    - name: Allow CNI and Flannel interface traffic
+      community.general.ufw:
+        rule: allow
+        direction: in
+        interface: "{{ item }}"
+      loop:
+        - cni0
+        - flannel.1
+
+    - name: Allow K3s Pod and Service subnets
+      community.general.ufw:
+        rule: allow
+        src: "{{ item }}"
+      loop:
+        - "10.42.0.0/16"
+        - "10.43.0.0/16"
+
+    - name: Ensure UFW default forward policy is ACCEPT for CNI routing
+      community.general.ufw:
+        default: allow
+        direction: routed
+
 - name: Resolve K3s cluster token
   ansible.builtin.set_fact:
     k3s_node_token: >-
