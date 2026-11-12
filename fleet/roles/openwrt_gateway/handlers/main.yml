@@ -9,6 +9,10 @@
   ansible.builtin.command:
     cmd: /etc/init.d/tinyproxy restart
 
+- name: Restart firewall
+  ansible.builtin.command:
+    cmd: /etc/init.d/firewall restart
+
 - name: Restart dnsmasq
   ansible.builtin.command:
     cmd: /etc/init.d/dnsmasq restart
