@@ -7,7 +7,7 @@ locals {
   openwrt_vm_id     = 200
   openwrt_ip        = "192.168.10.2"
   openwrt_image_url = "https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
-  openwrt_file_name = "openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
+  openwrt_file_name = "openwrt-25.12.6-x86-64-generic-ext4-combined.img"
 }
 
 resource "proxmox_download_file" "openwrt_image" {
