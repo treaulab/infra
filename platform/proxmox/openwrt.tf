@@ -17,6 +17,7 @@ resource "proxmox_download_file" "openwrt_image" {
   url                     = local.openwrt_image_url
   file_name               = local.openwrt_file_name
   decompression_algorithm = "gz"
+  overwrite               = false
 }
 
 resource "proxmox_virtual_environment_vm" "openwrt" {
@@ -47,7 +48,7 @@ resource "proxmox_virtual_environment_vm" "openwrt" {
 
   disk {
     datastore_id = local.datastore_vm
-    import_from  = proxmox_download_file.openwrt_image.id
+    file_id      = proxmox_download_file.openwrt_image.id
     interface    = "scsi0"
     iothread     = true
     discard      = "on"
