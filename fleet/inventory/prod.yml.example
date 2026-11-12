@@ -72,6 +72,10 @@ all:
           ansible_host: 192.168.10.254
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+        openwrt:
+          ansible_host: 192.168.10.2
+          ansible_user: root
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
     untrusted:
       hosts:
         beefyboi:

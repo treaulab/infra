@@ -1,0 +1,29 @@
+---
+# roles/openwrt_gateway/defaults/main.yml — Default parameters for OpenWrt DPI Gateway.
+
+openwrt_ip: "192.168.10.2"
+openwrt_netmask: "255.255.255.0"
+openwrt_gateway: "192.168.10.1"
+openwrt_dns: "192.168.10.5"
+openwrt_tailscale_gateway: "192.168.10.88"
+
+openwrt_tinyproxy_port: 8888
+openwrt_tinyproxy_max_clients: 1024
+openwrt_tinyproxy_allowed:
+  - "127.0.0.1"
+  - "192.168.10.0/24"
+  - "100.64.0.0/10"
+
+openwrt_zapret_desync_opt: "--filter-tcp=443 --in-range=-s1 --lua-desync=oob:urp=midsld:char=a"
+openwrt_zapret_user: "tpws"
+openwrt_zapret_qnum: 300
+openwrt_zapret_mark: "0x40000000"
+
+openwrt_zapret_ip_exclusions:
+  - "192.168.10.0/24"
+  - "100.64.0.0/10"
+  - "23.0.0.0/8"
+
+openwrt_zapret_host_exclusions:
+  - "quay.io"
+  - "cdn01.quay.io"

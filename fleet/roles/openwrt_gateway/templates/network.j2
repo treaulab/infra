@@ -1,0 +1,28 @@
+# Managed by Ansible (roles/openwrt_gateway). Do not edit manually.
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	list ipaddr '127.0.0.1/8'
+
+config globals 'globals'
+	option ula_prefix 'fd10:e3c8:f7ab::/48'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '{{ openwrt_ip }}'
+	option netmask '{{ openwrt_netmask }}'
+	option gateway '{{ openwrt_gateway }}'
+	option dns '{{ openwrt_dns }}'
+
+config route 'tailscale'
+	option interface 'lan'
+	option target '100.64.0.0'
+	option netmask '255.192.0.0'
+	option gateway '{{ openwrt_tailscale_gateway }}'

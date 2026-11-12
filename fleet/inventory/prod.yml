@@ -74,6 +74,10 @@ all:
           ansible_host: 100.101.14.72 # Raspberry Pi LAN/Tailscale gateway
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+        openwrt:
+          ansible_host: 192.168.10.2 # OpenWrt DPI Bypass Gateway
+          ansible_user: root
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
     untrusted:
       hosts:
         beefyboi:

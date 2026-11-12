@@ -1,0 +1,22 @@
+---
+# roles/openwrt_gateway/handlers/main.yml
+
+- name: Reload network
+  ansible.builtin.command:
+    cmd: /etc/init.d/network restart
+
+- name: Restart tinyproxy
+  ansible.builtin.command:
+    cmd: /etc/init.d/tinyproxy restart
+
+- name: Restart dnsmasq
+  ansible.builtin.command:
+    cmd: /etc/init.d/dnsmasq restart
+
+- name: Restart zapret2
+  ansible.builtin.command:
+    cmd: /etc/init.d/zapret2 restart
+
+- name: Apply sysctl
+  ansible.builtin.command:
+    cmd: sysctl -p /etc/sysctl.conf

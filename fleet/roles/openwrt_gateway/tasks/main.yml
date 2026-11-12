@@ -1,0 +1,117 @@
+---
+# roles/openwrt_gateway/tasks/main.yml — OpenWrt Gateway Convergence.
+
+- name: Check if python3 is installed on OpenWrt
+  ansible.builtin.raw: which python3 || true
+  register: python3_check
+  changed_when: false
+
+- name: Install python3 via apk if missing
+  ansible.builtin.raw: apk update && apk add python3
+  when: python3_check.stdout | trim == ''
+
+- name: Install required OpenWrt packages via apk
+  ansible.builtin.command:
+    cmd: apk add kmod-nfnetlink-queue kmod-nft-queue libnetfilter-queue1 luajit2 tinyproxy luci-ssl
+  register: apk_install
+  changed_when: "'Installing' in apk_install.stdout or 'Upgrading' in apk_install.stdout"
+
+- name: Ensure sysctl.d directory exists
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy kernel sysctl parameters
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.conf
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Deploy proxy tuning sysctl parameters
+  ansible.builtin.copy:
+    src: 99-proxy-tuning.conf
+    dest: /etc/sysctl.d/99-proxy-tuning.conf
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Deploy UCI network configuration
+  ansible.builtin.template:
+    src: network.j2
+    dest: /etc/config/network
+    mode: "0644"
+  notify: Reload network
+
+- name: Deploy UCI tinyproxy configuration
+  ansible.builtin.template:
+    src: tinyproxy.j2
+    dest: /etc/config/tinyproxy
+    mode: "0644"
+  notify: Restart tinyproxy
+
+- name: Deploy UCI dhcp/dnsmasq configuration
+  ansible.builtin.template:
+    src: dhcp.j2
+    dest: /etc/config/dhcp
+    mode: "0644"
+  notify: Restart dnsmasq
+
+- name: Ensure /opt directory exists
+  ansible.builtin.file:
+    path: /opt
+    state: directory
+    mode: "0755"
+
+- name: Unarchive Zapret2 bundle to /opt
+  ansible.builtin.unarchive:
+    src: zapret2-openwrt-bundle.tar.gz
+    dest: /opt
+    creates: /opt/zapret2/nfq2/nfqws2
+
+- name: Deploy Zapret2 configuration
+  ansible.builtin.template:
+    src: zapret2-config.j2
+    dest: /opt/zapret2/config
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Ensure Zapret2 ipset directory exists
+  ansible.builtin.file:
+    path: /opt/zapret2/ipset
+    state: directory
+    mode: "0755"
+
+- name: Deploy Zapret2 exclusions
+  ansible.builtin.template:
+    src: zapret-hosts-user-exclude.txt.j2
+    dest: /opt/zapret2/ipset/zapret-hosts-user-exclude.txt
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Symlink Zapret2 init script
+  ansible.builtin.file:
+    src: /opt/zapret2/init.d/openwrt/zapret2
+    dest: /etc/init.d/zapret2
+    state: link
+
+- name: Ensure hotplug interface directory exists
+  ansible.builtin.file:
+    path: /etc/hotplug.d/iface
+    state: directory
+    mode: "0755"
+
+- name: Symlink Zapret2 hotplug script
+  ansible.builtin.file:
+    src: /opt/zapret2/init.d/openwrt/90-zapret2
+    dest: /etc/hotplug.d/iface/90-zapret2
+    state: link
+
+- name: Enable and start OpenWrt services
+  ansible.builtin.command:
+    cmd: "/etc/init.d/{{ item }} enable && /etc/init.d/{{ item }} start"
+  loop:
+    - tinyproxy
+    - zapret2
+    - dnsmasq
+  changed_when: false

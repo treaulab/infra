@@ -132,6 +132,10 @@ converge-pve:
     cd fleet
     ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit hypervisors
 
+# Converge OpenWrt DPI bypass gateway.
+gateway *args="":
+    cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit openwrt {{args}}
+
 # Converge K3s cluster nodes (runs host.yml scoped to cluster group).
 k3s node="cluster" *args="":
     #!/usr/bin/env bash
