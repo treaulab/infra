@@ -7,6 +7,9 @@ openwrt_gateway: "192.168.10.1"
 openwrt_dns: "192.168.10.5"
 openwrt_tailscale_gateway: "192.168.10.88"
 
+openwrt_zapret_version: "v1.0.6"
+openwrt_zapret_url: "https://github.com/slancj/zapret2/releases/download/{{ openwrt_zapret_version }}/zapret2-openwrt-x86_64.tar.gz"
+
 openwrt_tinyproxy_port: 8888
 openwrt_tinyproxy_max_clients: 1024
 openwrt_tinyproxy_allowed:

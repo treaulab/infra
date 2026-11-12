@@ -63,11 +63,23 @@
     state: directory
     mode: "0755"
 
-- name: Unarchive Zapret2 bundle to /opt
+- name: Download Zapret2 release from GitHub mirror
+  ansible.builtin.get_url:
+    url: "{{ openwrt_zapret_url }}"
+    dest: /tmp/zapret2-release.tar.gz
+    mode: "0644"
+
+- name: Extract Zapret2 release to /opt
   ansible.builtin.unarchive:
-    src: zapret2-openwrt-bundle.tar.gz
+    src: /tmp/zapret2-release.tar.gz
     dest: /opt
+    remote_src: true
     creates: /opt/zapret2/nfq2/nfqws2
+
+- name: Clean up temporary Zapret2 release archive
+  ansible.builtin.file:
+    path: /tmp/zapret2-release.tar.gz
+    state: absent
 
 - name: Deploy Zapret2 configuration
   ansible.builtin.template:
