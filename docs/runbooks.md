@@ -149,9 +149,11 @@ Russian ISP TSPU (Roskomnadzor) resets TLS connections during SNI Client Hello i
 
 The infrastructure uses a two-tier circumvention model:
 
-1. **Router / Gateway Level (`192.168.10.254` OpenWrt)**:
+1. **Router / Gateway Level (`192.168.10.2` / `192.168.10.254` OpenWrt)**:
    - Runs **`zapret2`** (`nfqws2`) at the network boundary.
-   - Handles network-wide NFQUEUE desync for all devices routing via `.254` (Proxmox VMs `mercury`, `venus`, phones, IoT) without client software.
+   - Handles network-wide NFQUEUE desync for all devices routing via `.2` (Proxmox VMs `mercury`, `venus`, phones, IoT) without client software.
+   - Declared in code via OpenTofu ([platform/proxmox/openwrt.tf](file:///home/trueking/Safe/Proj/infra/platform/proxmox/openwrt.tf)) and converged via Ansible ([fleet/roles/openwrt_gateway](file:///home/trueking/Safe/Proj/infra/fleet/roles/openwrt_gateway) via `just gateway`).
+   - Mirror repository: [github.com/slancj/zapret2](https://github.com/slancj/zapret2).
    - Documented in `~/Safe/documented/router-192.168.10.254/`.
 
 2. **Workstation Fleet (`untrusted`: beefyboi, scrawnyboi, nucboi)**:
@@ -185,6 +187,9 @@ Both `zapret2` (`--lua-desync=oob:urp=midsld:char=a`) and `byedpi` (`--oob 1+s`)
     ```bash
     iptables -t nat -I OUTPUT -d 23.0.0.0/8 -j RETURN
     ```
+- **Impact on Consumer Services (TikTok & Roblox)**:
+  - **TikTok**: `www.tiktok.com` resolves directly to Akamai EdgeSuite (`23.199.54.x` within `23.0.0.0/8`). With `23.0.0.0/8` excluded from NFQUEUE desync, TLS 1.3 handshakes complete instantly without OOB handshake timeouts.
+  - **Roblox**: `www.roblox.com` resolves to Roblox edge IPs (`128.116.48.x`), which are not in the Akamai block. Traffic is processed by Zapret2 OOB desync (`--lua-desync=oob:urp=midsld:char=a`), completing clean TLS 1.3 handshakes and bypassing TSPU RST injection.
 - **Admission Webhook Impact**: If `metallb-controller` is stuck in `ImagePullBackOff` due to the Akamai timeout, applying `IPAddressPool` or `L2Advertisement` manifests will fail with `failed calling webhook ... no endpoints available for service "metallb-webhook-service"`. The controller pod must be healthy before pool CRDs can be applied.
 
 ## Proxmox VE & Homelab K3s Cluster
