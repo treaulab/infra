@@ -4,11 +4,10 @@
 # ==============================================================================
 
 locals {
-  openwrt_vm_id       = 200
-  openwrt_ip          = "192.168.10.2"
-  openwrt_mac_address = "BC:24:11:F4:2C:6C"
-  openwrt_image_url   = "https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
-  openwrt_file_name   = "openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
+  openwrt_vm_id     = 200
+  openwrt_ip        = "192.168.10.2"
+  openwrt_image_url = "https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
+  openwrt_file_name = "openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
 }
 
 resource "proxmox_download_file" "openwrt_image" {
@@ -60,10 +59,9 @@ resource "proxmox_virtual_environment_vm" "openwrt" {
   boot_order = ["scsi0"]
 
   network_device {
-    bridge      = local.network_bridge
-    model       = "virtio"
-    mac_address = local.openwrt_mac_address
-    firewall    = false
+    bridge   = local.network_bridge
+    model    = "virtio"
+    firewall = false
   }
 
   operating_system {
@@ -86,7 +84,7 @@ output "openwrt_vm" {
     vm_id        = proxmox_virtual_environment_vm.openwrt.vm_id
     name         = proxmox_virtual_environment_vm.openwrt.name
     ipv4_address = local.openwrt_ip
-    mac_address  = local.openwrt_mac_address
+    mac_address  = proxmox_virtual_environment_vm.openwrt.network_device[0].mac_address
   }
   description = "OpenWrt Gateway Virtual Machine"
 }

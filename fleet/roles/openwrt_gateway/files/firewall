@@ -1,0 +1,17 @@
+# Managed by Ansible (roles/openwrt_gateway). Do not edit manually.
+# One-armed gateway: lan zone only, forward/input/output accepted, masquerade on lan.
+
+config defaults
+	option syn_flood '1'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
+config zone
+	option name 'lan'
+	list network 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option masq '1'
+	option mtu_fix '1'
