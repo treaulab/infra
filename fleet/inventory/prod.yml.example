@@ -90,3 +90,9 @@ all:
         minecraft:
           ansible_host: 192.168.10.76
           ansible_user: admin
+          enable_k3s: true
+          k3s_role: server
+          k3s_tls_san:
+            - "192.168.10.76"
+            - "minecraft"
+            - "100.116.22.71"

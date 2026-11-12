@@ -133,18 +133,22 @@ converge-pve:
     ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit hypervisors
 
 # Converge K3s cluster nodes (runs host.yml scoped to cluster group).
-k3s node="cluster":
+k3s node="cluster" *args="":
     #!/usr/bin/env bash
     set -euo pipefail
     target="{{node}}"
     target="${target#node=}"
     cd fleet
-    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target"
+    ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "$target" {{args}}
     cd ..
     mkdir -p .kube
+    server_host="$target"
+    if [ "$server_host" = "cluster" ] || [ "$server_host" = "all" ]; then
+      server_host="mercury"
+    fi
     for kf in ".kube/k3s-$target.yaml" ".kube/k3s.yaml"; do
       if [ -f "$kf" ]; then
-        host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "mercury" 2>/dev/null | jq -r '.ansible_host // empty')
+        host_ip=$(cd fleet && ansible-inventory -i inventory/prod.yml --host "$server_host" 2>/dev/null | jq -r '.ansible_host // empty')
         if [ -n "$host_ip" ]; then
           sed -i "s/127.0.0.1/$host_ip/g" "$kf"
         fi

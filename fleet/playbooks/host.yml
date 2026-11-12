@@ -27,3 +27,4 @@
       tags: [tailscale]
     - role: k3s
       when: enable_k3s | default(false) | bool
+      tags: [k3s]
