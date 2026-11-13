@@ -28,8 +28,8 @@ locals {
   network_bridge    = "vmbr0"
 
   # Guest Network Defaults
-  ipv4_gateway = "192.168.10.2"
-  dns_servers  = ["192.168.10.2", "1.1.1.1"]
+  ipv4_gateway = "192.168.10.254"
+  dns_servers  = ["192.168.10.254", "1.1.1.1"]
 
   # Guest Admin User
   admin_username = "treau"
@@ -44,6 +44,19 @@ locals {
   # VM FLEET: Add, remove, or edit your virtual machines here
   # ============================================================================
   vms = {
+    gateway = {
+      vm_id         = 200
+      ipv4_address  = "192.168.10.2/24"
+      gateway       = "192.168.10.1"
+      dns_servers   = ["192.168.10.5", "1.1.1.1"]
+      cores         = 2
+      memory_mb     = 2048
+      memory_min_mb = 1024
+      disk_size_gb  = 16
+      startup_order = 1
+      tags          = ["gateway", "tofu", "ubuntu-26.04"]
+      description   = "Managed by OpenTofu (platform/proxmox) - Transparent DPI Bypass Gateway (192.168.10.2)"
+    }
     mercury = {
       vm_id         = 500
       ipv4_address  = "192.168.10.11/24"
@@ -264,14 +277,14 @@ resource "proxmox_virtual_environment_vm" "vms" {
     ip_config {
       ipv4 {
         address = each.value.ipv4_address
-        gateway = local.ipv4_gateway
+        gateway = lookup(each.value, "gateway", local.ipv4_gateway)
       }
     }
 
     dynamic "dns" {
-      for_each = local.dns_servers != null ? [1] : []
+      for_each = lookup(each.value, "dns_servers", local.dns_servers) != null ? [1] : []
       content {
-        servers = local.dns_servers
+        servers = lookup(each.value, "dns_servers", local.dns_servers)
       }
     }
 

@@ -75,10 +75,11 @@ all:
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
           tailscale_extra_args: "--ssh --advertise-routes=192.168.10.0/24"
-        openwrt:
-          ansible_host: 192.168.10.2 # OpenWrt DPI Bypass Gateway
-          ansible_user: root
+        gateway:
+          ansible_host: 192.168.10.2 # DPI Bypass Gateway (Ubuntu Minimal)
+          ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          enable_dpi_gateway: true
     untrusted:
       hosts:
         beefyboi:

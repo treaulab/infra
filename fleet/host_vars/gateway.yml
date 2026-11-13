@@ -1,0 +1,12 @@
+---
+# fleet/host_vars/gateway.yml — DPI Bypass Gateway host overrides (Ubuntu Minimal).
+
+# UFW is disabled on the gateway because nftables manages transparent NAT and NFQUEUE redirection directly
+enable_ufw: false
+
+enable_docker: false
+enable_byedpi: false
+enable_k3s: false
+enable_proxmox_host: false
+enable_tailscale: true
+enable_dpi_gateway: true
