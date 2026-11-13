@@ -167,3 +167,6 @@
     - dnsmasq
     - tinyproxy
     - zapret2
+
+- name: Flush handlers to ensure gateway services are active before proceeding
+  ansible.builtin.meta: flush_handlers
