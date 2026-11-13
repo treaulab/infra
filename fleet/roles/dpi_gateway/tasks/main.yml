@@ -17,37 +17,31 @@
       net.netfilter.nf_conntrack_max = 1048576
   notify: Apply sysctl
 
-- name: Ensure systemd-resolved configuration drop-in directory exists
-  ansible.builtin.file:
-    path: /etc/systemd/resolved.conf.d
-    state: directory
-    mode: "0755"
+- name: Ensure legacy dnsmasq service is stopped and disabled
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: stopped
+    enabled: false
+  failed_when: false
 
-- name: Disable systemd-resolved DNSStubListener to free port 53 for dnsmasq
-  ansible.builtin.copy:
-    dest: /etc/systemd/resolved.conf.d/disable-stub.conf
-    mode: "0644"
-    content: |
-      # Managed by Ansible (roles/dpi_gateway). Do not edit manually.
-      [Resolve]
-      DNSStubListener=no
+- name: Remove systemd-resolved DNSStubListener override if present
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d/disable-stub.conf
+    state: absent
   notify: Restart systemd-resolved
 
-- name: Point /etc/resolv.conf to upstream systemd-resolved config (avoid dead 127.0.0.53 stub)
+- name: Restore default systemd-resolved resolv.conf symlink
   ansible.builtin.file:
-    src: /run/systemd/resolve/resolv.conf
+    src: /run/systemd/resolve/stub-resolv.conf
     dest: /etc/resolv.conf
     state: link
     force: true
-
-- name: Flush handlers to release port 53 before dnsmasq installation
-  ansible.builtin.meta: flush_handlers
+  notify: Restart systemd-resolved
 
 - name: Install required gateway packages
   ansible.builtin.apt:
     name:
       - nftables
-      - dnsmasq
       - tinyproxy
       - git
       - build-essential
@@ -83,13 +77,6 @@
     dest: /etc/nftables.conf
     mode: "0755"
   notify: Restart nftables
-
-- name: Deploy dnsmasq gateway configuration
-  ansible.builtin.template:
-    src: dnsmasq.conf.j2
-    dest: /etc/dnsmasq.d/gateway.conf
-    mode: "0644"
-  notify: Restart dnsmasq
 
 - name: Deploy tinyproxy configuration
   ansible.builtin.template:
@@ -164,7 +151,6 @@
     state: started
   loop:
     - nftables
-    - dnsmasq
     - tinyproxy
     - zapret2
 

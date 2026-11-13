@@ -17,11 +17,6 @@
     state: restarted
   notify: Restart zapret2
 
-- name: Restart dnsmasq
-  ansible.builtin.systemd:
-    name: dnsmasq
-    state: restarted
-
 - name: Restart tinyproxy
   ansible.builtin.systemd:
     name: tinyproxy
