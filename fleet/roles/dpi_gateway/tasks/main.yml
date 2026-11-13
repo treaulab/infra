@@ -53,6 +53,7 @@
     name:
       - nftables
       - tinyproxy
+      - nginx-light
       - git
       - build-essential
       - libnetfilter-queue-dev
@@ -87,6 +88,21 @@
     dest: /etc/nftables.conf
     mode: "0755"
   notify: Restart nftables
+
+- name: Ensure tinyproxy systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/tinyproxy.service.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy tinyproxy resource limits override
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tinyproxy.service.d/limits.conf
+    mode: "0644"
+    content: |
+      [Service]
+      LimitNOFILE=65536
+  notify: Restart tinyproxy
 
 - name: Deploy tinyproxy configuration
   ansible.builtin.template:
@@ -150,6 +166,43 @@
     mode: "0644"
   notify: Restart zapret2
 
+- name: Deploy nginx PAC site configuration
+  ansible.builtin.template:
+    src: nginx-pac.conf.j2
+    dest: /etc/nginx/sites-available/default
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Ensure default nginx site is enabled
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/default
+    dest: /etc/nginx/sites-enabled/default
+    state: link
+    force: true
+  notify: Restart nginx
+
+- name: Ensure web root directory exists
+  ansible.builtin.file:
+    path: /var/www/html
+    state: directory
+    mode: "0755"
+
+- name: Deploy PAC configuration script
+  ansible.builtin.template:
+    src: sits.pac.j2
+    dest: /var/www/html/sits.pac
+    mode: "0644"
+
+- name: Create PAC script compatibility symlinks
+  ansible.builtin.file:
+    src: sits.pac
+    dest: "/var/www/html/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - proxy.pac
+    - wpad.dat
+
 - name: Ensure systemd daemon is reloaded
   ansible.builtin.systemd:
     daemon_reload: true
@@ -163,6 +216,7 @@
     - nftables
     - tinyproxy
     - zapret2
+    - nginx
 
 - name: Flush handlers to ensure gateway services are active before proceeding
   ansible.builtin.meta: flush_handlers

@@ -22,6 +22,11 @@
     name: tinyproxy
     state: restarted
 
+- name: Restart nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+
 - name: Restart zapret2
   ansible.builtin.systemd:
     name: zapret2

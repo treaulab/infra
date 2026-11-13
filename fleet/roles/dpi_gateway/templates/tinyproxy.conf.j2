@@ -2,12 +2,16 @@
 User tinyproxy
 Group tinyproxy
 Port {{ gateway_tinyproxy_port }}
-Timeout 15
+Timeout {{ gateway_tinyproxy_timeout }}
 DefaultErrorFile "/usr/share/tinyproxy/default.html"
 StatFile "/usr/share/tinyproxy/stats.html"
 LogFile "/var/log/tinyproxy/tinyproxy.log"
 LogLevel Warning
 MaxClients {{ gateway_tinyproxy_max_clients }}
+MinSpareServers {{ gateway_tinyproxy_min_spare_servers }}
+MaxSpareServers {{ gateway_tinyproxy_max_spare_servers }}
+StartServers {{ gateway_tinyproxy_start_servers }}
+MaxRequestsPerChild {{ gateway_tinyproxy_max_requests_per_child }}
 {% for allowed in gateway_tinyproxy_allowed %}
 Allow {{ allowed }}
 {% endfor %}

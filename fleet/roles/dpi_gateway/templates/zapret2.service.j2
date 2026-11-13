@@ -10,6 +10,7 @@ TimeoutSec=30sec
 IgnoreSIGPIPE=no
 GuessMainPID=no
 RemainAfterExit=no
+LimitNOFILE=65536
 ExecStart=/opt/zapret2/init.d/sysv/zapret2 start
 ExecStop=/opt/zapret2/init.d/sysv/zapret2 stop
 

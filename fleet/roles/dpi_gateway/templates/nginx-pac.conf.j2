@@ -1,0 +1,21 @@
+# Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+server {
+    listen 80 default_server;
+    server_name _;
+
+    root /var/www/html;
+    index sits.pac;
+
+    location = / {
+        return 302 /sits.pac;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+        add_header Cache-Control "public, max-age=300";
+        types {
+            application/x-ns-proxy-autoconfig pac dat;
+        }
+        default_type application/x-ns-proxy-autoconfig;
+    }
+}

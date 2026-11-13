@@ -1,0 +1,46 @@
+// Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+function FindProxyForURL(url, host) {
+    if (shExpMatch(url, "http://*msftconnecttest.com*") ||
+        shExpMatch(url, "http://*msftncsi.com*") ||
+        shExpMatch(url, "http://*detectportal.firefox.com*") ||
+        shExpMatch(url, "http://*captive.apple.com*") ||
+        shExpMatch(url, "http://*connectivitycheck.gstatic.com*")) {
+        return "DIRECT";
+    }
+
+    if (isPlainHostName(host) ||
+        host == "localhost" ||
+        shExpMatch(host, "127.*") ||
+        shExpMatch(host, "10.*") ||
+        shExpMatch(host, "192.168.*") ||
+        shExpMatch(host, "172.16.*") ||
+        shExpMatch(host, "172.17.*") ||
+        shExpMatch(host, "172.18.*") ||
+        shExpMatch(host, "172.19.*") ||
+        shExpMatch(host, "172.2*") ||
+        shExpMatch(host, "172.30.*") ||
+        shExpMatch(host, "172.31.*") ||
+        shExpMatch(host, "100.64.*") ||
+        shExpMatch(host, "*.local") ||
+        shExpMatch(host, "*.lan") ||
+        shExpMatch(host, "*.home") ||
+        shExpMatch(host, "*.internal") ||
+        shExpMatch(host, "*.intranet") ||
+        shExpMatch(host, "*.corp") ||
+        host == "duckling.ai" ||
+        shExpMatch(host, "*.duckling.ai") ||
+        host == "ducking.ai" ||
+        shExpMatch(host, "*.ducking.ai")) {
+        return "DIRECT";
+    }
+
+    if (isInNet(host, "10.0.0.0", "255.0.0.0") ||
+        isInNet(host, "172.16.0.0", "255.240.0.0") ||
+        isInNet(host, "192.168.0.0", "255.255.0.0") ||
+        isInNet(host, "100.64.0.0", "255.192.0.0") ||
+        isInNet(host, "127.0.0.0", "255.0.0.0")) {
+        return "DIRECT";
+    }
+
+    return "PROXY {{ gateway_ip }}:{{ gateway_tinyproxy_port }}; DIRECT";
+}

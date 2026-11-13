@@ -26,7 +26,12 @@ gateway_zapret_host_exclusions:
   - "cdn01.quay.io"
 
 gateway_tinyproxy_port: 8888
+gateway_tinyproxy_timeout: 15
 gateway_tinyproxy_max_clients: 1024
+gateway_tinyproxy_min_spare_servers: 10
+gateway_tinyproxy_max_spare_servers: 30
+gateway_tinyproxy_start_servers: 10
+gateway_tinyproxy_max_requests_per_child: 0
 gateway_tinyproxy_allowed:
   - "127.0.0.1"
   - "192.168.10.0/24"
