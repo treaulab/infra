@@ -3,6 +3,7 @@
 
 gateway_ip: "192.168.10.2"
 gateway_netmask: "255.255.255.0"
+gateway_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
 gateway_upstream_router: "192.168.10.1"
 gateway_dns_upstream: "192.168.10.5"
 
@@ -14,7 +15,7 @@ gateway_zapret_mark: "0x40000000"
 gateway_zapret_ports_tcp: "443"
 gateway_zapret_ports_udp: ""
 
-gateway_zapret_desync_opt: "--filter-tcp=443 --in-range=-s1 --lua-desync=oob:urp=midsld:char=a"
+gateway_zapret_desync_opt: "--filter-tcp=443 --in-range=-s1 --hostlist-exclude=/opt/zapret2/ipset/zapret-hosts-user-exclude.txt --lua-desync=oob:urp=midsld:char=a"
 
 gateway_zapret_ip_exclusions:
   - "192.168.10.0/24"

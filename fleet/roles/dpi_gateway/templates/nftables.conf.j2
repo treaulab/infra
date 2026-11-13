@@ -6,7 +6,7 @@ flush ruleset
 table ip nat {
     chain postrouting {
         type nat hook postrouting priority srcnat; policy accept;
-        ip saddr 192.168.10.0/24 ip daddr != 192.168.10.0/24 oif "eth0" masquerade
+        ip saddr 192.168.10.0/24 ip daddr != 192.168.10.0/24 oifname "{{ gateway_interface }}" masquerade
     }
 }
 

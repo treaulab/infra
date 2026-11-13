@@ -10,7 +10,6 @@
       net.ipv4.ip_forward = 1
       net.ipv4.conf.all.send_redirects = 0
       net.ipv4.conf.default.send_redirects = 0
-      net.ipv4.conf.eth0.send_redirects = 0
       net.ipv4.conf.all.accept_redirects = 0
       net.ipv4.tcp_max_syn_backlog = 8192
       net.core.somaxconn = 65535
@@ -33,6 +32,13 @@
       [Resolve]
       DNSStubListener=no
   notify: Restart systemd-resolved
+
+- name: Point /etc/resolv.conf to upstream systemd-resolved config (avoid dead 127.0.0.53 stub)
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
 
 - name: Flush handlers to release port 53 before dnsmasq installation
   ansible.builtin.meta: flush_handlers
@@ -99,12 +105,18 @@
     dest: /opt/zapret2
     depth: 1
     force: true
+  register: zapret2_git
+
+- name: Check if Zapret2 binary already exists
+  ansible.builtin.stat:
+    path: /opt/zapret2/binaries/my/nfqws2
+  register: zapret2_bin_stat
 
 - name: Compile Zapret2 binaries with systemd support
   ansible.builtin.command:
     cmd: make systemd
     chdir: /opt/zapret2
-    creates: /opt/zapret2/binaries/my/nfqws2
+  when: zapret2_git.changed or not zapret2_bin_stat.stat.exists
   notify: Restart zapret2
 
 - name: Deploy Zapret2 runtime configuration

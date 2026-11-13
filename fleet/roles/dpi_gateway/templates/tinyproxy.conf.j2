@@ -2,8 +2,6 @@
 User tinyproxy
 Group tinyproxy
 Port {{ gateway_tinyproxy_port }}
-Listen {{ gateway_ip }}
-Bind {{ gateway_ip }}
 Timeout 15
 DefaultErrorFile "/usr/share/tinyproxy/default.html"
 StatFile "/usr/share/tinyproxy/stats.html"

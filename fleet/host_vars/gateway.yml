@@ -3,6 +3,7 @@
 
 # UFW is disabled on the gateway because nftables manages transparent NAT and NFQUEUE redirection directly
 enable_ufw: false
+enable_fail2ban: false
 
 enable_docker: false
 enable_byedpi: false
@@ -10,3 +11,6 @@ enable_k3s: false
 enable_proxmox_host: false
 enable_tailscale: true
 enable_dpi_gateway: true
+
+# Only advertise SSH, not 192.168.10.0/24 subnet (already advertised by raspberry pi 'i')
+tailscale_extra_args: "--ssh"
