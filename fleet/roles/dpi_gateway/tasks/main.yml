@@ -15,7 +15,17 @@
       net.core.somaxconn = 65535
       net.ipv4.ip_local_port_range = 10240 65535
       net.netfilter.nf_conntrack_max = 1048576
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
   notify: Apply sysctl
+
+- name: Configure glibc getaddrinfo to prefer IPv4 over IPv6 (prevent dead AAAA timeouts)
+  ansible.builtin.copy:
+    dest: /etc/gai.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/dpi_gateway). Prefer IPv4 to avoid IPv6 connection timeouts.
+      precedence ::ffff:0:0/96 100
 
 - name: Ensure legacy dnsmasq service is stopped and disabled
   ansible.builtin.systemd:

@@ -8,10 +8,6 @@ StatFile "/usr/share/tinyproxy/stats.html"
 LogFile "/var/log/tinyproxy/tinyproxy.log"
 LogLevel Warning
 MaxClients {{ gateway_tinyproxy_max_clients }}
-MinSpareServers 10
-MaxSpareServers 30
-StartServers 10
-MaxRequestsPerChild 0
 {% for allowed in gateway_tinyproxy_allowed %}
 Allow {{ allowed }}
 {% endfor %}
