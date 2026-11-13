@@ -103,33 +103,43 @@
   register: k3s_agent_config_result
   when: k3s_role | default('server') == 'agent'
 
+- name: Check installed K3s version
+  ansible.builtin.command:
+    cmd: k3s --version
+  register: k3s_check_version
+  changed_when: false
+  failed_when: false
+
 - name: Download K3s installer script
   ansible.builtin.get_url:
     url: https://get.k3s.io
     dest: /tmp/k3s-install.sh
     mode: "0700"
+  when: (k3s_check_version.rc != 0) or (k3s_version not in (k3s_check_version.stdout | default('')))
 
 - name: Execute K3s server installation
   ansible.builtin.command:
     cmd: /tmp/k3s-install.sh
-    creates: /etc/systemd/system/k3s.service
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     INSTALL_K3S_EXEC: "server"
   register: k3s_server_install
-  when: k3s_role | default('server') == 'server'
+  when:
+    - k3s_role | default('server') == 'server'
+    - (k3s_check_version.rc != 0) or (k3s_version not in (k3s_check_version.stdout | default('')))
 
 - name: Execute K3s agent installation
   ansible.builtin.command:
     cmd: /tmp/k3s-install.sh
-    creates: /etc/systemd/system/k3s-agent.service
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     INSTALL_K3S_EXEC: "agent"
     K3S_URL: "{{ k3s_server_url }}"
     K3S_TOKEN: "{{ k3s_node_token }}"
   register: k3s_agent_install
-  when: k3s_role | default('server') == 'agent'
+  when:
+    - k3s_role | default('server') == 'agent'
+    - (k3s_check_version.rc != 0) or (k3s_version not in (k3s_check_version.stdout | default('')))
 
 - name: Clean up K3s installer script
   ansible.builtin.file:
