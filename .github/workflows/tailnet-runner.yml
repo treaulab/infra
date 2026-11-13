@@ -10,7 +10,7 @@
 #   1. OIDC workload identity federation (zero secrets, zero rotation):
 #      inputs.ts-oidc-client-id / inputs.ts-audience (from caller vars) or
 #      secrets TS_OIDC_CLIENT_ID / TS_AUDIENCE. Needs federated identity with
-#      `auth_keys` write scope + tag:ci-ephemeral in Tailscale admin.
+#      `auth_keys` write scope + tag:untrusted in Tailscale admin.
 #   2. OAuth client (one long-lived secret pair):
 #      secrets TS_OAUTH_CLIENT_ID + TS_OAUTH_SECRET (`auth_keys` write).
 #   3. Legacy authkey (30-day rotation via platform/tailscale):
@@ -27,7 +27,7 @@
 #     job logs (public run logs are world-readable). Default "false".
 #   startup-delay-seconds: stagger fan-out (tenant jobs set 0, 180, ...).
 #   tag: tailnet tag applied to ephemeral nodes (must exist + be permitted
-#     by the OIDC/OAuth credential). Default "tag:ci-ephemeral".
+#     by the OIDC/OAuth credential). Default "tag:untrusted".
 #   ts-oidc-client-id / ts-audience: federated identity Client ID + Audience,
 #     passed by the caller from its repo vars (public identifiers, not secrets).
 #   tailscale-version: pinned Tailscale version for the action. Bump together.
@@ -83,7 +83,7 @@ on:
       tag:
         description: "Tailnet tag for ephemeral nodes (must be permitted by the credential)"
         required: false
-        default: "tag:ci-ephemeral"
+        default: "tag:untrusted"
         type: string
       ts-oidc-client-id:
         description: "Federated identity Client ID (public identifier, caller passes from its vars)"

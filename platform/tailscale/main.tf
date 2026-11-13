@@ -28,7 +28,7 @@ locals {
   spoke_owner        = "andrewwang2161"
   spoke_repo         = "dotfiles"
   spoke_secret_name  = "TS_AUTHKEY_EPHEMERAL"
-  key_tag            = "tag:ci-ephemeral"
+  key_tag            = "tag:untrusted"
   key_expiry_seconds = 2592000 # 30 days
   key_description    = "tailnet-runner hourly runner burner"
   policy_file        = "policy.json"

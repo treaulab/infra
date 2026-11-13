@@ -72,9 +72,9 @@ calling job per tenant.
 
 1. Tailscale admin (once, preferred OIDC): Trust credentials -> OIDC federated
    identity, issuer `https://token.actions.githubusercontent.com`, subject
-   `repo:<owner>@<owner-id>/<repo>@<repo-id>:*`, tags `tag:ci-ephemeral`,
+   `repo:<owner>@<owner-id>/<repo>@<repo-id>:*`, tags `tag:untrusted`,
    scope `auth_keys` write. Put Client ID + Audience in spoke repo VARIABLES.
-   Access Controls: `tagOwners` for `tag:ci-ephemeral`, SSH accept from you to
+   Access Controls: `tagOwners` for `tag:untrusted`, SSH accept from you to
    that tag, users `["runner","root"]`. Name the NAT box `box`.
 2. Spoke repo (public dotfiles + README + caller file), pin
    `@<sha>`, set `TS_OIDC_CLIENT_ID`/`TS_AUDIENCE`. Legacy authkey path only

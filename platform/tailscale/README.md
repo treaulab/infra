@@ -52,7 +52,7 @@ echo
 ```
 Client prerequisites (set once in Tailscale admin): scopes `auth_keys` +
 `policy_file` + `devices:core:read` + `devices:posture_attributes`, tags
-including `tag:ci-ephemeral`, shortest expiry. Fallback instead of the
+including `tag:untrusted`, shortest expiry. Fallback instead of the
 pair: a pre-minted access token as `TAILSCALE_API_KEY` (one path, not both).
 
 Plus one trust grant (burner side, one click per ceremony): spoke repo
@@ -71,7 +71,7 @@ cd platform/tailscale
 tofu init
 
 # STEP 0 — seed policy.json with the CURRENT production policy export
-# (admin → Access Controls → copy whole file), merging the tag:ci-ephemeral
+# (admin → Access Controls → copy whole file), merging the policy
 # blocks, replacing every <placeholder>. NEVER apply the seed template.
 
 # STEP 1 — adopt before managing (provider enforces this: without import,

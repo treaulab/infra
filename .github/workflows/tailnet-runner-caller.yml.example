@@ -7,7 +7,7 @@
 #   2. Preferred (zero secrets, zero rotation): Tailscale admin → Trust
 #      credentials → OIDC federated identity (issuer
 #      https://token.actions.githubusercontent.com, subject
-#      repo:<owner>/<repo>:*, tags tag:ci-ephemeral, scope auth_keys write).
+#      repo:<owner>/<repo>:*, tags tag:untrusted, scope auth_keys write).
 #      Add repo VARIABLES (not secrets — public identifiers):
 #        TS_OIDC_CLIENT_ID = <federated identity Client ID>
 #        TS_AUDIENCE       = <federated identity Audience>
@@ -70,7 +70,7 @@ jobs:
       quiet: "true"
       startup-delay-seconds: "0"
       hold-minutes: ${{ inputs.hold-minutes || '90' }}
-      tag: tag:ci-ephemeral
+      tag: tag:untrusted
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}
     secrets:
@@ -95,7 +95,7 @@ jobs:
       quiet: "true"
       startup-delay-seconds: "180"
       hold-minutes: ${{ inputs.hold-minutes || '90' }}
-      tag: tag:ci-ephemeral
+      tag: tag:untrusted
       ts-oidc-client-id: ${{ vars.TS_OIDC_CLIENT_ID }}
       ts-audience: ${{ vars.TS_AUDIENCE }}
     secrets:
