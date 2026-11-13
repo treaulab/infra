@@ -1,0 +1,14 @@
+# Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.{{ gateway_interface }}.send_redirects = 0
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.{{ gateway_interface }}.accept_redirects = 0
+net.ipv4.tcp_max_syn_backlog = 8192
+net.core.somaxconn = 65535
+net.ipv4.ip_local_port_range = 10240 65535
+net.netfilter.nf_conntrack_max = 1048576
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
