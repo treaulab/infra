@@ -13,7 +13,6 @@
       when: enable_byedpi | default(false) | bool
       tags: [byedpi]
     - role: common
-      when: not (enable_openwrt_gateway | default(false) | bool)
     - role: ufw
       when: enable_ufw | default(false) | bool
       tags: [firewall]
@@ -29,6 +28,6 @@
     - role: k3s
       when: enable_k3s | default(false) | bool
       tags: [k3s]
-    - role: openwrt_gateway
-      when: enable_openwrt_gateway | default(false) | bool
-      tags: [openwrt]
+    - role: dpi_gateway
+      when: enable_dpi_gateway | default(false) | bool
+      tags: [gateway]

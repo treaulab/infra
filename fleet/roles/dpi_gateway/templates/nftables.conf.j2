@@ -1,0 +1,23 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+
+flush ruleset
+
+table ip nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip saddr 192.168.10.0/24 ip daddr != 192.168.10.0/24 oif "eth0" masquerade
+    }
+}
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy accept;
+    }
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

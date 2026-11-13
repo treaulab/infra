@@ -1,0 +1,157 @@
+---
+# roles/dpi_gateway/tasks/main.yml — DPI Bypass Gateway Convergence (Ubuntu Minimal).
+
+- name: Deploy kernel sysctl and proxy tuning parameters
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-gateway.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+      net.ipv4.ip_forward = 1
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+      net.ipv4.conf.eth0.send_redirects = 0
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.tcp_max_syn_backlog = 8192
+      net.core.somaxconn = 65535
+      net.ipv4.ip_local_port_range = 10240 65535
+      net.netfilter.nf_conntrack_max = 1048576
+  notify: Apply sysctl
+
+- name: Ensure systemd-resolved configuration drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Disable systemd-resolved DNSStubListener to free port 53 for dnsmasq
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/disable-stub.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/dpi_gateway). Do not edit manually.
+      [Resolve]
+      DNSStubListener=no
+  notify: Restart systemd-resolved
+
+- name: Flush handlers to release port 53 before dnsmasq installation
+  ansible.builtin.meta: flush_handlers
+
+- name: Install required gateway packages
+  ansible.builtin.apt:
+    name:
+      - nftables
+      - dnsmasq
+      - tinyproxy
+      - git
+      - build-essential
+      - libnetfilter-queue-dev
+      - libluajit-5.1-dev
+      - libcap-dev
+      - libmnl-dev
+      - libsystemd-dev
+      - zlib1g-dev
+      - pkg-config
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure zapret system group exists
+  ansible.builtin.group:
+    name: "{{ gateway_zapret_user }}"
+    system: true
+    state: present
+
+- name: Ensure zapret system user exists
+  ansible.builtin.user:
+    name: "{{ gateway_zapret_user }}"
+    group: "{{ gateway_zapret_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Deploy declarative nftables configuration
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0755"
+  notify: Restart nftables
+
+- name: Deploy dnsmasq gateway configuration
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/gateway.conf
+    mode: "0644"
+  notify: Restart dnsmasq
+
+- name: Deploy tinyproxy configuration
+  ansible.builtin.template:
+    src: tinyproxy.conf.j2
+    dest: /etc/tinyproxy/tinyproxy.conf
+    mode: "0644"
+  notify: Restart tinyproxy
+
+- name: Clone Zapret2 from GitLab mirror
+  ansible.builtin.git:
+    repo: "{{ gateway_zapret_git_url }}"
+    version: "{{ gateway_zapret_version }}"
+    dest: /opt/zapret2
+    depth: 1
+    force: true
+
+- name: Compile Zapret2 binaries with systemd support
+  ansible.builtin.command:
+    cmd: make systemd
+    chdir: /opt/zapret2
+    creates: /opt/zapret2/binaries/my/nfqws2
+  notify: Restart zapret2
+
+- name: Deploy Zapret2 runtime configuration
+  ansible.builtin.template:
+    src: zapret2.conf.j2
+    dest: /opt/zapret2/config
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Ensure Zapret2 ipset directory exists
+  ansible.builtin.file:
+    path: /opt/zapret2/ipset
+    state: directory
+    mode: "0755"
+
+- name: Deploy Zapret2 IP exclusions
+  ansible.builtin.template:
+    src: zapret-ip-exclude.txt.j2
+    dest: /opt/zapret2/ipset/zapret-ip-exclude.txt
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Deploy Zapret2 host exclusions
+  ansible.builtin.template:
+    src: zapret-hosts-user-exclude.txt.j2
+    dest: /opt/zapret2/ipset/zapret-hosts-user-exclude.txt
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Deploy Zapret2 systemd unit
+  ansible.builtin.template:
+    src: zapret2.service.j2
+    dest: /etc/systemd/system/zapret2.service
+    mode: "0644"
+  notify: Restart zapret2
+
+- name: Ensure systemd daemon is reloaded
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start gateway systemd services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nftables
+    - dnsmasq
+    - tinyproxy
+    - zapret2

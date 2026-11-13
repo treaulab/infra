@@ -1,6 +1,5 @@
-# Managed by Ansible (roles/openwrt_gateway). Do not edit manually.
+# Managed by Ansible (roles/dpi_gateway). Do not edit manually.
 
-# options for ipsets
 SET_MAXELEM=522288
 IPSET_OPT="hashsize 262144 maxelem $SET_MAXELEM"
 IP2NET_OPT4="--prefix-length=22-30 --v4-threshold=3/4"
@@ -21,23 +20,24 @@ MDIG_EAGAIN=10
 MDIG_EAGAIN_DELAY=500
 GZIP_LISTS=1
 
-DESYNC_MARK={{ openwrt_zapret_mark }}
+DESYNC_MARK={{ gateway_zapret_mark }}
 DESYNC_MARK_POSTNAT=0x20000000
 
-# ---- DPI Desync Engine Configuration ----
 FWTYPE=nftables
 MODE_FILTER=none
 DISABLE_IPV6=1
 NFQWS2_ENABLE=1
-NFQWS2_PORTS_TCP=443
-NFQWS2_PORTS_UDP=
+NFQWS2_PORTS_TCP={{ gateway_zapret_ports_tcp }}
+NFQWS2_PORTS_UDP={{ gateway_zapret_ports_udp }}
 NFQWS2_TCP_PKT_OUT=20
 NFQWS2_TCP_PKT_IN=10
 NFQWS2_UDP_PKT_OUT=0
 NFQWS2_UDP_PKT_IN=0
-NFQWS2_OPT="{{ openwrt_zapret_desync_opt }}"
-WS_USER={{ openwrt_zapret_user }}
-QNUM={{ openwrt_zapret_qnum }}
+NFQWS2_OPT="{{ gateway_zapret_desync_opt }}"
+WS_USER={{ gateway_zapret_user }}
+QNUM={{ gateway_zapret_qnum }}
 FLOWOFFLOAD=donttouch
 INIT_APPLY_FW=1
 FILTER_TTL_EXPIRED_ICMP=1
+IFACE_LAN=eth0
+IFACE_WAN=eth0
