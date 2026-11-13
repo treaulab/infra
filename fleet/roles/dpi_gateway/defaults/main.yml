@@ -15,7 +15,7 @@ gateway_zapret_mark: "0x40000000"
 gateway_zapret_ports_tcp: "443"
 gateway_zapret_ports_udp: ""
 
-gateway_zapret_desync_opt: "--filter-tcp=443 --in-range=-s1 --hostlist-exclude=/opt/zapret2/ipset/zapret-hosts-user-exclude.txt --lua-desync=oob:urp=midsld:char=a"
+gateway_zapret_desync_opt: "--filter-tcp=443 --hostlist-exclude=/opt/zapret2/ipset/zapret-hosts-user-exclude.txt --lua-desync=oob:urp=midsld:char=a"
 
 gateway_zapret_ip_exclusions:
   - "192.168.10.0/24"
