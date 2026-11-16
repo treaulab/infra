@@ -69,7 +69,7 @@ all:
     routers:
       hosts:
         i:
-          ansible_host: 192.168.10.254
+          ansible_host: 100.101.14.72 # Raspberry Pi LAN/Tailscale gateway
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
           tailscale_extra_args: "--ssh --advertise-routes=192.168.10.0/24"
