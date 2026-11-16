@@ -1,4 +1,9 @@
-# treaulab-tunnel (Cloudflare Worker — tunnels on go.treau.me)
+# [ARCHIVED] treaulab-tunnel (Cloudflare Worker — tunnels on go.treau.me)
+
+> [!NOTE]
+> **Status: ARCHIVED / RETIRED**
+> This component has been retired and is no longer active. Remote homelab connectivity is managed natively via the private Tailscale mesh network and public Caddy reverse proxy on Azure VPS.
+> This commit and tag (`archive/tunnel-worker`) preserve the final working snapshot before removal from the active repository tree.
 
 HTTP tunnels + SSH pipes for agents behind NAT / locked-down origins, served
 on `go.treau.me`. The tunnel/pipe code never `fetch()`es an origin — the VPS
