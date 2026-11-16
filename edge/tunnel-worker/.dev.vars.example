@@ -1,3 +1,0 @@
-# cp .dev.vars.example .dev.vars (gitignored) — local `wrangler dev` only.
-# Long-URL-only: no secrets. The room/box ID in the URL is the secret.
-# No RELAY_TOKEN / PIPE_TOKEN needed.

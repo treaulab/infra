@@ -1,19 +1,17 @@
 # treaulab/infra
 
 Infrastructure-as-code for everything `treau.me` runs: the static site on the
-Azure VPS, the `go.treau.me` tunnel Worker, and the private homelab.
+Azure VPS and the private homelab.
 
 ## Architecture
 
 ```text
 treau.me / www  ── Cloudflare ──> Azure VPS Caddy ──> static website only
-go.treau.me     ── Cloudflare ──> Worker ──────────> /t/* HTTP + /p/* SSH pipes
 homelab          ── Tailscale only ──> laptop / tailnet devices
 later: selected homelab service ── Cloudflare Tunnel ──> cloudflared
 ```
 
-The VPS is the main website origin, not a homelab proxy. The Worker is
-tunnel-only and never bundles the site. Homelab services stay private on the
+The VPS is the main website origin, not a homelab proxy. Homelab services stay private on the
 tailnet; Cloudflare Tunnel is an optional later ingress for selected services.
 
 ## Layout
@@ -34,9 +32,6 @@ stacks/            Declarative workloads -> /opt/stacks/<name>
 kubernetes/        Declarative Kubernetes state (homelab K3s cluster)
 ├── manifests/     Deployments, Services, PVCs, Namespaces
 └── images/        Custom container images
-
-edge/
-└── tunnel-worker/ Cloudflare Worker on go.treau.me (tunnel-only)
 
 tools/             operator helpers invoked by the Justfile
 docs/runbooks.md   ops manual
@@ -67,7 +62,6 @@ Keep port 22 until Tailscale access is proven.
 | Change | Command | Destination |
 |---|---|---|
 | `stacks/edge/**` | `just deploy-public` | Azure VPS |
-| `edge/tunnel-worker/**` | `cd edge/tunnel-worker && npm run deploy` / `tunnel.yml` | Cloudflare |
 | `platform/**` | `just plan <root>` | OpenTofu (human apply) |
 | `fleet/playbooks/host.yml` | `just converge <node>` | Host OS baseline |
 | `fleet/playbooks/compose.yml` | `just deploy-compose <host>` | Compose stack convergence |
@@ -90,13 +84,3 @@ prefer the `just` recipes.
   `0600`, and never apply after moving directories until `tofu plan` is empty.
   `platform/tailscale/terraform.tfstate` contains a live key — treat it as a
   secret.
-
-## Tunnel Worker
-
-```bash
-cd edge/tunnel-worker && npm install
-npm run dev       # http://127.0.0.1:8787
-npm run deploy    # wrangler login required
-```
-
-Details: `edge/tunnel-worker/README.md`.

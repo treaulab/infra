@@ -96,34 +96,6 @@ jobs:
             -v "$PWD/stacks/edge/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
 
-  worker:
-    name: worker
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: edge/tunnel-worker
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "npm"
-          cache-dependency-path: edge/tunnel-worker/package-lock.json
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: npm ci --no-audit --no-fund
-      - name: Syntax check
-        run: |
-          set -euo pipefail
-          for f in src/*.js lib/*.js agent/*.js bin/*.js bin/tunnel; do
-            node --check "$f"
-          done
-          python3 -m py_compile agent/agent.py
-      - name: Wrangler dry-run
-        run: npm run deploy:dry
-
   hygiene:
     name: hygiene
     runs-on: ubuntu-24.04
@@ -136,7 +108,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [tofu, fleet, caddy, worker, hygiene]
+    needs: [tofu, fleet, caddy, hygiene]
     runs-on: ubuntu-24.04
     steps:
       - name: Evaluate prerequisite checks

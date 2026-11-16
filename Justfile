@@ -99,8 +99,6 @@ check:
       --env-file "$caddy_env" \
       -v "$PWD/stacks/edge/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
       docker.io/library/caddy:2.11 validate --config /etc/caddy/Caddyfile
-    echo "== worker dry-run"
-    (cd edge/tunnel-worker && npm run deploy:dry)
     git diff --check
     echo "OK"
 

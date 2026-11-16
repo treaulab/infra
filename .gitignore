@@ -82,7 +82,7 @@ venv/
 *.egg-info/
 .uv/
 
-# node (tunnel worker + tooling; the static site has no build step)
+# node (tooling; the static site has no build step)
 node_modules/
 .next/
 .nuxt/
@@ -92,10 +92,6 @@ out/
 .turbo/
 .parcel-cache/
 *.tsbuildinfo
-
-# cloudflare worker (tunnel only — no generated site assets)
-edge/tunnel-worker/.dev.vars
-edge/tunnel-worker/.wrangler/
 
 # backups / archives
 backups/
