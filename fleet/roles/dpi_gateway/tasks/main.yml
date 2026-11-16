@@ -141,13 +141,6 @@
     mode: "0644"
   notify: Restart zapret2
 
-- name: Deploy Zapret2 host exclusions
-  ansible.builtin.template:
-    src: zapret-hosts-user-exclude.txt.j2
-    dest: /opt/zapret2/ipset/zapret-hosts-user-exclude.txt
-    mode: "0644"
-  notify: Restart zapret2
-
 - name: Deploy Zapret2 systemd unit
   ansible.builtin.template:
     src: zapret2.service.j2

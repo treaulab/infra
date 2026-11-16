@@ -21,10 +21,6 @@ gateway_zapret_ip_exclusions:
   - "100.64.0.0/10"
   - "23.0.0.0/8"
 
-gateway_zapret_host_exclusions:
-  - "quay.io"
-  - "cdn01.quay.io"
-
 gateway_tinyproxy_port: 8888
 gateway_tinyproxy_timeout: 300
 gateway_tinyproxy_max_clients: 1024

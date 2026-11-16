@@ -13,11 +13,11 @@ table ip nat {
 table inet mangle {
     chain forward {
         type filter hook forward priority mangle; policy accept;
-        tcp flags & (fin | syn | rst) == syn tcp option maxseg size set rt mtu
+        tcp flags & (fin | syn | rst) == syn tcp option maxseg size set 1440
     }
     chain postrouting {
         type filter hook postrouting priority mangle; policy accept;
-        oifname "{{ gateway_interface }}" tcp flags & (fin | syn | rst) == syn tcp option maxseg size set rt mtu
+        oifname "{{ gateway_interface }}" tcp flags & (fin | syn | rst) == syn tcp option maxseg size set 1440
     }
 }
 
