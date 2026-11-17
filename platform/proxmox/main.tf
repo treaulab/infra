@@ -49,6 +49,7 @@ locals {
       ipv4_address  = "192.168.10.2/24"
       gateway       = "192.168.10.1"
       dns_servers   = ["192.168.10.5", "1.1.1.1"]
+      mac_address   = "00:1B:21:A4:7B:12"
       cores         = 2
       memory_mb     = 2048
       memory_min_mb = 1024
@@ -60,6 +61,7 @@ locals {
     mercury = {
       vm_id         = 500
       ipv4_address  = "192.168.10.11/24"
+      mac_address   = "B8:2A:72:3F:81:4A"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -71,6 +73,7 @@ locals {
     venus = {
       vm_id         = 501
       ipv4_address  = "192.168.10.13/24"
+      mac_address   = "3C:D9:2B:65:19:D8"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -82,6 +85,7 @@ locals {
     earth = {
       vm_id         = 502
       ipv4_address  = "192.168.10.14/24"
+      mac_address   = "E4:54:E8:90:3C:55"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -93,6 +97,7 @@ locals {
     mars = {
       vm_id         = 503
       ipv4_address  = "192.168.10.22/24"
+      mac_address   = "00:25:90:D1:4E:82"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -104,6 +109,7 @@ locals {
     jupiter = {
       vm_id         = 504
       ipv4_address  = "192.168.10.23/24"
+      mac_address   = "34:17:EB:42:09:A6"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -115,6 +121,7 @@ locals {
     saturn = {
       vm_id         = 505
       ipv4_address  = "192.168.10.24/24"
+      mac_address   = "18:66:DA:77:B0:13"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -126,6 +133,7 @@ locals {
     uranus = {
       vm_id         = 506
       ipv4_address  = "192.168.10.25/24"
+      mac_address   = "9C:B6:54:18:2D:6E"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -137,6 +145,7 @@ locals {
     neptune = {
       vm_id         = 507
       ipv4_address  = "192.168.10.26/24"
+      mac_address   = "00:E0:4C:68:5A:91"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -148,6 +157,7 @@ locals {
     pluto = {
       vm_id         = 508
       ipv4_address  = "192.168.10.27/24"
+      mac_address   = "A0:36:9F:8C:33:F4"
       cores         = 2
       memory_mb     = 8192
       memory_min_mb = 4096
@@ -249,10 +259,11 @@ resource "proxmox_virtual_environment_vm" "vms" {
   boot_order = ["scsi0"]
 
   network_device {
-    bridge   = local.network_bridge
-    model    = "virtio"
-    queues   = each.value.cores
-    firewall = true
+    bridge      = local.network_bridge
+    model       = "virtio"
+    mac_address = lookup(each.value, "mac_address", null)
+    queues      = each.value.cores
+    firewall    = true
   }
 
   operating_system {
