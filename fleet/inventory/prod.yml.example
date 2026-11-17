@@ -16,6 +16,10 @@ all:
           ansible_host: 192.168.10.10   # Proxmox VE hypervisor host
           ansible_user: root
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+        pve:
+          ansible_host: 192.168.10.9    # Second Proxmox VE hypervisor host
+          ansible_user: root
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
     cluster:
       hosts:
         mercury:
