@@ -17,6 +17,18 @@ provider "proxmox" {
   }
 }
 
+# Secondary provider for independent node: pve (192.168.10.9)
+provider "proxmox" {
+  alias     = "pve"
+  endpoint  = var.proxmox_pve_endpoint
+  api_token = var.proxmox_pve_api_token
+  insecure  = true
+  ssh {
+    agent    = true
+    username = "root"
+  }
+}
+
 # ==============================================================================
 # CONFIGURATION - Edit your VMs and network settings right here:
 # ==============================================================================
