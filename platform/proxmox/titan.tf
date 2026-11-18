@@ -39,8 +39,8 @@ resource "proxmox_virtual_environment_vm" "titan" {
   description = "Managed by OpenTofu (platform/proxmox) - Windows 11 Enterprise LTSC 2024 (192.168.10.31)"
   tags        = ["windows", "ltsc", "titan", "tofu"]
 
-  # VM running
-  started = true
+  # Post-install: VM powered off in pristine state
+  started = false
 
   machine = "q35"
   bios    = "ovmf"
@@ -89,13 +89,13 @@ resource "proxmox_virtual_environment_vm" "titan" {
     ssd          = true
   }
 
-  # Primary OS boot CDROM (ide2 is compliant with q35 chipset)
+  # Post-install: CDROM ejected and boot locked to scsi0
   cdrom {
     interface = "ide2"
-    file_id   = proxmox_download_file.win11_ltsc_iso.id
+    file_id   = "none"
   }
 
-  boot_order = ["ide2", "scsi0"]
+  boot_order = ["scsi0"]
 
   network_device {
     bridge      = "vmbr0"
