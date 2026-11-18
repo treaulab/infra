@@ -5,7 +5,7 @@
       <SetupUILanguage>
         <UILanguage>en-US</UILanguage>
       </SetupUILanguage>
-      <InputLocale>en-US</InputLocale>
+      <InputLocale>0409:00000409</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
@@ -101,6 +101,7 @@
       <UserData>
         <AcceptEula>true</AcceptEula>
         <ProductKey>
+          <Key>CGK42-GYN6Y-VD22B-BX98W-J8JXD</Key>
           <WillShowUI>Never</WillShowUI>
         </ProductKey>
       </UserData>
@@ -136,7 +137,7 @@
   </settings>
   <settings pass="oobeSystem">
     <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-      <InputLocale>en-US</InputLocale>
+      <InputLocale>0409:00000409</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
@@ -144,12 +145,10 @@
     <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
-        <HideLocalAccountScreen>true</HideLocalAccountScreen>
-        <HideOEMRegistrationScreens>true</HideOEMRegistrationScreens>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
         <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
         <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
         <ProtectYourPC>3</ProtectYourPC>
-        <NetworkLocation>Work</NetworkLocation>
       </OOBE>
       <UserAccounts>
         <LocalAccounts>
@@ -166,7 +165,7 @@
       </UserAccounts>
       <AutoLogon>
         <Enabled>true</Enabled>
-        <LogonCount>2</LogonCount>
+        <LogonCount>1</LogonCount>
         <Username>treau</Username>
         <Password>
           <Value>AdminPass123!</Value>
@@ -176,17 +175,17 @@
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <CommandLine>powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Get-CimInstance Win32_LogicalDisk | ForEach-Object { $d = $_.DeviceID + '\virtio-win-guest-tools.exe'; if (Test-Path $d) { Start-Process -FilePath $d -ArgumentList '/install /passive /norestart' -Wait } }"</CommandLine>
+          <CommandLine>powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=5' | ForEach-Object { $p = Join-Path $_.DeviceID 'virtio-win-guest-tools.exe'; if (Test-Path $p) { Start-Process -FilePath $p -ArgumentList '/install /quiet /norestart' -Wait } }"</CommandLine>
           <Description>Install VirtIO Guest Tools</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>2</Order>
-          <CommandLine>powershell -ExecutionPolicy Bypass -Command "Get-NetAdapter | Where-Object { $_.Status -ne 'Disabled' } | ForEach-Object { New-NetIPAddress -InterfaceIndex $_.ifIndex -IPAddress 192.168.10.31 -PrefixLength 24 -DefaultGateway 192.168.10.2 -ErrorAction SilentlyContinue; Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('192.168.10.5') }"</CommandLine>
-          <Description>Set Static IP and AD DNS</Description>
+          <CommandLine>powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "$a = Get-NetAdapter | Where-Object { $_.Status -ne 'Disabled' -and $_.HardwareInterface -eq $true } | Select-Object -First 1; if ($a) { Set-NetIPInterface -InterfaceIndex $a.ifIndex -Dhcp Disabled -ErrorAction SilentlyContinue; Remove-NetIPAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue; Remove-NetRoute -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress '192.168.10.31' -PrefixLength 24 -DefaultGateway '192.168.10.2'; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses '192.168.10.5'; Get-NetConnectionProfile -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue | Set-NetConnectionProfile -NetworkCategory Private }"</CommandLine>
+          <Description>Set Static IP, AD DNS, and Private Network Profile</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>3</Order>
-          <CommandLine>powershell -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0; Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"</CommandLine>
+          <CommandLine>powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0; Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"</CommandLine>
           <Description>Enable Remote Desktop</Description>
         </SynchronousCommand>
       </FirstLogonCommands>

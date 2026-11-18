@@ -101,7 +101,7 @@ resource "proxmox_virtual_environment_vm" "titan" {
     bridge      = "vmbr0"
     model       = "virtio"
     mac_address = "B4:45:06:51:D4:89"
-    firewall    = true
+    firewall    = false
   }
 
   operating_system {
