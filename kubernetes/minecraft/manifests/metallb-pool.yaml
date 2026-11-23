@@ -1,0 +1,23 @@
+---
+# kubernetes/minecraft/manifests/metallb-pool.yaml
+# MetalLB Layer 2 IPAddressPool & L2Advertisement for standalone minecraft cluster (192.168.10.77 - 192.168.10.81).
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: minecraft-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.10.77-192.168.10.81
+  autoAssign: true
+
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: minecraft-l2-adv
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - minecraft-pool

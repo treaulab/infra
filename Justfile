@@ -206,6 +206,38 @@ k-mc *args:
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
 
+# Run helm against the standalone minecraft cluster.
+helm-mc *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=".kube/k3s-minecraft.yaml"
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: $cfg not found." >&2
+      exit 1
+    fi
+    KUBECONFIG="$cfg" helm {{args}}
+
+# Apply manifests from kubernetes/minecraft/manifests.
+k-mc-apply path="kubernetes/minecraft/manifests":
+    @just k-mc apply -f {{path}}
+
+# Run helmfile against the minecraft cluster.
+k-mc-helmfile *args="apply":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=".kube/k3s-minecraft.yaml"
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: $cfg not found." >&2
+      exit 1
+    fi
+    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f kubernetes/minecraft/helmfile.yaml {{args}}
+
+# Full convergence for minecraft cluster: Helmfile charts → wait for webhook → manifests.
+k-mc-sync:
+    @just k-mc-helmfile apply
+    @just k-mc wait --namespace metallb-system --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
+    @just k-mc-apply
+
 # Run helm against the homelab cluster.
 helm *args:
     #!/usr/bin/env bash
