@@ -183,7 +183,7 @@ k *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
       if [ -f "$candidate" ]; then
         cfg="$candidate"
         break
@@ -195,12 +195,23 @@ k *args:
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
 
+# Run kubectl against the standalone minecraft cluster.
+k-mc *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=".kube/k3s-minecraft.yaml"
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: $cfg not found. Run 'cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit minecraft --tags k3s' first." >&2
+      exit 1
+    fi
+    KUBECONFIG="$cfg" kubectl {{args}}
+
 # Run helm against the homelab cluster.
 helm *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
       if [ -f "$candidate" ]; then
         cfg="$candidate"
         break
@@ -221,7 +232,7 @@ k-helmfile *args="apply":
     #!/usr/bin/env bash
     set -euo pipefail
     cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml .kube/k3s-*.yaml; do
+    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
       if [ -f "$candidate" ]; then
         cfg="$candidate"
         break

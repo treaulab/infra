@@ -1,5 +1,6 @@
 ---
 # roles/k3s/defaults/main.yml
+k3s_cluster_name: "main"
 k3s_version: "v1.37.2+k3s1"
 k3s_server_url: "https://192.168.10.11:6443"
 k3s_node_token: ""

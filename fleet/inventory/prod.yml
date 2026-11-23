@@ -72,6 +72,11 @@ all:
           ansible_user: treau
           ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
           k3s_role: agent
+        raspi:
+          ansible_host: 192.168.10.161 # Raspberry Pi ARM64 (1GB RAM)
+          ansible_user: pi
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+          k3s_role: agent
     routers:
       hosts:
         i:
@@ -103,4 +108,11 @@ all:
           ansible_host: 192.168.10.76
           ansible_user: admin
           enable_k3s: true
-          k3s_role: agent
+          k3s_role: server
+          k3s_cluster_name: minecraft
+          k3s_token: ""
+          k3s_server_config:
+            write-kubeconfig-mode: "0644"
+            tls-san:
+              - "192.168.10.76"
+              - "minecraft"
