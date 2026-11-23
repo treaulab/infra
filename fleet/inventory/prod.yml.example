@@ -112,6 +112,7 @@ all:
           k3s_server_config:
             write-kubeconfig-mode: "0644"
             disable:
+              - "traefik"
               - "servicelb"
             tls-san:
               - "192.168.10.76"

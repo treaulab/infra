@@ -178,19 +178,16 @@ ts node="all":
 byedpi node="untrusted":
     cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit "{{node}}" --tags byedpi
 
-# Run kubectl against the homelab cluster.
+# Run kubectl against the main homelab cluster.
 k *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
-      if [ -f "$candidate" ]; then
-        cfg="$candidate"
-        break
-      fi
+    for candidate in .kube/k3s.yaml .kube/k3s-main.yaml .kube/k3s-mercury.yaml; do
+      if [ -f "$candidate" ]; then cfg="$candidate"; break; fi
     done
     if [ -z "$cfg" ]; then
-      echo "ERROR: no kubeconfig found in .kube/. Run 'just converge mercury' first." >&2
+      echo "ERROR: kubeconfig for main cluster not found in .kube/." >&2
       exit 1
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
@@ -201,10 +198,24 @@ k-mc *args:
     set -euo pipefail
     cfg=".kube/k3s-minecraft.yaml"
     if [ ! -f "$cfg" ]; then
-      echo "ERROR: $cfg not found. Run 'cd fleet && ansible-playbook -i inventory/prod.yml playbooks/host.yml --limit minecraft --tags k3s' first." >&2
+      echo "ERROR: $cfg not found in .kube/." >&2
       exit 1
     fi
     KUBECONFIG="$cfg" kubectl {{args}}
+
+# Run helm against the main homelab cluster.
+helm *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cfg=""
+    for candidate in .kube/k3s.yaml .kube/k3s-main.yaml .kube/k3s-mercury.yaml; do
+      if [ -f "$candidate" ]; then cfg="$candidate"; break; fi
+    done
+    if [ -z "$cfg" ]; then
+      echo "ERROR: kubeconfig for main cluster not found in .kube/." >&2
+      exit 1
+    fi
+    KUBECONFIG="$cfg" helm {{args}}
 
 # Run helm against the standalone minecraft cluster.
 helm-mc *args:
@@ -212,78 +223,74 @@ helm-mc *args:
     set -euo pipefail
     cfg=".kube/k3s-minecraft.yaml"
     if [ ! -f "$cfg" ]; then
-      echo "ERROR: $cfg not found." >&2
+      echo "ERROR: $cfg not found in .kube/." >&2
       exit 1
     fi
     KUBECONFIG="$cfg" helm {{args}}
 
-# Apply manifests from kubernetes/minecraft/manifests.
-k-mc-apply path="kubernetes/minecraft/manifests":
-    @just k-mc apply -f {{path}}
-
-# Run helmfile against the minecraft cluster.
-k-mc-helmfile *args="apply":
+# Apply manifests for a cluster (default: main).
+k-apply cluster="main":
     #!/usr/bin/env bash
     set -euo pipefail
-    cfg=".kube/k3s-minecraft.yaml"
+    c="{{cluster}}"
+    [[ "$c" == "mc" ]] && c="minecraft"
+    cfg=".kube/k3s-${c}.yaml"
+    if [ ! -f "$cfg" ] && [ "$c" = "main" ]; then
+      for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml; do
+        if [ -f "$candidate" ]; then cfg="$candidate"; break; fi
+      done
+    fi
     if [ ! -f "$cfg" ]; then
-      echo "ERROR: $cfg not found." >&2
+      echo "ERROR: kubeconfig '$cfg' not found." >&2
       exit 1
     fi
-    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f kubernetes/minecraft/helmfile.yaml {{args}}
+    KUBECONFIG="$PWD/$cfg" kubectl apply -f "kubernetes/${c}/manifests"
 
-# Full convergence for minecraft cluster: Helmfile charts → wait for webhook → manifests.
+# Run helmfile against a cluster (default: main).
+k-helmfile cluster="main" *args="apply":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    c="{{cluster}}"
+    [[ "$c" == "mc" ]] && c="minecraft"
+    cfg=".kube/k3s-${c}.yaml"
+    if [ ! -f "$cfg" ] && [ "$c" = "main" ]; then
+      for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml; do
+        if [ -f "$candidate" ]; then cfg="$candidate"; break; fi
+      done
+    fi
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: kubeconfig '$cfg' not found." >&2
+      exit 1
+    fi
+    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f "kubernetes/${c}/helmfile.yaml" {{args}}
+
+# Preview diff of all Helm releases against a live cluster (default: main).
+k-diff cluster="main":
+    @just k-helmfile {{cluster}} diff
+
+# Full convergence for a cluster: Helmfile charts → wait for webhook → apply manifests (default: main).
+k-sync cluster="main":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    c="{{cluster}}"
+    [[ "$c" == "mc" ]] && c="minecraft"
+    cfg=".kube/k3s-${c}.yaml"
+    if [ ! -f "$cfg" ] && [ "$c" = "main" ]; then
+      for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml; do
+        if [ -f "$candidate" ]; then cfg="$candidate"; break; fi
+      done
+    fi
+    if [ ! -f "$cfg" ]; then
+      echo "ERROR: kubeconfig '$cfg' not found." >&2
+      exit 1
+    fi
+    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f "kubernetes/${c}/helmfile.yaml" apply
+    KUBECONFIG="$PWD/$cfg" kubectl wait --namespace metallb-system --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
+    KUBECONFIG="$PWD/$cfg" kubectl apply -f "kubernetes/${c}/manifests"
+
+# Convenience alias: full convergence specifically for minecraft cluster.
 k-mc-sync:
-    @just k-mc-helmfile apply
-    @just k-mc wait --namespace metallb-system --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
-    @just k-mc-apply
-
-# Run helm against the homelab cluster.
-helm *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
-      if [ -f "$candidate" ]; then
-        cfg="$candidate"
-        break
-      fi
-    done
-    if [ -z "$cfg" ]; then
-      echo "ERROR: no kubeconfig found in .kube/. Run 'just converge mercury' first." >&2
-      exit 1
-    fi
-    KUBECONFIG="$cfg" helm {{args}}
-
-# Apply manifests from kubernetes/manifests.
-k-apply path="kubernetes/manifests":
-    @just k apply -f {{path}}
-
-# Run helmfile against the homelab cluster.
-k-helmfile *args="apply":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cfg=""
-    for candidate in .kube/k3s.yaml .kube/k3s-mercury.yaml .kube/k3s-venus.yaml; do
-      if [ -f "$candidate" ]; then
-        cfg="$candidate"
-        break
-      fi
-    done
-    if [ -z "$cfg" ]; then
-      echo "ERROR: no kubeconfig found in .kube/." >&2
-      exit 1
-    fi
-    KUBECONFIG="$PWD/$cfg" helmfile --kubeconfig "$PWD/$cfg" -f kubernetes/helmfile.yaml {{args}}
-
-# Preview diff of all Helm releases against live cluster.
-k-diff:
-    @just k-helmfile diff
-
-# Full Kubernetes convergence: apply Helmfile charts → apply custom manifests.
-k-sync:
-    @just k-helmfile apply
-    @just k-apply
+    @just k-sync minecraft
 
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":

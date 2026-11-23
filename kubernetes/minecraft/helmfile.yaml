@@ -3,6 +3,8 @@
 repositories:
   - name: metallb
     url: https://metallb.github.io/metallb
+  - name: traefik
+    url: https://traefik.github.io/charts
 
 releases:
   - name: metallb
@@ -11,4 +13,14 @@ releases:
     version: 0.16.2
     createNamespace: true
     values:
-      - ../values/metallb.yaml
+      - ../shared/values/metallb.yaml
+
+  - name: traefik
+    namespace: traefik
+    chart: traefik/traefik
+    version: 42.3.2
+    createNamespace: true
+    needs:
+      - metallb-system/metallb
+    values:
+      - ../shared/values/traefik.yaml

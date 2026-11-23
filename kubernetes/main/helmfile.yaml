@@ -1,4 +1,4 @@
-# kubernetes/helmfile.yaml — Declarative Helm releases for homelab cluster.
+# kubernetes/main/helmfile.yaml — Declarative Helm releases for main cluster.
 
 repositories:
   - name: metallb
@@ -13,7 +13,7 @@ releases:
     version: 0.16.2
     createNamespace: true
     values:
-      - values/metallb.yaml
+      - ../shared/values/metallb.yaml
 
   - name: traefik
     namespace: traefik
@@ -23,4 +23,4 @@ releases:
     needs:
       - metallb-system/metallb
     values:
-      - values/traefik.yaml
+      - ../shared/values/traefik.yaml

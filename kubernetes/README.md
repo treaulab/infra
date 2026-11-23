@@ -28,28 +28,35 @@ Virtual machines are provisioned on the Proxmox VE hypervisor (`entia`) via Open
 
 ```text
 kubernetes/
-├── helmfile.yaml         # Helmfile orchestrating MetalLB and Traefik releases
-├── values/               # Helm values overrides
-│   ├── metallb.yaml      # Controller & speaker configuration
-│   └── traefik.yaml      # Traefik LoadBalancer service & entrypoints
-├── manifests/            # Declarative Kubernetes manifests (.yaml)
-│   ├── metallb-pool.yaml # IPAddressPool (192.168.10.200-220) & L2Advertisement
-│   └── uptime-kuma.yaml  # Deployment, PVC, Service, and Ingress (kuma.lan)
-└── images/               # Dockerfiles & build contexts for custom cluster images
+├── shared/
+│   └── values/               # Shared Helm values overrides
+│       ├── metallb.yaml      # Controller & speaker configuration
+│       └── traefik.yaml      # Traefik LoadBalancer service & entrypoints
+├── main/                     # Main 10-node cluster (mercury...pluto + raspi)
+│   ├── helmfile.yaml         # MetalLB + Traefik releases
+│   └── manifests/
+│       ├── metallb-pool.yaml # lan-pool: 192.168.10.200 - 192.168.10.220
+│       └── uptime-kuma.yaml  # Deployment, PVC, Service, and Ingress (kuma.lan)
+├── minecraft/                # Standalone 1-node cluster (minecraft @ 192.168.10.76)
+│   ├── helmfile.yaml         # MetalLB + Traefik releases
+│   └── manifests/
+│       └── metallb-pool.yaml # minecraft-pool: 192.168.10.77 - 192.168.10.81
+└── images/                   # Dockerfiles & build contexts for custom cluster images
 ```
 
 ## Ingress & Load Balancing Architecture
 
-The cluster runs a standard bare-metal ingress layer:
+Both clusters share identical ingress architecture while remaining completely isolated:
 
 1. **MetalLB (v0.16.2)**:
    - Deployed via Helmfile into `metallb-system`.
-   - Runs `metallb-controller` and `metallb-speaker` DaemonSet across all nodes.
-   - Configured with `lan-pool`: `192.168.10.200 - 192.168.10.220` (unassigned high subnet block) with Layer 2 ARP advertisements (`l2-adv`).
+   - Runs `metallb-controller` and `metallb-speaker` daemon.
+   - **`main` pool**: `192.168.10.200 - 192.168.10.220` with Layer 2 ARP advertisements (`l2-adv`).
+   - **`minecraft` pool**: `192.168.10.77 - 192.168.10.81` with Layer 2 ARP advertisements (`minecraft-l2-adv`).
 2. **Traefik (v42.3.2 / App v3.7.17)**:
    - Deployed via Helmfile into `traefik`.
-   - Exposed as `type: LoadBalancer`, acquiring the first VIP (`192.168.10.200`).
-   - Ingress controller routes traffic by hostname (`Host: kuma.lan`) to backend services.
+   - Exposed as `type: LoadBalancer`. On `main` it acquires `192.168.10.200`; on `minecraft` it acquires `192.168.10.77`.
+   - On `minecraft`, using VIP `.77` avoids port collisions with the host Docker CTFd container on `192.168.10.76:80`.
 
 > [!IMPORTANT]
 > **DPI Note on Quay.io & Akamai CDN**:
@@ -59,55 +66,48 @@ The cluster runs a standard bare-metal ingress layer:
 
 ## Quick Start & Operator Workflow
 
-The root [`Justfile`](file:///home/trueking/Safe/Proj/infra/Justfile) provides the operator interface:
+The root [`Justfile`](file:///home/trueking/Safe/Proj/infra/Justfile) provides the unified operator interface:
 
-### 1. Converge K3s Engine & Fetch Kubeconfig
-
-Deploy or update the K3s cluster across all nodes:
-```bash
-just k3s
-```
-*This installs/updates K3s, configures `mercury` as server, connects agent nodes, and automatically fetches and configures your local kubeconfig at `.kube/k3s.yaml`.*
-
-### 2. Deploy Ingress Infrastructure (Helmfile)
-
-Deploy MetalLB and Traefik:
-```bash
-# Preview helm diff
-just k-diff
-# Sync releases
-just k-sync
-# Or direct helmfile:
-helmfile --file kubernetes/helmfile.yaml apply
-```
-
-Apply MetalLB IP address pool and L2 advertisement:
-```bash
-just k-apply path="kubernetes/manifests/metallb-pool.yaml"
-```
-
-### 3. Inspect Cluster Health
+### 1. Cluster Inspection
 
 ```bash
+# Main cluster nodes & pods
 just k get nodes -o wide
 just k get pods -A
-just k get svc -n traefik
+
+# Minecraft cluster nodes & pods
+just k-mc get nodes -o wide
+just k-mc get pods -A
 ```
 
-### 4. Deploy Workloads
+### 2. Deploy Ingress Infrastructure (Helmfile & Manifests)
 
-Apply any manifest or directory under `kubernetes/manifests/`:
 ```bash
-just k-apply path="kubernetes/manifests"
-# or apply a specific manifest:
-just k-apply path="kubernetes/manifests/uptime-kuma.yaml"
+# Preview helm diff (default: main)
+just k-diff
+just k-diff minecraft
+
+# Full declarative sync (Helmfile releases + wait for webhook + apply manifests)
+just k-sync               # Syncs main cluster
+just k-sync minecraft     # Syncs minecraft cluster (alias: just k-mc-sync)
+```
+
+### 3. Deploy Custom Manifests
+
+```bash
+# Apply all manifests for a cluster
+just k-apply              # Applies kubernetes/main/manifests
+just k-apply minecraft    # Applies kubernetes/minecraft/manifests
 ```
 
 ### 4. Direct Kubectl Commands
 
-The `just k` helper automatically binds to `.kube/k3s.yaml`:
 ```bash
+# Main cluster
 just k logs -n <namespace> <pod-name> -f
 just k describe node mercury
-just k port-forward -n <namespace> svc/<service-name> 8080:80
+
+# Minecraft cluster
+just k-mc logs -n <namespace> <pod-name> -f
+just k-mc get svc -n traefik
 ```
