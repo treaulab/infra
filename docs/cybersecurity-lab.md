@@ -105,6 +105,12 @@ just k-mc get pods -A
 # Apply manifest updates
 just k-apply minecraft
 
+# Sync all 53 monitors into Uptime Kuma SQLite database
+just kuma-sync
+
+# Idempotently sync DNS zones and A records to MamaDuck Active Directory
+just dns-sync
+
 # Restart Homepage deployment after config changes
 just k-mc rollout restart deployment/homepage
 

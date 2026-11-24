@@ -292,6 +292,15 @@ k-sync cluster="main":
 k-mc-sync:
     @just k-sync minecraft
 
+# Sync all classroom lab monitors into Uptime Kuma SQLite database.
+kuma-sync:
+    python3 tools/sync-kuma-lab.py
+    kubectl --kubeconfig .kube/k3s-minecraft.yaml rollout restart deploy/uptime-kuma
+
+# Sync classroom DNS zones and records to MamaDuck Active Directory.
+dns-sync:
+    python3 tools/sync-ad-dns.py
+
 # Deploy Caddy + static website to the Azure VPS.
 deploy-public env="prod":
     #!/usr/bin/env bash
