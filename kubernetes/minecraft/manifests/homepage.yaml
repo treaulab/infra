@@ -90,7 +90,7 @@ data:
             ping: "https://duckling.ai"
 
         - ctf.com:
-            icon: ctfd
+            icon: mdi-flag-checkered
             href: "http://duckling.ctf.com"
             description: "Cybersecurity CTF Challenges"
             ping: "http://duckling.ctf.com"
@@ -102,13 +102,13 @@ data:
             ping: "https://netlab.pccsk12.com"
 
         - exam.duckling.local:
-            icon: windows
+            icon: windows-11.png
             href: "https://exam.duckling.local"
             description: "Online Exam & Testing Portal"
             ping: "https://exam.duckling.local"
 
         - pccsk12.instructure.com:
-            icon: canvas
+            icon: si-canvas
             href: "https://pccsk12.instructure.com/login/saml"
             description: "Canvas LMS (P-CCS Portal)"
             ping: "https://pccsk12.instructure.com"
