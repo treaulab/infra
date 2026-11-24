@@ -48,6 +48,8 @@ Students and instructors access all classroom resources through the central **Cl
 | **PCCSK12 NETLAB+** | `https://netlab.pccsk12.com` | Remote training pod at `10.7.13.3` | **Network+ / Security+**: Cisco routing, firewall configuration, Linux sandbox pods |
 | **Exam Portal** | `https://exam.duckling.local` | Windows Server IIS at `192.168.10.70` | **Certification Delivery**: Official proctored exam testing and assessment portal |
 | **Duckling AI Tutor** | `https://duckling.ai` | Containerized LLM on `192.168.10.68` | **Study & Review**: Real-time AI explanation of networking concepts, acronyms, and attack vectors |
+| **Canvas LMS** | `https://pccsk12.instructure.com/login/saml` | Cloud SaaS (P-CCS Google SAML SSO) | **Classroom Management**: Assignments, grading, and coursework delivery |
+| **TestOut LabSim** | `https://labsimapp.testout.com/` | Cloud SaaS (CompTIA Courseware) | **Security+ / Network+ / A+**: Interactive virtual hardware, OS, and network simulation labs |
 
 ---
 
