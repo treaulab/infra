@@ -21,6 +21,10 @@ def esc(val):
 
 # 1. Status Page
 sql_statements.append("""
+DELETE FROM monitor_group;
+DELETE FROM "group";
+DELETE FROM monitor;
+
 INSERT OR REPLACE INTO status_page (id, slug, title, description, icon, theme, published, search_engine_index, show_tags, show_powered_by, auto_refresh_interval)
 VALUES (1, 'default', 'Cybersecurity Lab Status', 'Real-time health monitoring for Classroom Portals, Student Workstations (CV01 - CV28), and Core Infrastructure.', '/icon.svg', 'dark', 1, 0, 0, 0, 60);
 
@@ -67,11 +71,24 @@ groups_data = [
     },
     {
         "id": 4,
-        "name": "Lab Infrastructure & Servers",
+        "name": "UniFi Network Infrastructure",
         "weight": 4,
+        "monitors": [
+            {"name": "UniFi Security Gateway (USG)", "type": "ping", "hostname": "192.168.10.1", "interval": 60},
+            {"name": "UniFi Switch - Core (LSwitch)", "type": "ping", "hostname": "192.168.10.32", "interval": 60},
+            {"name": "UniFi Switch - Access (SSwitch)", "type": "ping", "hostname": "192.168.10.21", "interval": 60},
+        ]
+    },
+    {
+        "id": 5,
+        "name": "Lab Infrastructure & Servers",
+        "weight": 5,
         "monitors": [
             {"name": "MamaDuck (Domain Controller / DNS)", "type": "ping", "hostname": "192.168.10.5", "interval": 60},
             {"name": "Atlas (Proxmox R620)", "type": "ping", "hostname": "192.168.10.10", "interval": 60},
+            {"name": "scrawnyboi", "type": "ping", "hostname": "192.168.10.67", "interval": 60},
+            {"name": "nucboi", "type": "ping", "hostname": "192.168.10.68", "interval": 60},
+            {"name": "beefyboi", "type": "ping", "hostname": "192.168.10.69", "interval": 60},
             {"name": "Netboot.xyz (iPXE Master)", "type": "ping", "hostname": "192.168.10.6", "interval": 60},
             {"name": "NAS5439CA (Storage 1)", "type": "ping", "hostname": "192.168.10.82", "interval": 60},
             {"name": "NAS5170AD (Storage 2)", "type": "ping", "hostname": "192.168.10.83", "interval": 60},
