@@ -26,7 +26,7 @@ DELETE FROM "group";
 DELETE FROM monitor;
 
 INSERT OR REPLACE INTO status_page (id, slug, title, description, icon, theme, published, search_engine_index, show_tags, show_powered_by, auto_refresh_interval)
-VALUES (1, 'default', 'DuckPond Cybersecurity Lab', 'Real-time telemetry for Classroom Portals, Student Workstations (CV01 - CV28, TITAN, TEST-PC), and Lab Infrastructure.', '/icon.svg', 'dark', 1, 0, 0, 0, 60);
+VALUES (1, 'default', 'DuckPond Cybersecurity Lab', 'Real-time telemetry for Classroom Portals, Student Workstations (CV01 - CV28, TEST-PC), and Lab Infrastructure.', '/icon.svg', 'dark', 1, 0, 0, 0, 60);
 
 INSERT OR REPLACE INTO setting (key, value, type) VALUES ('entryPage', '"statusPage-default"', 'general');
 INSERT OR REPLACE INTO setting (key, value, type) VALUES ('primaryBaseURL', '"http://status.class.net"', 'general');
@@ -39,12 +39,12 @@ groups_data = [
         "name": "Core Classroom Portals",
         "weight": 1,
         "monitors": [
-            {"name": "Class Lab Hub", "type": "http", "url": "http://class.net", "interval": 60},
-            {"name": "CTFd Platform", "type": "http", "url": "http://duckling.ctf.com", "interval": 60},
-            {"name": "Duckling AI Tutor", "type": "http", "url": "https://duckling.ai", "interval": 60, "ignore_tls": True},
-            {"name": "PCCSK12 NETLAB+", "type": "http", "url": "https://netlab.pccsk12.com", "interval": 60, "ignore_tls": True},
-            {"name": "Exam Portal", "type": "http", "url": "https://exam.duckling.local", "interval": 60, "ignore_tls": True, "accepted_statuscodes_json": '["200-299","401"]'},
-            {"name": "SITS Organization", "type": "http", "url": "https://sitservices.org", "interval": 60},
+            {"name": "Class Lab Hub (http://class.net)", "type": "http", "url": "http://class.net", "interval": 60},
+            {"name": "CTFd Platform (http://duckling.ctf.com)", "type": "http", "url": "http://duckling.ctf.com", "interval": 60},
+            {"name": "Duckling AI Tutor (https://duckling.ai)", "type": "http", "url": "https://duckling.ai", "interval": 60, "ignore_tls": True},
+            {"name": "PCCSK12 NETLAB+ (https://netlab.pccsk12.com)", "type": "http", "url": "https://netlab.pccsk12.com", "interval": 60, "ignore_tls": True},
+            {"name": "Online Exam Portal (https://exam.duckling.local)", "type": "http", "url": "https://exam.duckling.local", "interval": 60, "ignore_tls": True, "accepted_statuscodes_json": '["200-299","401"]'},
+            {"name": "SITS Organization (https://sitservices.org)", "type": "http", "url": "https://sitservices.org", "interval": 60},
         ]
     },
     {
@@ -65,7 +65,6 @@ groups_data = [
             {"name": f"CV{i:02d}", "type": "ping", "hostname": f"192.168.10.{100 + i}", "interval": 60}
             for i in range(1, 29)
         ] + [
-            {"name": "TITAN Workstation", "type": "ping", "hostname": "192.168.10.31", "interval": 60},
             {"name": "TEST-PC", "type": "ping", "hostname": "192.168.10.140", "interval": 60},
         ]
     },
@@ -124,12 +123,13 @@ VALUES ({g_id}, {g_name}, 1, 1, {g_weight}, 1);
         m_tls = 1 if m.get("ignore_tls") else 0
         m_codes = esc(m.get("accepted_statuscodes_json", '["200-299"]'))
 
+        send_url = 1 if m.get("url") else 0
         sql_statements.append(f"""
 INSERT OR REPLACE INTO monitor (id, name, active, user_id, interval, url, type, weight, hostname, maxretries, ignore_tls, accepted_statuscodes_json, ping_count, ping_numeric, ping_per_request_timeout)
 VALUES ({monitor_id}, {m_name}, 1, 1, {m_int}, {m_url}, {m_type}, 2000, {m_host}, 1, {m_tls}, {m_codes}, 1, 1, 2);
 
-INSERT OR REPLACE INTO monitor_group (id, monitor_id, group_id, weight)
-VALUES ({monitor_id}, {monitor_id}, {g_id}, 1000);
+INSERT OR REPLACE INTO monitor_group (id, monitor_id, group_id, weight, send_url)
+VALUES ({monitor_id}, {monitor_id}, {g_id}, 1000, {send_url});
 """)
         monitor_id += 1
 

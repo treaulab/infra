@@ -43,7 +43,7 @@ Students and instructors access all classroom resources through the central **Cl
 | Service / Platform | Access URL | Underpinning Infrastructure | CompTIA Curriculum Alignment |
 | :--- | :--- | :--- | :--- |
 | **Class Lab Hub** | `http://class.net`<br>`http://class/`<br>`http://class.lan` | MetalLB VIP `192.168.10.77` on Minecraft K3s | Central navigation and daily operational hub |
-| **DuckPond Cyber Lab Status** | `http://status.class.net/status/default`<br>`http://status/status/default` | K3s on `minecraft` (`192.168.10.77:3001`) | **Security+ / CySA+**: Service availability, SLAs, outage alerting, and health monitoring (52 live monitors across Portals, Teacher/Proctor, Student Desks CV01–CV28/TITAN/TEST-PC, UniFi Network, Compute Servers, and Printers) |
+| **DuckPond Cyber Lab Status** | `http://status.class.net/status/default`<br>`http://status/status/default` | K3s on `minecraft` (`192.168.10.77:3001`) | **Security+ / CySA+**: Service availability, SLAs, outage alerting, and health monitoring (52 live monitors across Portals, Teacher/Proctor, Student Desks CV01–CV28/TEST-PC, UniFi Network, Compute Servers, and Printers) |
 | **CTFd Platform** | `http://duckling.ctf.com` | Docker on `192.168.10.76:80` | **Security+ / PenTest+**: Hands-on capture-the-flag challenges, flags, crypto, and web security |
 | **PCCSK12 NETLAB+** | `https://netlab.pccsk12.com` | Remote training pod at `10.7.13.3` | **Network+ / Security+**: Cisco routing, firewall configuration, Linux sandbox pods |
 | **Exam Portal** | `https://exam.duckling.local` | Windows Server IIS at `192.168.10.70` | **Certification Delivery**: Official proctored exam testing and assessment portal |
