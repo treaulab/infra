@@ -74,6 +74,15 @@ data:
 
   services.yaml: |
     - Class Portals:
+        - Status & Uptime:
+            icon: uptime-kuma
+            href: "http://status.class.net/status/default"
+            description: "DuckPond Fleet & Service Health"
+            widget:
+              type: uptimekuma
+              url: "http://uptime-kuma:3001"
+              slug: "default"
+
         - duckling.ai:
             icon: openai
             href: "https://duckling.ai"
@@ -97,15 +106,6 @@ data:
             href: "https://exam.duckling.local"
             description: "Online Exam & Testing Portal"
             ping: "https://exam.duckling.local"
-
-        - Status & Uptime:
-            icon: uptime-kuma
-            href: "http://status.class.net/status/default"
-            description: "DuckPond Fleet & Service Health"
-            widget:
-              type: uptimekuma
-              url: "http://uptime-kuma:3001"
-              slug: "default"
 
   bookmarks.yaml: |
     - CompTIA & Security Frameworks:
