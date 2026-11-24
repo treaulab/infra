@@ -44,6 +44,7 @@ groups_data = [
             {"name": "Duckling AI Tutor", "type": "http", "url": "https://duckling.ai", "interval": 60, "ignore_tls": True},
             {"name": "PCCSK12 NETLAB+", "type": "http", "url": "https://netlab.pccsk12.com", "interval": 60, "ignore_tls": True},
             {"name": "Exam Portal", "type": "http", "url": "https://exam.duckling.local", "interval": 60, "ignore_tls": True, "accepted_statuscodes_json": '["200-299","401"]'},
+            {"name": "SITS Organization", "type": "http", "url": "https://sitservices.org", "interval": 60},
         ]
     },
     {

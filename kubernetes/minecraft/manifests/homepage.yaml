@@ -60,7 +60,7 @@ data:
     layout:
       Classroom & Coursework:
         style: "row"
-        columns: 3
+        columns: 4
         icon: mdi-school
       Cyber Lab Platforms:
         style: "row"
@@ -99,6 +99,12 @@ data:
             href: "https://exam.duckling.local"
             description: "Online Testing & Certification"
             ping: "https://exam.duckling.local"
+
+        - SITS:
+            icon: https://sitservices.org/assets/logo/logo.svg
+            href: "https://sitservices.org/"
+            description: "Student IT Services (Nonprofit)"
+            ping: "https://sitservices.org"
 
     - Cyber Lab Platforms:
         - DuckPond Fleet Status:
