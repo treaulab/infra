@@ -100,7 +100,7 @@ data:
 
         - Status & Uptime:
             icon: uptime-kuma
-            href: "http://status.class.net"
+            href: "http://status.class.net/status/default"
             description: "Class Fleet & Service Health"
             widget:
               type: uptimekuma
