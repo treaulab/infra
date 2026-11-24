@@ -57,7 +57,7 @@ data:
     layout:
       Class Portals:
         style: "row"
-        columns: 3
+        columns: 4
 
   widgets.yaml: |
     - search:
@@ -81,6 +81,10 @@ data:
             icon: cisco.png
             href: "https://netlab.pccsk12.com"
             description: "PCCSK12 Networking & Cyber Lab"
+        - exam.duckling.local:
+            icon: windows.png
+            href: "https://exam.duckling.local"
+            description: "Online Exam & Testing Portal"
 
   bookmarks.yaml: |
     - Documentation:
