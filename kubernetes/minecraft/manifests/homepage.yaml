@@ -55,15 +55,9 @@ data:
     headerStyle: "boxed"
     cardBlur: "sm"
     layout:
-      Class Resources:
-        style: "row"
-        columns: 2
-      Homelab & Services:
+      Class Portals:
         style: "row"
         columns: 3
-      Cluster Infrastructure:
-        style: "row"
-        columns: 2
 
   widgets.yaml: |
     - search:
@@ -72,66 +66,33 @@ data:
     - greeting:
         text_size: 2xl
         text: "Class Lab Hub"
-    - resources:
-        cpu: true
-        memory: true
-        disk: /
 
   services.yaml: |
-    - Class Resources:
-        - CTFd Platform:
+    - Class Portals:
+        - duckling.ai:
+            icon: openai.png
+            href: "https://duckling.ai"
+            description: "Local AI Platform"
+        - ctf.com:
             icon: ctfd.png
             href: "http://duckling.ctf.com"
-            description: "Student CTF Challenge Platform (Port 80)"
-        - Class Code Repository:
-            icon: github.png
-            href: "https://github.com"
-            description: "Course codebase, templates, and assignments"
-
-    - Homelab & Services:
-        - Uptime Kuma:
-            icon: uptime-kuma.png
-            href: "http://kuma.lan"
-            description: "Fleet Uptime & Service Monitoring (Main Cluster)"
-        - Jellyfin:
-            icon: jellyfin.png
-            href: "http://192.168.10.69:8096"
-            description: "Media Server on beefyboi"
-        - Proxmox VE:
-            icon: proxmox.png
-            href: "https://192.168.10.20:8006"
-            description: "entia Hypervisor Management"
-
-    - Cluster Infrastructure:
-        - Main K3s Fleet:
-            icon: kubernetes.png
-            href: "http://192.168.10.200"
-            description: "10-Node Production Cluster (mercury)"
-        - Minecraft Server Node:
-            icon: kubernetes.png
-            href: "http://class.lan"
-            description: "Standalone 1-Node Cluster (192.168.10.76)"
-            widget:
-              type: kubernetes
-              cluster:
-                showNodes: true
-                cpu: true
-                memory: true
+            description: "Cybersecurity CTF Challenges"
+        - netlab.pccsk12.com:
+            icon: cisco.png
+            href: "https://netlab.pccsk12.com"
+            description: "PCCSK12 Networking & Cyber Lab"
 
   bookmarks.yaml: |
-    - Documentation & Reference:
+    - Documentation:
         - Kubernetes Docs:
             - abbr: K8s
               href: https://kubernetes.io/docs/
-        - Linux Commands:
+        - Linux Manual:
             - abbr: BASH
               href: https://man7.org/linux/man-pages/
         - Python Docs:
             - abbr: PY
               href: https://docs.python.org/3/
-        - Docker Reference:
-            - abbr: DOCK
-              href: https://docs.docker.com/reference/
 
 ---
 apiVersion: apps/v1
