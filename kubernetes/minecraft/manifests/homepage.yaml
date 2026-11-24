@@ -102,7 +102,10 @@ data:
             icon: uptime-kuma
             href: "http://status.class.net"
             description: "Class Fleet & Service Health"
-            siteMonitor: "http://uptime-kuma:3001/"
+            widget:
+              type: uptimekuma
+              url: "http://uptime-kuma:3001"
+              slug: "default"
 
   bookmarks.yaml: |
     - CompTIA & Security Frameworks:
