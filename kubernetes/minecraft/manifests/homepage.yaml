@@ -1,0 +1,240 @@
+---
+# kubernetes/minecraft/manifests/homepage.yaml
+# Class Lab Homepage Dashboard deployed on the standalone minecraft cluster.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: homepage
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: homepage
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: homepage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: homepage
+subjects:
+  - kind: ServiceAccount
+    name: homepage
+    namespace: default
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage-config
+  namespace: default
+data:
+  settings.yaml: |
+    title: "Class Lab Hub"
+    theme: "dark"
+    color: "slate"
+    headerStyle: "boxed"
+    cardBlur: "sm"
+    layout:
+      Class Resources:
+        style: "row"
+        columns: 2
+      Homelab & Services:
+        style: "row"
+        columns: 3
+      Cluster Infrastructure:
+        style: "row"
+        columns: 2
+
+  widgets.yaml: |
+    - search:
+        provider: duckduckgo
+        target: _blank
+    - greeting:
+        text_size: 2xl
+        text: "Class Lab Hub"
+    - resources:
+        cpu: true
+        memory: true
+        disk: /
+
+  services.yaml: |
+    - Class Resources:
+        - CTFd Platform:
+            icon: ctfd.png
+            href: "http://duckling.ctf.com"
+            description: "Student CTF Challenge Platform (Port 80)"
+        - Class Code Repository:
+            icon: github.png
+            href: "https://github.com"
+            description: "Course codebase, templates, and assignments"
+
+    - Homelab & Services:
+        - Uptime Kuma:
+            icon: uptime-kuma.png
+            href: "http://kuma.lan"
+            description: "Fleet Uptime & Service Monitoring (Main Cluster)"
+        - Jellyfin:
+            icon: jellyfin.png
+            href: "http://192.168.10.69:8096"
+            description: "Media Server on beefyboi"
+        - Proxmox VE:
+            icon: proxmox.png
+            href: "https://192.168.10.20:8006"
+            description: "entia Hypervisor Management"
+
+    - Cluster Infrastructure:
+        - Main K3s Fleet:
+            icon: kubernetes.png
+            href: "http://192.168.10.200"
+            description: "10-Node Production Cluster (mercury)"
+        - Minecraft Server Node:
+            icon: kubernetes.png
+            href: "http://class.lan"
+            description: "Standalone 1-Node Cluster (192.168.10.76)"
+            widget:
+              type: kubernetes
+              cluster:
+                showNodes: true
+                cpu: true
+                memory: true
+
+  bookmarks.yaml: |
+    - Documentation & Reference:
+        - Kubernetes Docs:
+            - abbr: K8s
+              href: https://kubernetes.io/docs/
+        - Linux Commands:
+            - abbr: BASH
+              href: https://man7.org/linux/man-pages/
+        - Python Docs:
+            - abbr: PY
+              href: https://docs.python.org/3/
+        - Docker Reference:
+            - abbr: DOCK
+              href: https://docs.docker.com/reference/
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: default
+  labels:
+    app.kubernetes.io/name: homepage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homepage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homepage
+    spec:
+      serviceAccountName: homepage
+      initContainers:
+        - name: init-config
+          image: ghcr.io/gethomepage/homepage:latest
+          command: ["sh", "-c", "cp /config-templates/* /app/config/"]
+          volumeMounts:
+            - name: config-templates
+              mountPath: /config-templates
+            - name: config-dir
+              mountPath: /app/config
+      containers:
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: "class.lan,192.168.10.77,localhost,127.0.0.1,*"
+          volumeMounts:
+            - name: config-dir
+              mountPath: /app/config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config-templates
+          configMap:
+            name: homepage-config
+        - name: config-dir
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homepage
+  namespace: default
+  labels:
+    app.kubernetes.io/name: homepage
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: homepage
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homepage
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: class.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
