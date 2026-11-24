@@ -29,12 +29,14 @@ stacks/            Declarative workloads -> /opt/stacks/<name>
 ├── edge/          Azure VPS: caddy/ (compose.yml, Caddyfile, site/)
 └── homelab/       jellyfin/
 
-kubernetes/        Declarative Kubernetes state (homelab K3s cluster)
-├── manifests/     Deployments, Services, PVCs, Namespaces
-└── images/        Custom container images
+kubernetes/        Declarative Kubernetes state (homelab K3s clusters: main & minecraft)
+├── shared/        Shared Helm values (MetalLB, Traefik)
+├── main/          Production fleet (mercury..pluto)
+└── minecraft/     Classroom & CTF cluster (VIP 192.168.10.77)
 
 tools/             operator helpers invoked by the Justfile
 docs/runbooks.md   ops manual
+docs/cybersecurity-lab.md  CompTIA Cyber Lab architecture & portal ops
 Justfile           single operator interface
 ```
 
