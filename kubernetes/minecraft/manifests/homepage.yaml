@@ -63,28 +63,40 @@ data:
     - search:
         provider: duckduckgo
         target: _blank
-    - greeting:
+
+    # Live Digital Clock (essential for timed labs / exams)
+    - datetime:
         text_size: 2xl
-        text: "Class Lab Hub"
+        format:
+          timeStyle: short
+          dateStyle: medium
+          hour12: true
 
   services.yaml: |
     - Class Portals:
         - duckling.ai:
-            icon: openai.png
+            icon: openai
             href: "https://duckling.ai"
             description: "Local AI Platform"
+            ping: "https://duckling.ai"
+
         - ctf.com:
-            icon: ctfd.png
+            icon: ctfd
             href: "http://duckling.ctf.com"
             description: "Cybersecurity CTF Challenges"
+            ping: "http://duckling.ctf.com"
+
         - netlab.pccsk12.com:
-            icon: cisco.png
+            icon: cisco
             href: "https://netlab.pccsk12.com"
             description: "PCCSK12 Networking & Cyber Lab"
+            ping: "https://netlab.pccsk12.com"
+
         - exam.duckling.local:
-            icon: windows.png
+            icon: windows
             href: "https://exam.duckling.local"
             description: "Online Exam & Testing Portal"
+            ping: "https://exam.duckling.local"
 
   bookmarks.yaml: |
     - CompTIA & Security Frameworks:
@@ -140,6 +152,22 @@ spec:
         app.kubernetes.io/name: homepage
     spec:
       serviceAccountName: homepage
+      hostAliases:
+        - ip: "192.168.10.76"
+          hostnames:
+            - "duckling.ctf.com"
+            - "minecraft.duckling.local"
+            - "minecraft.host"
+        - ip: "192.168.10.70"
+          hostnames:
+            - "exam.duckling.local"
+        - ip: "10.7.13.3"
+          hostnames:
+            - "netlab.pccsk12.com"
+        - ip: "192.168.10.68"
+          hostnames:
+            - "duckling.ai"
+            - "affine.duckling.ai"
       initContainers:
         - name: init-config
           image: ghcr.io/gethomepage/homepage:latest
@@ -161,6 +189,8 @@ spec:
               value: "3000"
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: "*"
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
           volumeMounts:
             - name: config-dir
               mountPath: /app/config
