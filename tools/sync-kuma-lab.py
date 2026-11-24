@@ -54,8 +54,7 @@ groups_data = [
         "monitors": [
             {"name": "CV00 (Teacher / Exam Host)", "type": "ping", "hostname": "192.168.10.70", "interval": 60},
             {"name": "PEARSONADMIN (Proctor PC)", "type": "ping", "hostname": "192.168.10.131", "interval": 60},
-            {"name": "CTE10-0134", "type": "ping", "hostname": "192.168.10.128", "interval": 60},
-            {"name": "CTE10-0135", "type": "ping", "hostname": "192.168.10.136", "interval": 60},
+            {"name": "CTE10-0135 (Teacher Laptop)", "type": "ping", "hostname": "192.168.10.136", "interval": 60},
             {"name": "TEST-PC", "type": "ping", "hostname": "192.168.10.140", "interval": 60},
             {"name": "TITAN Workstation", "type": "ping", "hostname": "192.168.10.31", "interval": 60},
         ]
