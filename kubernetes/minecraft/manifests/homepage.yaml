@@ -49,15 +49,23 @@ metadata:
   namespace: default
 data:
   settings.yaml: |
-    title: "Class Lab Hub"
+    title: "DuckPond Cyber Lab"
     theme: "dark"
-    color: "slate"
-    headerStyle: "boxed"
-    cardBlur: "sm"
+    color: "zinc"
+    headerStyle: "clean"
+    statusStyle: "dot"
+    target: "_blank"
+    cardBlur: "md"
+    hideVersion: true
     layout:
-      Class Portals:
+      Classroom & Coursework:
         style: "row"
-        columns: 5
+        columns: 3
+        icon: mdi-school
+      Cyber Lab Platforms:
+        style: "row"
+        columns: 4
+        icon: mdi-shield-check
 
   widgets.yaml: |
     - search:
@@ -73,8 +81,27 @@ data:
           hour12: true
 
   services.yaml: |
-    - Class Portals:
-        - Status & Uptime:
+    - Classroom & Coursework:
+        - Canvas LMS:
+            icon: si-canvas
+            href: "https://pccsk12.instructure.com/login/saml"
+            description: "P-CCS Student Learning Portal"
+            ping: "https://pccsk12.instructure.com"
+
+        - CompTIA TestOut:
+            icon: si-comptia
+            href: "https://labsimapp.testout.com/"
+            description: "Courseware & Lab Simulations"
+            ping: "https://labsimapp.testout.com"
+
+        - Exam Portal:
+            icon: windows-11.png
+            href: "https://exam.duckling.local"
+            description: "Online Testing & Certification"
+            ping: "https://exam.duckling.local"
+
+    - Cyber Lab Platforms:
+        - DuckPond Fleet Status:
             icon: uptime-kuma
             href: "http://status.class.net/status/default"
             description: "DuckPond Fleet & Service Health"
@@ -83,41 +110,30 @@ data:
               url: "http://uptime-kuma:3001"
               slug: "default"
 
-        - duckling.ai:
+        - Duckling AI:
             icon: openai
             href: "https://duckling.ai"
             description: "Local AI Platform"
             ping: "https://duckling.ai"
 
-        - ctf.com:
+        - Cyber CTF:
             icon: mdi-flag-checkered
             href: "http://duckling.ctf.com"
             description: "Cybersecurity CTF Challenges"
             ping: "http://duckling.ctf.com"
 
-        - netlab.pccsk12.com:
+        - NETLAB+:
             icon: cisco
             href: "https://netlab.pccsk12.com"
-            description: "PCCSK12 Networking & Cyber Lab"
+            description: "P-CCS Networking & Cyber Lab"
             ping: "https://netlab.pccsk12.com"
 
-        - exam.duckling.local:
-            icon: windows-11.png
-            href: "https://exam.duckling.local"
-            description: "Online Exam & Testing Portal"
-            ping: "https://exam.duckling.local"
-
-        - pccsk12.instructure.com:
-            icon: si-canvas
-            href: "https://pccsk12.instructure.com/login/saml"
-            description: "Canvas LMS (P-CCS Portal)"
-            ping: "https://pccsk12.instructure.com"
-
-        - TestOut LabSim:
-            icon: si-comptia
-            href: "https://labsimapp.testout.com/"
-            description: "CompTIA TestOut Courseware"
-            ping: "https://labsimapp.testout.com"
+  custom.css: |
+    /* Modern Obsidian Theme - Deep Charcoal / Obsidian Gradient */
+    body, #page_wrapper, #inner_wrapper {
+      background: radial-gradient(ellipse at 50% 0%, #27272a 0%, #18181b 40%, #09090b 100%) !important;
+      min-height: 100vh;
+    }
 
   bookmarks.yaml: ""
 
