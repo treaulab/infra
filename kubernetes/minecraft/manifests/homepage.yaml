@@ -101,7 +101,7 @@ data:
         - Status & Uptime:
             icon: uptime-kuma
             href: "http://status.class.net/status/default"
-            description: "Class Fleet & Service Health"
+            description: "DuckPond Fleet & Service Health"
             widget:
               type: uptimekuma
               url: "http://uptime-kuma:3001"
@@ -176,7 +176,6 @@ spec:
         - ip: "192.168.10.68"
           hostnames:
             - "duckling.ai"
-            - "affine.duckling.ai"
         - ip: "192.168.10.77"
           hostnames:
             - "status.class.net"

@@ -26,7 +26,7 @@ DELETE FROM "group";
 DELETE FROM monitor;
 
 INSERT OR REPLACE INTO status_page (id, slug, title, description, icon, theme, published, search_engine_index, show_tags, show_powered_by, auto_refresh_interval)
-VALUES (1, 'default', 'Cybersecurity Lab Status', 'Real-time health monitoring for Classroom Portals, Student Workstations (CV01 - CV28), and Core Infrastructure.', '/icon.svg', 'dark', 1, 0, 0, 0, 60);
+VALUES (1, 'default', 'DuckPond Cybersecurity Lab', 'Real-time telemetry for Classroom Portals, Student Workstations (CV01 - CV28, TITAN, TEST-PC), and Lab Infrastructure.', '/icon.svg', 'dark', 1, 0, 0, 0, 60);
 
 INSERT OR REPLACE INTO setting (key, value, type) VALUES ('entryPage', '"statusPage-default"', 'general');
 INSERT OR REPLACE INTO setting (key, value, type) VALUES ('primaryBaseURL', '"http://status.class.net"', 'general');
@@ -43,8 +43,7 @@ groups_data = [
             {"name": "CTFd Platform", "type": "http", "url": "http://duckling.ctf.com", "interval": 60},
             {"name": "Duckling AI Tutor", "type": "http", "url": "https://duckling.ai", "interval": 60, "ignore_tls": True},
             {"name": "PCCSK12 NETLAB+", "type": "http", "url": "https://netlab.pccsk12.com", "interval": 60, "ignore_tls": True},
-            {"name": "Exam Delivery Portal", "type": "http", "url": "https://exam.duckling.local", "interval": 60, "ignore_tls": True, "accepted_statuscodes_json": '["200-299","401"]'},
-            {"name": "AFFiNE Workspace", "type": "http", "url": "https://affine.duckling.ai", "interval": 60, "ignore_tls": True},
+            {"name": "Exam Portal", "type": "http", "url": "https://exam.duckling.local", "interval": 60, "ignore_tls": True, "accepted_statuscodes_json": '["200-299","401"]'},
         ]
     },
     {
@@ -52,20 +51,21 @@ groups_data = [
         "name": "Teacher & Proctor Stations",
         "weight": 2,
         "monitors": [
-            {"name": "CV00 (Teacher / Exam Host)", "type": "ping", "hostname": "192.168.10.70", "interval": 60},
+            {"name": "CV00 (Mr. Obsniuk - Teacher PC)", "type": "ping", "hostname": "192.168.10.70", "interval": 60},
             {"name": "PEARSONADMIN (Proctor PC)", "type": "ping", "hostname": "192.168.10.131", "interval": 60},
             {"name": "CTE10-0135 (Teacher Laptop)", "type": "ping", "hostname": "192.168.10.136", "interval": 60},
-            {"name": "TEST-PC", "type": "ping", "hostname": "192.168.10.140", "interval": 60},
-            {"name": "TITAN Workstation", "type": "ping", "hostname": "192.168.10.31", "interval": 60},
         ]
     },
     {
         "id": 3,
-        "name": "Student Workstations (CV01 - CV28)",
+        "name": "Student Workstations",
         "weight": 3,
         "monitors": [
             {"name": f"CV{i:02d}", "type": "ping", "hostname": f"192.168.10.{100 + i}", "interval": 60}
             for i in range(1, 29)
+        ] + [
+            {"name": "TITAN Workstation", "type": "ping", "hostname": "192.168.10.31", "interval": 60},
+            {"name": "TEST-PC", "type": "ping", "hostname": "192.168.10.140", "interval": 60},
         ]
     },
     {
