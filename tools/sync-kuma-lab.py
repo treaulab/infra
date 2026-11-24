@@ -77,6 +77,7 @@ groups_data = [
             {"name": "UniFi Security Gateway (USG)", "type": "ping", "hostname": "192.168.10.1", "interval": 60},
             {"name": "UniFi Switch - Core (LSwitch)", "type": "ping", "hostname": "192.168.10.32", "interval": 60},
             {"name": "UniFi Switch - Access (SSwitch)", "type": "ping", "hostname": "192.168.10.21", "interval": 60},
+            {"name": "UniFi Access Point (UAP)", "type": "ping", "hostname": "192.168.10.43", "interval": 60},
         ]
     },
     {
