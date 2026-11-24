@@ -94,6 +94,15 @@ groups_data = [
             {"name": "NAS5439CA (Storage 1)", "type": "ping", "hostname": "192.168.10.82", "interval": 60},
             {"name": "NAS5170AD (Storage 2)", "type": "ping", "hostname": "192.168.10.83", "interval": 60},
         ]
+    },
+    {
+        "id": 6,
+        "name": "Printers & 3D Fabrication",
+        "weight": 6,
+        "monitors": [
+            {"name": "cheeseboi (HP Network Printer)", "type": "ping", "hostname": "192.168.10.57", "interval": 60},
+            {"name": "Bambu Lab 3D Printer", "type": "ping", "hostname": "192.168.10.137", "interval": 60},
+        ]
     }
 ]
 
