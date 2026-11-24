@@ -113,6 +113,12 @@ data:
             description: "Canvas LMS (P-CCS Portal)"
             ping: "https://pccsk12.instructure.com"
 
+        - TestOut LabSim:
+            icon: si-comptia
+            href: "https://labsimapp.testout.com/"
+            description: "CompTIA TestOut Courseware"
+            ping: "https://labsimapp.testout.com"
+
   bookmarks.yaml: ""
 
 ---
