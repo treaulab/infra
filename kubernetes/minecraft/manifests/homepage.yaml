@@ -217,6 +217,26 @@ spec:
                 name: homepage
                 port:
                   number: 3000
+    - host: class.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
+    - host: "*.class.net"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
     - host: "*.lan"
       http:
         paths:
