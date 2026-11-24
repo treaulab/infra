@@ -107,40 +107,13 @@ data:
             description: "Online Exam & Testing Portal"
             ping: "https://exam.duckling.local"
 
-  bookmarks.yaml: |
-    - CompTIA & Security Frameworks:
-        - MITRE ATT&CK Matrix:
-            - abbr: ATT&CK
-              href: https://attack.mitre.org/
-        - NIST Cybersecurity Framework:
-            - abbr: NIST
-              href: https://www.nist.gov/cyberframework
-        - Common Ports & Protocols:
-            - abbr: PORT
-              href: https://packetlife.net/library/cheat-sheets/
-        - OWASP Top 10:
-            - abbr: OWASP
-              href: https://owasp.org/www-project-top-ten/
-        - CompTIA Exam Objectives:
-            - abbr: COMP
-              href: https://www.comptia.org/certifications
+        - pccsk12.instructure.com:
+            icon: canvas
+            href: "https://pccsk12.instructure.com/login/saml"
+            description: "Canvas LMS (P-CCS Portal)"
+            ping: "https://pccsk12.instructure.com"
 
-    - Cyber Tools & Reference:
-        - CyberChef (Crypto & Decoding):
-            - abbr: CHEF
-              href: https://gchq.github.io/CyberChef/
-        - Wireshark Display Filters:
-            - abbr: SHARK
-              href: https://www.wireshark.org/docs/dfref/
-        - Nmap Network Scanning Manual:
-            - abbr: NMAP
-              href: https://nmap.org/book/man.html
-        - Exploit Database & CVEs:
-            - abbr: CVE
-              href: https://www.exploit-db.com/
-        - ExplainShell (Linux Command Manual):
-            - abbr: BASH
-              href: https://explainshell.com/
+  bookmarks.yaml: ""
 
 ---
 apiVersion: apps/v1
