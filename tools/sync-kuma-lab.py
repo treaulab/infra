@@ -54,7 +54,6 @@ groups_data = [
         "monitors": [
             {"name": "CV00 (Mr. Obsniuk - Teacher PC)", "type": "ping", "hostname": "192.168.10.70", "interval": 60},
             {"name": "PEARSONADMIN (Proctor PC)", "type": "ping", "hostname": "192.168.10.131", "interval": 60},
-            {"name": "CTE10-0135 (Teacher Laptop)", "type": "ping", "hostname": "192.168.10.136", "interval": 60},
         ]
     },
     {
@@ -89,6 +88,7 @@ groups_data = [
             {"name": "scrawnyboi", "type": "ping", "hostname": "192.168.10.67", "interval": 60},
             {"name": "nucboi", "type": "ping", "hostname": "192.168.10.68", "interval": 60},
             {"name": "beefyboi", "type": "ping", "hostname": "192.168.10.69", "interval": 60},
+            {"name": "minecraft (Minecraft / CTF Host)", "type": "ping", "hostname": "192.168.10.76", "interval": 60},
             {"name": "Netboot.xyz (iPXE Master)", "type": "ping", "hostname": "192.168.10.6", "interval": 60},
             {"name": "NAS5439CA (Storage 1)", "type": "ping", "hostname": "192.168.10.82", "interval": 60},
             {"name": "NAS5170AD (Storage 2)", "type": "ping", "hostname": "192.168.10.83", "interval": 60},
