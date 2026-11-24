@@ -137,7 +137,7 @@ spec:
             - name: PORT
               value: "3000"
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: "class.lan,192.168.10.77,localhost,127.0.0.1,*"
+              value: "class.lan,duckling.lan,192.168.10.77,localhost,127.0.0.1,*"
           volumeMounts:
             - name: config-dir
               mountPath: /app/config
@@ -185,6 +185,16 @@ spec:
   ingressClassName: traefik
   rules:
     - host: class.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
+    - host: duckling.lan
       http:
         paths:
           - path: /
