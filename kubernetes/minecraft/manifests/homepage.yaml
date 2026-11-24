@@ -57,7 +57,7 @@ data:
     layout:
       Class Portals:
         style: "row"
-        columns: 4
+        columns: 5
 
   widgets.yaml: |
     - search:
@@ -97,6 +97,12 @@ data:
             href: "https://exam.duckling.local"
             description: "Online Exam & Testing Portal"
             ping: "https://exam.duckling.local"
+
+        - Status & Uptime:
+            icon: uptime-kuma
+            href: "http://status.class.net"
+            description: "Class Fleet & Service Health"
+            siteMonitor: "http://uptime-kuma:3001/"
 
   bookmarks.yaml: |
     - CompTIA & Security Frameworks:
@@ -168,6 +174,11 @@ spec:
           hostnames:
             - "duckling.ai"
             - "affine.duckling.ai"
+        - ip: "192.168.10.77"
+          hostnames:
+            - "status.class.net"
+            - "class.net"
+            - "class"
       initContainers:
         - name: init-config
           image: ghcr.io/gethomepage/homepage:latest
