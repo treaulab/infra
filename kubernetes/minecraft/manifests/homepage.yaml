@@ -87,16 +87,39 @@ data:
             description: "Online Exam & Testing Portal"
 
   bookmarks.yaml: |
-    - Documentation:
-        - Kubernetes Docs:
-            - abbr: K8s
-              href: https://kubernetes.io/docs/
-        - Linux Manual:
+    - CompTIA & Security Frameworks:
+        - MITRE ATT&CK Matrix:
+            - abbr: ATT&CK
+              href: https://attack.mitre.org/
+        - NIST Cybersecurity Framework:
+            - abbr: NIST
+              href: https://www.nist.gov/cyberframework
+        - Common Ports & Protocols:
+            - abbr: PORT
+              href: https://packetlife.net/library/cheat-sheets/
+        - OWASP Top 10:
+            - abbr: OWASP
+              href: https://owasp.org/www-project-top-ten/
+        - CompTIA Exam Objectives:
+            - abbr: COMP
+              href: https://www.comptia.org/certifications
+
+    - Cyber Tools & Reference:
+        - CyberChef (Crypto & Decoding):
+            - abbr: CHEF
+              href: https://gchq.github.io/CyberChef/
+        - Wireshark Display Filters:
+            - abbr: SHARK
+              href: https://www.wireshark.org/docs/dfref/
+        - Nmap Network Scanning Manual:
+            - abbr: NMAP
+              href: https://nmap.org/book/man.html
+        - Exploit Database & CVEs:
+            - abbr: CVE
+              href: https://www.exploit-db.com/
+        - ExplainShell (Linux Command Manual):
             - abbr: BASH
-              href: https://man7.org/linux/man-pages/
-        - Python Docs:
-            - abbr: PY
-              href: https://docs.python.org/3/
+              href: https://explainshell.com/
 
 ---
 apiVersion: apps/v1
