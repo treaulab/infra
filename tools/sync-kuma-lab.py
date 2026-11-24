@@ -61,7 +61,11 @@ groups_data = [
         "name": "Student Workstations",
         "weight": 3,
         "monitors": [
-            {"name": f"CV{i:02d}", "type": "ping", "hostname": f"192.168.10.{100 + i}", "interval": 60}
+            (
+                {"name": f"CV{i:02d}", "type": "port", "hostname": f"192.168.10.{100 + i}", "port": 445, "interval": 60}
+                if i in (7, 28)
+                else {"name": f"CV{i:02d}", "type": "ping", "hostname": f"192.168.10.{100 + i}", "interval": 60}
+            )
             for i in range(1, 29)
         ] + [
             {"name": "TEST-PC", "type": "ping", "hostname": "192.168.10.140", "interval": 60},
@@ -119,14 +123,15 @@ VALUES ({g_id}, {g_name}, 1, 1, {g_weight}, 1);
         m_type = esc(m["type"])
         m_url = esc(m.get("url"))
         m_host = esc(m.get("hostname"))
+        m_port = m.get("port", "NULL")
         m_int = m.get("interval", 60)
         m_tls = 1 if m.get("ignore_tls") else 0
         m_codes = esc(m.get("accepted_statuscodes_json", '["200-299"]'))
 
         send_url = 1 if m.get("url") else 0
         sql_statements.append(f"""
-INSERT OR REPLACE INTO monitor (id, name, active, user_id, interval, url, type, weight, hostname, maxretries, ignore_tls, accepted_statuscodes_json, ping_count, ping_numeric, ping_per_request_timeout)
-VALUES ({monitor_id}, {m_name}, 1, 1, {m_int}, {m_url}, {m_type}, 2000, {m_host}, 1, {m_tls}, {m_codes}, 1, 1, 2);
+INSERT OR REPLACE INTO monitor (id, name, active, user_id, interval, url, type, weight, hostname, port, maxretries, ignore_tls, accepted_statuscodes_json, ping_count, ping_numeric, ping_per_request_timeout)
+VALUES ({monitor_id}, {m_name}, 1, 1, {m_int}, {m_url}, {m_type}, 2000, {m_host}, {m_port}, 1, {m_tls}, {m_codes}, 1, 1, 2);
 
 INSERT OR REPLACE INTO monitor_group (id, monitor_id, group_id, weight, send_url)
 VALUES ({monitor_id}, {monitor_id}, {g_id}, 1000, {send_url});
